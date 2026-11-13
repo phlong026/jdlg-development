@@ -1,4 +1,4 @@
-import { get, put } from '../utils/request';
+import { get, post, put } from '../utils/request';
 import { API_ENDPOINTS } from '../config/api';
 
 export type AIVideoStudioMode = 'text' | 'first_frame' | 'first_last_frame' | 'reference';
@@ -19,6 +19,8 @@ export interface AIVideoStudioConfig {
     provider_code: string;
     provider_display_name: string;
     provider_configured: boolean;
+    execution_ready?: boolean;
+    accounting_ready?: boolean;
     modes: Record<AIVideoStudioMode, boolean>;
     limits: {
         max_concurrency: number;
@@ -71,6 +73,27 @@ export interface PageResult<T> {
     page_size: number;
 }
 
+export interface AIVideoStudioResult {
+    result_id: string;
+    status: string;
+    external_id?: string;
+    error_message?: string;
+}
+
+export interface AIVideoStudioBatchDetail {
+    batch_id: string;
+    status: string;
+    items: AIVideoStudioResult[];
+    charge: { quoted_stones?: number; total_stones?: number; settled_stones?: number; released_stones?: number };
+}
+
+export type StudioReconciliationAction = 'query' | 'attach_external_id' | 'refund_confirmed_rejected';
+export interface StudioReconciliationInput {
+    action: StudioReconciliationAction;
+    evidence: string;
+    external_id?: string;
+}
+
 const defaultPriceCatalog: AIVideoStudioPrice[] = [
     { code: 'ai_video_studio_prompt_optimize', label: '提示词优化', billing_unit: 'per_request', unit_stones: null, enabled: false },
     { code: 'ai_video_studio_768p', label: '768P 视频生成', billing_unit: 'per_second', unit_stones: null, enabled: false },
@@ -103,7 +126,7 @@ export const getAIVideoStudioConfig = async (): Promise<AIVideoStudioConfig> => 
 };
 
 export const saveAIVideoStudioConfig = async (config: AIVideoStudioConfig): Promise<AIVideoStudioConfig> => {
-    const { version, provider_configured: _providerConfigured, provider_display_name: _providerName, updated_at: _updatedAt, ...editable } = config;
+    const { version, provider_configured: _providerConfigured, provider_display_name: _providerName, execution_ready: _executionReady, accounting_ready: _accountingReady, updated_at: _updatedAt, ...editable } = config;
     const response = await put<AIVideoStudioConfig>(API_ENDPOINTS.AI_VIDEO_STUDIO.CONFIG, {
         ...editable,
         expected_version: version,
@@ -117,9 +140,13 @@ export const getAIVideoStudioTasks = async (params: Record<string, string | numb
     return { ...page, items: (page.items || []).map((item) => ({ ...item, id: item.id || item.batch_id })) };
 };
 
-export const getAIVideoStudioTask = async (id: string): Promise<AIVideoStudioTask> => {
-    const response = await get<AIVideoStudioTask>(API_ENDPOINTS.AI_VIDEO_STUDIO.TASK_DETAIL(id));
+export const getAIVideoStudioTask = async (id: string): Promise<AIVideoStudioBatchDetail> => {
+    const response = await get<AIVideoStudioBatchDetail>(API_ENDPOINTS.AI_VIDEO_STUDIO.TASK_DETAIL(id));
     return response.data!;
+};
+
+export const reconcileAIVideoStudioResult = async (id: string, input: StudioReconciliationInput): Promise<void> => {
+    await post(API_ENDPOINTS.AI_VIDEO_STUDIO.RECONCILE(id), input);
 };
 
 export const getAIVideoStudioLedger = async (params: Record<string, string | number | undefined> = {}): Promise<PageResult<AIVideoStudioLedgerItem>> => {

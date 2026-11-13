@@ -38,6 +38,8 @@ Page({
     this._token = String(wx.getStorageSync('token') || '');
     this._editVersion = 0;
     this._tabStates = {};
+    try { if (api.pendingSubmission && api.pendingSubmission()) this.setData({ submissionUncertain: true }); }
+    catch (_) { /* Account profile loading must not prevent draft editing. */ }
     this.load();
   },
   onUnload() {
@@ -67,6 +69,7 @@ Page({
       this.seedTabStates();
       if (this.options.draft_id) await this.restoreDraft(this.options.draft_id, epoch);
       else this.scheduleAutoQuote();
+      if (this.data.submissionUncertain) await this.checkSubmission();
     } catch (error) {
       if (!this.current(epoch)) return;
       const base = this.parameterState({}, 'text', '768p');
@@ -383,11 +386,51 @@ Page({
     try {
       const batch = await api.createBatch(built.value);
       if (!this.current()) return;
-      wx.redirectTo({ url: '/pages/aivideostudio/detail?batch_id=' + encodeURIComponent(batch.batch_id || batch.id) });
+      this.openSubmittedBatch(batch);
     } catch (error) {
       if (!this.current()) return;
-      const uncertain = !!error.networkError || Number(error.statusCode) >= 500;
+      const uncertain = !!error.networkError || !!error.pendingSubmission || Number(error.statusCode) >= 500;
       this.setData({ submitting: false, submissionUncertain: uncertain, quote: uncertain ? this.data.quote : null, quoteReady: uncertain, error: uncertain ? '提交结果待确认，请先到创作记录核对，避免重复扣费。' : (error.message || '提交失败') });
+    }
+  },
+  openSubmittedBatch(batch) {
+    this.setData({ submitting: false, submissionUncertain: true, quoteReady: false, notice: '任务已创建，正在打开创作记录…' });
+    wx.redirectTo({ url: '/pages/aivideostudio/detail?batch_id=' + encodeURIComponent(batch.batch_id || batch.id), fail: () => { if (this.current()) this.setData({ error: '任务已创建，请到创作记录查看进度。' }); } });
+  },
+  async checkSubmission() {
+    if (this.data.submitting) return;
+    let pending;
+    try { pending = api.pendingSubmission && api.pendingSubmission(); }
+    catch (error) { this.setData({ error: error.message }); return; }
+    if (!pending) return;
+    this.setData({ submitting: true, submissionUncertain: true, notice: '正在查询上次提交结果…' });
+    try {
+      const batch = await api.getSubmission(pending);
+      if (this.current()) this.openSubmittedBatch(batch);
+    } catch (error) {
+      if (this.current()) this.setData({ submitting: false, notice: error.statusCode === 404 ? '尚未找到任务；可按原请求恢复，不会重复扣费。' : '提交记录暂不可查询，可稍后重试或查看创作记录。' });
+    }
+  },
+  async recoverSubmission() {
+    if (this.data.submitting) return;
+    let pending;
+    try { pending = api.pendingSubmission && api.pendingSubmission(); }
+    catch (error) { this.setData({ error: error.message }); return; }
+    if (!pending) {
+      this.setData({ submissionUncertain: false });
+      this.scheduleAutoQuote();
+      return;
+    }
+    this.setData({ submitting: true, submissionUncertain: true, error: '', notice: '正在按原请求恢复提交，不会重复扣费…' });
+    try {
+      const batch = await api.createBatch(pending);
+      if (this.current()) this.openSubmittedBatch(batch);
+    } catch (error) {
+      if (!this.current()) return;
+      let unresolved = true;
+      try { unresolved = !!api.pendingSubmission(); } catch (_) { /* Keep payment blocked until its account can be checked. */ }
+      this.setData({ submitting: false, submissionUncertain: unresolved, notice: '', error: unresolved ? '提交结果仍待核对，可稍后恢复原请求或到创作记录查看。' : (error.message || '该请求未创建任务，可重新生成') });
+      if (!unresolved) this.scheduleAutoQuote();
     }
   },
 

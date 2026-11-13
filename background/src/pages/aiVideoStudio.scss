@@ -31,6 +31,8 @@
   .aivs-pagination { display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin-top: 12px; color: var(--admin-text-muted); font-size: var(--admin-font-caption); }
   .aivs-pagination button { min-height: 36px; padding: 6px 12px; border: 1px solid var(--admin-border); border-radius: 7px; background: var(--admin-surface); color: var(--admin-text); }
   .aivs-actions { justify-content: flex-end; }
+  .aivs-evidence { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; font-size: var(--admin-font-caption); }
+  .aivs-evidence textarea { min-height: 88px; padding: 9px; border: 1px solid var(--admin-border); border-radius: 7px; background: var(--admin-surface); color: var(--admin-text); resize: vertical; }
   .aivs-filters { margin: 0 0 14px; }
   .aivs-filters input { min-width: 260px; }
   @media (max-width: 900px) {

@@ -3,14 +3,18 @@ import {
     getAIVideoStudioConfig,
     getAIVideoStudioLedger,
     getAIVideoStudioTasks,
+    getAIVideoStudioTask,
+    reconcileAIVideoStudioResult,
     saveAIVideoStudioConfig,
     type AIVideoStudioConfig,
     type AIVideoStudioLedgerItem,
     type AIVideoStudioMode,
     type AIVideoStudioTask,
+    type AIVideoStudioBatchDetail,
+    type StudioReconciliationAction,
 } from '../api/aiVideoStudio';
 import { reportPageLoadError, reportPageLoadRecovered } from '../utils/pageLoadError';
-import { validateAIVideoStudioConfig } from './aiVideoStudioModel';
+import { buildStudioReconciliation, validateAIVideoStudioConfig } from './aiVideoStudioModel';
 import './aiVideoStudio.scss';
 
 type Tab = 'config' | 'tasks' | 'ledger';
@@ -30,10 +34,11 @@ const billingLabels: Record<string, string> = {
 };
 
 const statusLabels: Record<string, string> = {
-    queued: '排队中', submitting: '提交中', processing: '生成中', delivering: '交付准备中',
+    queued: '排队中', submitting: '提交中', submitted: '已受理', running: '生成中', processing: '生成中', delivering: '交付准备中', partial_success: '部分完成',
     completed: '已完成', failed: '生成失败', cancelled: '已取消', uncertain: '待确认',
     reserved: '已预留', settled: '已结算', released: '已释放', refunded: '已退款',
     reconciliation_required: '费用待核对', retain_failed: '素材留存失败',
+    reserve: '预留', settle: '结算', refund: '退回',
 };
 
 const label = (value: string) => statusLabels[value] || value || '-';
@@ -59,6 +64,16 @@ const AIVideoStudio: React.FC = () => {
     const ledgerRequest = useRef(0);
     const saveInFlight = useRef(false);
     const mounted = useRef(true);
+    const detailRequest = useRef(0);
+    const [detail, setDetail] = useState<AIVideoStudioBatchDetail | null>(null);
+    const [detailLoading, setDetailLoading] = useState(false);
+    const [detailError, setDetailError] = useState('');
+    const [targetID, setTargetID] = useState('');
+    const [reconcileAction, setReconcileAction] = useState<StudioReconciliationAction>('query');
+    const [externalID, setExternalID] = useState('');
+    const [evidence, setEvidence] = useState('');
+    const [reconciling, setReconciling] = useState(false);
+    const reconciliationInFlight = useRef(false);
 
     const loadConfig = useCallback(async () => {
         const request = ++configRequest.current;
@@ -114,11 +129,47 @@ const AIVideoStudio: React.FC = () => {
             configRequest.current += 1;
             taskRequest.current += 1;
             ledgerRequest.current += 1;
+            detailRequest.current += 1;
         };
     }, []);
 
     const errors = useMemo(() => config ? validateAIVideoStudioConfig(config) : [], [config]);
     const dirty = !!config && !!savedConfig && JSON.stringify(config) !== JSON.stringify(savedConfig);
+    const target = detail?.items.find((item) => item.result_id === targetID);
+
+    const loadTaskDetail = async (id: string) => {
+        const request = ++detailRequest.current;
+        setDetailLoading(true); setDetailError(''); setDetail(null);
+        try {
+            const value = await getAIVideoStudioTask(id);
+            if (!mounted.current || request !== detailRequest.current) return;
+            const first = value.items.find((item) => item.status === 'uncertain') || value.items[0];
+            setDetail(value); setTargetID(first?.result_id || '');
+            setReconcileAction(first?.external_id ? 'query' : 'attach_external_id');
+            setExternalID(''); setEvidence('');
+        } catch (error: any) {
+            if (mounted.current && request === detailRequest.current) setDetailError(error?.message || '任务详情读取失败');
+        } finally {
+            if (mounted.current && request === detailRequest.current) setDetailLoading(false);
+        }
+    };
+
+    const reconcile = async () => {
+        if (!target || !detail || reconciliationInFlight.current) return;
+        try {
+            const input = buildStudioReconciliation(reconcileAction, externalID, evidence);
+            if (reconcileAction === 'refund_confirmed_rejected' && !window.confirm('确认供应商未受理该任务？此操作将按原报价退回预留灵石并记录操作依据。')) return;
+            reconciliationInFlight.current = true; setReconciling(true); setDetailError('');
+            await reconcileAIVideoStudioResult(target.result_id, input);
+            if (!mounted.current) return;
+            await Promise.all([loadTaskDetail(detail.batch_id), loadTasks(), loadLedger()]);
+        } catch (error: any) {
+            if (mounted.current) setDetailError(error?.message || '核对失败，请刷新后重试');
+        } finally {
+            reconciliationInFlight.current = false;
+            if (mounted.current) setReconciling(false);
+        }
+    };
 
     const changeLimit = (key: keyof AIVideoStudioConfig['limits'], value: string) => {
         const number = Math.max(0, Math.trunc(Number(value) || 0));
@@ -156,7 +207,7 @@ const AIVideoStudio: React.FC = () => {
             {state.config === 'error' ? <div className="aivs-state error" role="alert">配置加载失败，当前状态未知，不能执行修改。<button type="button" onClick={() => void loadConfig()}>重新加载</button></div> : null}
             {state.config === 'ready' && config ? <>
                 <div className="aivs-summary">
-                    <div><span>模块状态</span><b className={config.enabled ? 'ok' : ''}>{config.enabled ? '已开放' : '已停用'}</b></div>
+                    <div><span>模块状态</span><b className={config.enabled ? 'ok' : ''}>{config.enabled ? (config.execution_ready && config.accounting_ready && config.provider_configured ? '允许新任务' : '等待服务就绪') : '已停用'}</b></div>
                     <div><span>服务适配</span><b>{config.provider_display_name || config.provider_code || '未选择'}</b><small>{config.provider_configured ? '服务端已配置' : '未配置，不能开放'}</small></div>
                     <div><span>配置版本</span><b>v{config.version}</b><small>{dateTime(config.updated_at)}</small></div>
                 </div>
@@ -195,8 +246,22 @@ const AIVideoStudio: React.FC = () => {
 
         {tab === 'tasks' ? <section className="aivs-panel">
             <div className="aivs-filters"><input value={keyword} onChange={(event) => { setKeyword(event.target.value); setTaskPage(1); }} placeholder="批次、报价或用户 ID" /><select value={status} onChange={(event) => { setStatus(event.target.value); setTaskPage(1); }}><option value="">全部状态</option><option value="uncertain">待确认</option><option value="failed">生成失败</option><option value="reconciliation_required">费用待核对</option><option value="retain_failed">素材留存失败</option><option value="completed">已完成</option></select><button type="button" onClick={() => void loadTasks()}>查询</button></div>
-            {state.tasks === 'loading' ? <div className="aivs-state">任务加载中…</div> : state.tasks === 'error' ? <div className="aivs-state error">任务加载失败。<button onClick={() => void loadTasks()}>重试</button></div> : tasks.length === 0 ? <div className="aivs-state">暂无符合条件的新模块任务。</div> : <div className="admin-table-region"><table><thead><tr><th>批次</th><th>用户 / 草稿</th><th>模式</th><th>任务状态</th><th>费用状态</th><th>费用快照</th><th>错误摘要</th><th>更新时间</th></tr></thead><tbody>{tasks.map((task) => <tr key={task.id}><td><b>{task.id}</b><small>报价 {task.quote_id || '-'}</small></td><td>{task.user_id}<small>草稿 {task.draft_id}</small></td><td>{modeLabels[task.mode] || task.mode}</td><td><b>{label(task.status)}</b></td><td><b>{label(task.fee_status)}</b></td><td>{task.total_stones} 灵石</td><td>{task.error_message || task.error_code || '-'}</td><td>{dateTime(task.updated_at)}</td></tr>)}</tbody></table></div>}
-            <p className="aivs-note">待确认任务不能更换幂等键盲目重试。当前后台仅提供查询与定位；取消、重试或人工结算按钮会在服务端提供带审计的专用动作后开放。</p>
+            {state.tasks === 'loading' ? <div className="aivs-state">任务加载中…</div> : state.tasks === 'error' ? <div className="aivs-state error">任务加载失败。<button onClick={() => void loadTasks()}>重试</button></div> : tasks.length === 0 ? <div className="aivs-state">暂无符合条件的新模块任务。</div> : <div className="admin-table-region"><table><thead><tr><th>批次</th><th>用户 / 草稿</th><th>模式</th><th>任务状态</th><th>费用状态</th><th>费用快照</th><th>错误摘要</th><th>更新时间</th><th>核对</th></tr></thead><tbody>{tasks.map((task) => <tr key={task.id}><td><b>{task.id}</b><small>报价 {task.quote_id || '-'}</small></td><td>{task.user_id}<small>草稿 {task.draft_id}</small></td><td>{modeLabels[task.mode] || task.mode}</td><td><b>{label(task.status)}</b></td><td><b>{label(task.fee_status)}</b></td><td>{task.total_stones} 灵石</td><td>{task.error_message || task.error_code || '-'}</td><td>{dateTime(task.updated_at)}</td><td><button type="button" onClick={() => void loadTaskDetail(task.id)} disabled={reconciling}>查看与核对</button></td></tr>)}</tbody></table></div>}
+            <p className="aivs-note">待确认任务保留原预留费用；请先核对供应商任务标识。有标识时查询实际结果；确认未受理才能退回费用。</p>
+            {detailLoading ? <div className="aivs-state">任务详情加载中…</div> : null}
+            {detailError ? <div className="aivs-errors" role="alert">{detailError}</div> : null}
+            {detail ? <div className="aivs-card">
+                <h3>批次核对 · {detail.batch_id}</h3>
+                <p>{label(detail.status)} · 预计 {detail.charge?.quoted_stones ?? detail.charge?.total_stones ?? 0} 灵石 · 已结算 {detail.charge?.settled_stones || 0} · 已退回 {detail.charge?.released_stones || 0}</p>
+                <div className="admin-table-region"><table><thead><tr><th>子任务</th><th>状态</th><th>供应商标识</th><th>说明</th></tr></thead><tbody>{detail.items.map((item) => <tr key={item.result_id}><td>{item.result_id}</td><td>{label(item.status)}</td><td>{item.external_id || '尚未取得'}</td><td>{item.error_message || '-'}</td></tr>)}</tbody></table></div>
+                <div className="aivs-form-grid">
+                    <label>子任务<select value={targetID} disabled={reconciling} onChange={(event) => { setTargetID(event.target.value); setReconcileAction(detail.items.find((item) => item.result_id === event.target.value)?.external_id ? 'query' : 'attach_external_id'); setExternalID(''); setEvidence(''); }}>{detail.items.map((item) => <option key={item.result_id} value={item.result_id}>{item.result_id} · {label(item.status)}</option>)}</select></label>
+                    <label>核对动作<select value={reconcileAction} disabled={reconciling} onChange={(event) => setReconcileAction(event.target.value as StudioReconciliationAction)}><option value="query" disabled={!target?.external_id}>查询供应商实际结果</option><option value="attach_external_id" disabled={target?.status !== 'uncertain' || !!target?.external_id}>补回供应商任务标识</option><option value="refund_confirmed_rejected" disabled={target?.status !== 'uncertain' || !!target?.external_id}>确认未受理并退款</option></select></label>
+                    {reconcileAction === 'attach_external_id' ? <label>供应商任务标识<input value={externalID} maxLength={191} disabled={reconciling} onChange={(event) => setExternalID(event.target.value)} /></label> : null}
+                </div>
+                {reconcileAction !== 'query' ? <label className="aivs-evidence">核对依据<textarea value={evidence} minLength={10} maxLength={500} disabled={reconciling} placeholder="填写供应商核对记录与依据，10至500字" onChange={(event) => setEvidence(event.target.value)} /></label> : null}
+                <div className="aivs-actions"><button type="button" disabled={reconciling || !target || (reconcileAction === 'query' ? !target.external_id : target.status !== 'uncertain' || !!target.external_id)} className={reconcileAction === 'refund_confirmed_rejected' ? 'primary danger' : 'primary'} onClick={() => void reconcile()}>{reconciling ? '正在核对…' : reconcileAction === 'query' ? '查询任务' : reconcileAction === 'attach_external_id' ? '核验并补回标识' : '确认未受理并退回灵石'}</button></div>
+            </div> : null}
             {taskTotal > 20 ? <div className="aivs-pagination"><button type="button" onClick={() => setTaskPage((page) => Math.max(1, page - 1))} disabled={taskPage <= 1}>上一页</button><span>第 {taskPage} 页 · 共 {taskTotal} 条</span><button type="button" onClick={() => setTaskPage((page) => page + 1)} disabled={taskPage * 20 >= taskTotal}>下一页</button></div> : null}
         </section> : null}
 

@@ -135,6 +135,7 @@ export const API_ENDPOINTS = {
         CONFIG: '/api/v1/management/ai-video-studio/config',
         TASKS: '/api/v1/management/ai-video-studio/tasks',
         TASK_DETAIL: (id: string) => `/api/v1/management/ai-video-studio/tasks/${encodeURIComponent(id)}`,
+        RECONCILE: (id: string) => `/api/v1/management/ai-video-studio/results/${encodeURIComponent(id)}/reconcile`,
         LEDGER: '/api/v1/management/ai-video-studio/ledger',
     },
     // OSS管理

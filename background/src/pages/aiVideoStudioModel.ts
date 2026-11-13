@@ -1,4 +1,16 @@
-import type { AIVideoStudioConfig } from '../api/aiVideoStudio';
+import type { AIVideoStudioConfig, StudioReconciliationAction, StudioReconciliationInput } from '../api/aiVideoStudio';
+
+export function buildStudioReconciliation(action: StudioReconciliationAction, externalID: string, evidence: string): StudioReconciliationInput {
+    if (!['query', 'attach_external_id', 'refund_confirmed_rejected'].includes(action)) throw new Error('请选择有效的核对动作');
+    const reason = evidence.trim();
+    if (action !== 'query' && (reason.length < 10 || reason.length > 500)) throw new Error('请填写10至500字的供应商核对依据');
+    if (action === 'attach_external_id') {
+        const id = externalID.trim();
+        if (!id || id.length > 191) throw new Error('请填写有效的供应商任务标识');
+        return { action, external_id: id, evidence: reason };
+    }
+    return { action, evidence: reason };
+}
 
 export function validateAIVideoStudioConfig(config: AIVideoStudioConfig): string[] {
     const errors: string[] = [];

@@ -26,12 +26,13 @@ function loadApi() {
     module,
     exports: module.exports,
     require(name) {
-      if (name === '../utils/request') return { get: request('get'), put: request('put') };
+      if (name === '../utils/request') return { get: request('get'), put: request('put'), post: request('post') };
       if (name === '../config/api') return {
         API_ENDPOINTS: { AI_VIDEO_STUDIO: {
           CONFIG: '/api/v1/management/ai-video-studio/config',
           TASKS: '/api/v1/management/ai-video-studio/tasks',
           TASK_DETAIL: id => `/api/v1/management/ai-video-studio/tasks/${encodeURIComponent(id)}`,
+          RECONCILE: id => `/api/v1/management/ai-video-studio/results/${encodeURIComponent(id)}/reconcile`,
           LEDGER: '/api/v1/management/ai-video-studio/ledger',
         } },
       };
@@ -74,6 +75,20 @@ test('page exposes fail-closed provider and price states without credential fiel
   assert.match(source, /unit_stones/);
   assert.doesNotMatch(source, /api_key|secret|access_token|endpoint/);
   assert.match(source, /待确认|费用待核对/);
+});
+
+test('reconciliation requires a specific task and operator evidence without a fabricated result', async () => {
+  const model = loadModel();
+  assert.throws(() => model.buildStudioReconciliation('attach_external_id', '', 'a valid explanation'), /标识/);
+  assert.throws(() => model.buildStudioReconciliation('refund_confirmed_rejected', '', ''), /依据/);
+  const payload = model.buildStudioReconciliation('attach_external_id', 'external-123', '已与供应商核对该任务属于本次提交');
+  assert.equal(payload.action, 'attach_external_id');
+  assert.equal(payload.external_id, 'external-123');
+  assert.equal('result_url' in payload, false);
+  const { api, calls } = loadApi();
+  await api.reconcileAIVideoStudioResult('result/1', payload);
+  assert.equal(calls[0][0], 'post');
+  assert.equal(calls[0][1], '/api/v1/management/ai-video-studio/results/result%2F1/reconcile');
 });
 
 test('configuration stays fail-closed until provider, mode and positive price are ready', () => {

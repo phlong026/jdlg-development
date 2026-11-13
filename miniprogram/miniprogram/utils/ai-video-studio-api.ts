@@ -36,7 +36,46 @@ function request(path, method, body, query) {
     fail(error) { reject(Object.assign(new Error(error && error.errMsg || '网络不可用，请检查连接'), { networkError: true })); },
   }));
 }
-function idempotencyKey() { sequence += 1; return 'aivs-' + Date.now() + '-' + sequence; }
+function idempotencyKey() { sequence += 1; return 'aivs-' + Date.now() + '-' + sequence + '-' + Math.random().toString(36).slice(2, 14); }
+function submissionStorageKey() {
+  const info = wx.getStorageSync('userInfo') || {};
+  const userID = Number(info.id);
+  if (!currentToken() || !Number.isSafeInteger(userID) || userID < 1 || (info.token && info.token !== currentToken())) throw new Error('账号资料尚未就绪，请重新登录后生成');
+  return 'aivs:pending:' + userID;
+}
+function pendingSubmission() {
+  const value = wx.getStorageSync(submissionStorageKey());
+  return value && typeof value.quote_id === 'string' && typeof value.idempotency_key === 'string'
+    ? { quote_id: value.quote_id, idempotency_key: value.idempotency_key } : null;
+}
+function clearSubmission(storageKey, value) {
+  const pending = wx.getStorageSync(storageKey);
+  if (pending && pending.quote_id === value.quote_id && pending.idempotency_key === value.idempotency_key) wx.removeStorageSync(storageKey);
+}
+async function getSubmission(input) {
+  const storageKey = submissionStorageKey();
+  const batch = await request(ROOT + '/submissions/' + encodeURIComponent(input.idempotency_key));
+  if (!batch.batch_id && !batch.id) throw new Error('提交记录暂不可读，请稍后查询');
+  clearSubmission(storageKey, input);
+  return batch;
+}
+async function createBatch(input) {
+  const storageKey = submissionStorageKey();
+  const previous = pendingSubmission();
+  if (previous && previous.quote_id !== input.quote_id) throw Object.assign(new Error('上次提交结果待核对，请先查询提交结果'), { pendingSubmission: true });
+  const value = previous || { quote_id: input.quote_id, idempotency_key: input.idempotency_key };
+  // Persist before sending: a killed page can replay this exact request safely.
+  wx.setStorageSync(storageKey, value);
+  try {
+    const batch = await request(ROOT + '/batches', 'POST', value);
+    if (!batch.batch_id && !batch.id) throw Object.assign(new Error('提交结果待核对，请查询提交结果'), { networkError: true });
+    clearSubmission(storageKey, value);
+    return batch;
+  } catch (error) {
+    if ([400, 402, 409, 410, 422].includes(Number(error.statusCode))) clearSubmission(storageKey, value);
+    throw error;
+  }
+}
 function normalizeBatch(value) {
   const batch = value || {};
   const items = Array.isArray(batch.items) ? batch.items : [];
@@ -65,7 +104,7 @@ function uploadMedia(filePath, onProgress) {
 }
 
 module.exports = {
-  ORIGIN, ROOT, request, idempotencyKey, uploadMedia,
+  ORIGIN, ROOT, request, idempotencyKey, uploadMedia, pendingSubmission, getSubmission,
   capabilities: () => request(ROOT + '/capabilities'),
   listDrafts: query => request(ROOT + '/drafts', 'GET', {}, query),
   createDraft: input => request(ROOT + '/drafts', 'POST', input),
@@ -80,9 +119,10 @@ module.exports = {
   getMedia: id => request(ROOT + '/media/' + encodeURIComponent(id)),
   registerMedia: mediaID => request(ROOT + '/media/register', 'POST', { media_id: mediaID }),
   quote: input => request(ROOT + '/quotes', 'POST', input),
-  createBatch: input => request(ROOT + '/batches', 'POST', { quote_id: input.quote_id, idempotency_key: input.idempotency_key }),
+  createBatch,
   listBatches: query => request(ROOT + '/batches', 'GET', {}, query),
   getBatch: id => request(ROOT + '/batches/' + encodeURIComponent(id)).then(normalizeBatch),
+  cancelBatch: id => request(ROOT + '/batches/' + encodeURIComponent(id) + '/cancel', 'POST', {}),
   playback: id => request(ROOT + '/results/' + encodeURIComponent(id) + '/playback', 'POST', {}),
   retain: id => request(ROOT + '/results/' + encodeURIComponent(id) + '/retain', 'POST', {}),
   adoptContent: (mediaID, input) => request(ROOT + '/media/' + encodeURIComponent(mediaID) + '/adopt/content', 'POST', input),

@@ -2,31 +2,51 @@
 'use strict';
 const api = require('../../utils/ai-video-studio-api');
 const phase3 = require('../../utils/phase3-api');
-const statusText = status => ({ queued: '等待处理', processing: '生成中', partial_success: '部分完成', completed: '已完成', failed: '失败', uncertain: '待核对', cancelled: '已取消' }[status] || '状态待确认');
+const statusText = status => ({ queued: '等待处理', submitting: '提交中', submitted: '已受理', running: '生成中', processing: '生成中', partial_success: '部分完成', completed: '已完成', failed: '失败', uncertain: '待核对', cancelled: '已取消' }[status] || '状态待确认');
 const modeText = mode => ({ text: '文生视频', first_frame: '首帧图生', first_last_frame: '首尾帧', reference: '参考生成' }[mode] || '视频创作');
 
 Page({
-  data: { loading: true, error: '', batch: null, snapshot: {}, results: [], statusLabel: '', adoptingResultID: '' },
-  onLoad(options) { this.id = options.batch_id; this._token = String(wx.getStorageSync('token') || ''); this.load(); },
-  onHide() { this.abortDownload(); },
-  onUnload() { this._unloaded = true; this._epoch = (this._epoch || 0) + 1; this.abortDownload(); },
+  data: { loading: true, error: '', batch: null, snapshot: {}, results: [], statusLabel: '', adoptingResultID: '', cancelling: false },
+  onLoad(options) { this.id = options.batch_id; this._token = String(wx.getStorageSync('token') || ''); this._visible = true; this.load(); },
+  onShow() { if (this._visible === false) { this._visible = true; this.load(true); } },
+  onHide() { this._visible = false; this._epoch = (this._epoch || 0) + 1; this.stopPolling(); this.abortDownload(); },
+  onUnload() { this._unloaded = true; this.onHide(); },
   current(epoch) { return !this._unloaded && this._token === String(wx.getStorageSync('token') || '') && (epoch === undefined || epoch === this._epoch); },
   abortDownload() { if (this._downloadTask && this._downloadTask.abort) this._downloadTask.abort(); this._downloadTask = null; },
+  stopPolling() { if (this._pollTimer) clearTimeout(this._pollTimer); this._pollTimer = null; },
+  schedulePoll() {
+    this.stopPolling();
+    if (!this.current() || !this._visible || ['completed', 'partial_success', 'failed', 'cancelled'].includes((this.data.batch || {}).status)) return;
+    this._pollTimer = setTimeout(() => { this._pollTimer = null; return this.load(true); }, Math.min(30000, 3000 * Math.pow(2, this._pollFailures || 0)));
+  },
   onPullDownRefresh() { this.load().finally(() => wx.stopPullDownRefresh()); },
-  async load() {
+  async load(silent) {
+    if (this._visible === false || !this.current()) return;
+    this.stopPolling();
     const epoch = this._epoch = (this._epoch || 0) + 1;
     if (!this.id) { this.setData({ loading: false, error: '任务标识无效' }); return; }
-    this.setData({ loading: true, error: '' });
+    this.setData(silent === true ? { error: '' } : { loading: true, error: '' });
     try {
       const batch = await api.getBatch(this.id);
       if (!this.current(epoch)) return;
+      this._pollFailures = 0;
       const snapshot = Object.assign({}, batch.snapshot || {}, { mode_label: modeText((batch.snapshot || {}).mode) });
       const results = (batch.results || []).map(item => Object.assign({}, item, {
-        status_label: statusText(item.status), playback_url: '',
+        status_label: statusText(item.status), playback_url: ((this.data.results || []).find(previous => previous.result_id === item.result_id) || {}).playback_url || '',
         retained: !!item.stable_media_id || ['retained', 'ready', 'completed'].includes(item.retention_status),
       }));
       this.setData({ loading: false, batch: Object.assign({}, batch, { charge: batch.charge || {} }), snapshot, results, statusLabel: statusText(batch.status) });
-    } catch (error) { if (this.current(epoch)) this.setData({ loading: false, error: error.message || '任务加载失败' }); }
+    } catch (error) { if (this.current(epoch)) { this._pollFailures = Math.min(4, (this._pollFailures || 0) + 1); this.setData({ loading: false, error: error.message || '任务加载失败' }); } }
+    if (this.current(epoch)) this.schedulePoll();
+  },
+  async cancelQueued() {
+    if (this.data.cancelling || !(this.data.batch || {}).can_cancel) return;
+    this.setData({ cancelling: true, error: '' });
+    try {
+      await api.cancelBatch(this.id);
+      if (this.current()) await this.load(true);
+    } catch (error) { if (this.current()) this.setData({ error: error.message || '取消失败，任务可能已开始，请刷新状态' }); }
+    finally { if (this.current()) this.setData({ cancelling: false }); }
   },
   async play(event) {
     const index = Number(event.currentTarget.dataset.index), item = this.data.results[index];

@@ -23,6 +23,7 @@
     <view wx:if="{{loading}}" class="inline-state">正在读取生成能力…</view>
     <view wx:if="{{loadError}}" class="inline-state state-error"><text>{{loadError}}</text><text class="retry" bindtap="load">重试</text></view>
     <view wx:if="{{!loading && !capabilities.enabled}}" class="capability-note">{{capabilities.disabled_reason || '能力或价格尚未配置，可继续编辑和保存草稿。'}}</view>
+    <view wx:if="{{submissionUncertain}}" class="inline-state"><text>上次提交结果待核对</text><text class="retry" bindtap="checkSubmission">查询</text><text class="retry" bindtap="recoverSubmission">按原请求恢复</text></view>
 
     <view wx:if="{{activeTab === 'creation'}}" class="section-block">
       <view class="section-heading"><text>画面素材</text><text class="optional">选填</text></view>

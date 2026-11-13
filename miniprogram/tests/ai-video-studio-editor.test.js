@@ -265,6 +265,46 @@ test('unknown submission state survives edits and tab switches and blocks anothe
   assert.match(page.data.error, /创作记录/);
 });
 
+test('recovery uses the durable submission without another quote or a new key', async () => {
+  const requests = [];
+  let redirected = '';
+  const page = instance(loadPage({
+    pendingSubmission: () => ({ quote_id: 'original-quote', idempotency_key: 'original-key' }),
+    createBatch: async input => { requests.push(input); return { batch_id: 'recovered-batch' }; },
+  }), { data: { submissionUncertain: true } });
+  global.wx = { redirectTo({ url }) { redirected = url; } };
+  try { await page.recoverSubmission(); } finally { delete global.wx; }
+  assert.deepEqual(requests, [{ quote_id: 'original-quote', idempotency_key: 'original-key' }]);
+  assert.match(redirected, /recovered-batch/);
+});
+
+test('definite recovery rejection unlocks editing without discarding the prompt', async () => {
+  let pending = { quote_id: 'expired', idempotency_key: 'original-key' };
+  const page = instance(loadPage({
+    pendingSubmission: () => pending,
+    createBatch: async () => { pending = null; throw Object.assign(new Error('报价已过期'), { statusCode: 410 }); },
+  }), { data: { submissionUncertain: true, prompt: '需要保留的画面描述' }, scheduleAutoQuote() {} });
+  await page.recoverSubmission();
+  assert.equal(page.data.submissionUncertain, false);
+  assert.equal(page.data.prompt, '需要保留的画面描述');
+  assert.match(page.data.error, /过期/);
+});
+
+test('opening an unresolved editor only queries and never creates a paid batch automatically', async () => {
+  let submitted = 0;
+  let queried = 0;
+  const page = instance(loadPage({
+    pendingSubmission: () => ({ quote_id: 'quote-A', idempotency_key: 'key-A' }),
+    getSubmission: async () => { queried += 1; throw Object.assign(new Error('未找到任务'), { statusCode: 404 }); },
+    createBatch: async () => { submitted += 1; },
+  }), { data: { submissionUncertain: true } });
+  await page.checkSubmission();
+  assert.equal(queried, 1);
+  assert.equal(submitted, 0);
+  assert.equal(page.data.submissionUncertain, true);
+  assert.match(page.data.notice, /原请求/);
+});
+
 test('editor markup follows the confirmed two-tab workspace without fake AI polish', () => {
   const root = path.resolve(__dirname, '../miniprogram/pages/aivideostudio');
   const markup = fs.readFileSync(path.join(root, 'generate.wxml'), 'utf8');
