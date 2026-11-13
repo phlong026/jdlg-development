@@ -1,0 +1,16 @@
+{
+  "scope": "ai-video-studio-ui-20261113",
+  "method": "manual comparison of approved reference, existing app styles and native simulator screenshots",
+  "native_viewport": { "width": 402, "height": 874, "pixel_ratio": 3, "font_scale": 0.85 },
+  "screenshot_pixels": { "width": 589, "height": 1280 },
+  "reference": "design-approved.png",
+  "screenshots": ["editor-frame.jpg", "editor-reference.jpg", "editor-empty.jpg"],
+  "user_overrides": ["existing mini-program styling", "equal first and last frame aspect ratio", "automatic quote and direct generate action"],
+  "observed_equal_frame_css_pixels": [{ "width": 168, "height": 95 }, { "width": 168, "height": 95 }],
+  "resolved": ["navigation mismatch", "unequal frame slots", "manual quote confirmation", "reference duration lost before validation", "duplicate draft on failed quote", "late response overwrite", "uncertain state cleared by editing", "missing media metadata on draft restore", "reference settings obscured by footer"],
+  "p0": 0,
+  "p1": 0,
+  "p2": 0,
+  "result": "passed",
+  "evidence_boundary": "isolated native UI fixture only; no production deployment, paid provider generation or real-device acceptance"
+}
