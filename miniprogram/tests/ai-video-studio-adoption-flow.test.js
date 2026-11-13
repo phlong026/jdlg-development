@@ -46,3 +46,42 @@ test('changing accounts clears protected task and adoption data before the next 
   assert.equal(page.data.batch, null); assert.equal(page.data.results.length, 0); assert.equal(page.data.noteAdoptionOpen, false);
   release({ batch_id: 'batch-1', status: 'completed', results: [] }); await pending;
 });
+
+test('content recovery replays the original owner before a revoked grant can release its pending attempt', async () => {
+  const original = { draft_instance_id: 'old-stable-key', owner_id: 'owner-revoked', title: '原题' }, calls = [];
+  let pending = original, contexts = 0;
+  const { page } = detail({
+    pendingAdoption: () => pending, idempotencyKey: () => 'new-key',
+    adoptContent: async (_mediaID, input) => { calls.push(input); if (pending) { pending = null; throw Object.assign(new Error('原归属权限已撤销'), { statusCode: 403 }); } return { content_id: 'new-draft' }; },
+  }, { workbenchContext: async () => { contexts++; return { owner_choices: [{ owner_id: 'owner-current', display_name: '当前归属' }] }; } });
+  await page.adoptContent(event());
+  assert.equal(contexts, 0); assert.equal(calls[0].owner_id, original.owner_id); assert.equal(calls[0].draft_instance_id, original.draft_instance_id);
+  await page.adoptContent(event());
+  assert.equal(contexts, 1); assert.equal(calls[1].owner_id, 'owner-current');
+});
+
+test('a late old-account content context neither submits nor releases the new-account adoption lock', async () => {
+  let releaseA, releaseB; const requests = []; let contexts = 0;
+  const { page, setToken } = detail({
+    pendingAdoption: () => null, idempotencyKey: () => 'key',
+    getBatch: async () => ({ batch_id: 'batch-b', status: 'completed', results: [{ result_id: 'result-b', stable_media_id: 'media-b', retained: true }] }),
+    adoptContent: (mediaID, input) => { requests.push({ mediaID, input }); if (mediaID !== 'media-b') return Promise.reject(Object.assign(new Error('not found'), { statusCode: 404 })); return new Promise(resolve => { releaseB = resolve; }); },
+  }, { workbenchContext: () => ++contexts === 1 ? new Promise(resolve => { releaseA = resolve; }) : Promise.resolve({ owner_choices: [{ owner_id: 'owner-b', display_name: 'B归属' }] }) });
+  const first = page.adoptContent(event()); setToken('account-b'); await page.onShow();
+  const second = page.adoptContent(event()); await Promise.resolve(); await Promise.resolve();
+  releaseA({ owner_choices: [{ owner_id: 'owner-a', display_name: 'A归属' }] }); await first;
+  assert.equal(requests.length, 1); assert.equal(requests[0].mediaID, 'media-b'); assert.equal(page.data.adoptingResultID, 'result-b');
+  releaseB({ content_id: 'content-b' }); await second;
+});
+
+test('project and note retry buttons reload the first page instead of pretending to append', async () => {
+  let projects = 0, notes = 0;
+  const { page } = detail({ pendingAdoption: () => null }, {
+    listProjectNoteProjects: async () => { if (++projects === 1) throw new Error('temporary'); return { items: [{ project_id: 'p', name: '项目' }] }; },
+    getProjectNoteHistory: async () => { if (++notes === 1) throw new Error('temporary'); return { items: [{ note_id: 'n', title: '笔记' }] }; },
+  });
+  await page.startNoteAdoption(event()); await page.loadAdoptionProjects({ currentTarget: { dataset: {} } });
+  assert.equal(projects, 2); assert.equal(page.data.adoptionProjects.length, 1);
+  await page.selectAdoptionProject(event('p')); await page.loadAdoptionNotes({ currentTarget: { dataset: {} } });
+  assert.equal(notes, 2); assert.equal(page.data.adoptionNotes.length, 1);
+});

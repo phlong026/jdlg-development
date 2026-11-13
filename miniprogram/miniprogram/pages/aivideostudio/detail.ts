@@ -11,7 +11,7 @@ Page({
   onShow() {
     const token = String(wx.getStorageSync('token') || '');
     if (token !== this._token) {
-      this.stopPolling(); this.abortDownload(); this.closeNoteAdoption();
+      this.stopPolling(); this.abortDownload(); this.closeNoteAdoption(); this._contentAdoptionAttempt = null;
       this._token = token; this._epoch = (this._epoch || 0) + 1; this._visible = true;
       this.setData({ batch: null, snapshot: {}, results: [], loading: !!token, error: token ? '' : '请先登录', adoptingResultID: '', cancelling: false });
       if (token) return this.load();
@@ -19,7 +19,7 @@ Page({
     }
     if (this._visible === false) { this._visible = true; return this.load(true); }
   },
-  onHide() { this.closeNoteAdoption(); this._visible = false; this._epoch = (this._epoch || 0) + 1; this.stopPolling(); this.abortDownload(); },
+  onHide() { this.closeNoteAdoption(); this._contentAdoptionAttempt = null; this.setData({ adoptingResultID: '' }); this._visible = false; this._epoch = (this._epoch || 0) + 1; this.stopPolling(); this.abortDownload(); },
   onUnload() { this._unloaded = true; this.onHide(); },
   current(epoch) { return !this._unloaded && this._token === String(wx.getStorageSync('token') || '') && (epoch === undefined || epoch === this._epoch); },
   abortDownload() { if (this._downloadTask && this._downloadTask.abort) this._downloadTask.abort(); this._downloadTask = null; },
@@ -124,7 +124,7 @@ Page({
     } catch (error) { if (this.adoptionCurrent(epoch)) this.setData({ adoptionError: error.message || '项目加载失败' }); }
   },
   async loadAdoptionProjects(event) {
-    const append = !!(event && event.currentTarget), epoch = this._adoptionEpoch;
+    const append = !!(event && event.currentTarget && event.currentTarget.dataset && event.currentTarget.dataset.more), epoch = this._adoptionEpoch;
     if (append && !this.data.adoptionCursor) return;
     this.setData({ adoptionLoading: true, adoptionError: '' });
     try {
@@ -140,7 +140,7 @@ Page({
     return this.loadAdoptionNotes();
   },
   async loadAdoptionNotes(event) {
-    const append = !!(event && event.currentTarget), epoch = this._adoptionEpoch;
+    const append = !!(event && event.currentTarget && event.currentTarget.dataset && event.currentTarget.dataset.more), epoch = this._adoptionEpoch;
     if (!this.data.adoptionProject || (append && !this.data.adoptionCursor)) return;
     this.setData({ adoptionLoading: true, adoptionError: '' });
     try {
@@ -184,19 +184,29 @@ Page({
   async adoptContent(event) {
     const item = this.data.results[Number(event.currentTarget.dataset.index)];
     if (!item || !item.stable_media_id || this.data.adoptingResultID) return;
+    const attempt = { token: this._token };
+    this._contentAdoptionAttempt = attempt;
+    const ownsAttempt = () => this._contentAdoptionAttempt === attempt && attempt.token === this._token && attempt.token === String(wx.getStorageSync('token') || '') && this._visible !== false && !this._unloaded;
     this.setData({ adoptingResultID: item.result_id, error: '' });
     try {
-      const context = await phase3.workbenchContext();
-      if (!this.current()) return;
-      const owners = context.owner_choices || (context.owners || []).map(owner_id => ({ owner_id, display_name: owner_id }));
-      if (!owners.length) throw new Error('当前账号没有可用的内容归属');
-      let owner = owners[0];
-      if (owners.length > 1) owner = await new Promise((resolve, reject) => wx.showActionSheet({ itemList: owners.map(row => row.display_name), success: result => resolve(owners[result.tapIndex]), fail: reject }));
-      if (!this.current() || !owner) return;
-      const saved = await api.adoptContent(item.stable_media_id, { draft_instance_id: api.idempotencyKey(), owner_id: owner.owner_id, title: String(this.data.snapshot.name || this.data.batch.name || 'AI 视频创作').slice(0, 80) });
-      if (!this.current()) return;
+      // Recover the exact pending target even when its former owner is no
+      // longer selectable. A definitive server refusal releases that attempt.
+      let input = api.pendingAdoption('content', item.stable_media_id);
+      if (!input) {
+        const context = await phase3.workbenchContext();
+        if (!ownsAttempt()) return;
+        const owners = context.owner_choices || (context.owners || []).map(owner_id => ({ owner_id, display_name: owner_id }));
+        if (!owners.length) throw new Error('当前账号没有可用的内容归属');
+        let owner = owners[0];
+        if (owners.length > 1) owner = await new Promise((resolve, reject) => wx.showActionSheet({ itemList: owners.map(row => row.display_name), success: result => resolve(owners[result.tapIndex]), fail: reject }));
+        if (!ownsAttempt() || !owner) return;
+        input = { draft_instance_id: api.idempotencyKey(), owner_id: owner.owner_id, title: String(this.data.snapshot.name || this.data.batch && this.data.batch.name || 'AI 视频创作').slice(0, 80) };
+      }
+      const saved = await api.adoptContent(item.stable_media_id, input);
+      if (!ownsAttempt()) return;
+      this._contentAdoptionAttempt = null;
       this.setData({ adoptingResultID: '' });
       wx.navigateTo({ url: '/pages/contentedit/contentedit?id=' + encodeURIComponent(saved.content_id) });
-    } catch (error) { if (this.current()) this.setData({ adoptingResultID: '', error: /cancel/i.test(String(error && error.errMsg || '')) ? '已取消选择，视频保持不变' : (error.message || '内容草稿创建失败') }); }
+    } catch (error) { if (ownsAttempt()) { this._contentAdoptionAttempt = null; this.setData({ adoptingResultID: '', error: /cancel/i.test(String(error && error.errMsg || '')) ? '已取消选择，视频保持不变' : (error.message || '内容草稿创建失败') }); } }
   },
 });
