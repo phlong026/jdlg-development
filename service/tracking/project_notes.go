@@ -38,6 +38,7 @@ type ProjectNoteProjectInput struct {
 	Name         string  `json:"name"`
 	Owner        string  `json:"owner_id"`
 	CRMID        string  `json:"crm_id,omitempty"`
+	CustomerRef  string  `json:"customer_ref,omitempty"`
 	Location     string  `json:"location,omitempty"`
 	BuildingArea float64 `json:"building_area,omitempty"`
 	Floors       int     `json:"floors,omitempty"`
@@ -59,6 +60,7 @@ type ProjectNoteProject struct {
 	Name               string    `json:"name"`
 	Owner              string    `json:"owner_id"`
 	CRMID              string    `json:"crm_id,omitempty"`
+	CustomerRef        string    `json:"customer_ref,omitempty"`
 	Location           string    `json:"location,omitempty"`
 	BuildingArea       float64   `json:"building_area,omitempty"`
 	Floors             int       `json:"floors,omitempty"`
@@ -133,18 +135,18 @@ type ProjectNoteDraft struct {
 }
 
 type ProjectNote struct {
-	ID         string    `json:"note_id"`
-	ProjectID  string    `json:"project_id"`
-	Revision   int       `json:"revision"`
-	Title      string    `json:"title"`
-	Body       string    `json:"body"`
-	BodyFormat string    `json:"body_format"`
-	CoverID    string    `json:"cover_media_id,omitempty"`
-	MediaIDs   []string  `json:"media_ids,omitempty"`
+	ID         string   `json:"note_id"`
+	ProjectID  string   `json:"project_id"`
+	Revision   int      `json:"revision"`
+	Title      string   `json:"title"`
+	Body       string   `json:"body"`
+	BodyFormat string   `json:"body_format"`
+	CoverID    string   `json:"cover_media_id,omitempty"`
+	MediaIDs   []string `json:"media_ids,omitempty"`
 	// Media 是草稿的媒体类型元数据（D2/D11）：只带类型/尺寸，不暴露对象地址。
-	Media      []Asset   `json:"media,omitempty"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	Media     []Asset   `json:"media,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type ProjectNoteVersion struct {
@@ -479,7 +481,7 @@ func (s *Service) ProjectNoteCreateProject(ctx context.Context, scope Scope, inp
 	}
 	now := s.Now().UTC()
 	out = ProjectNoteProject{
-		ID: opaque(), Name: input.Name, Owner: input.Owner, CRMID: input.CRMID,
+		ID: opaque(), Name: input.Name, Owner: input.Owner, CRMID: input.CRMID, CustomerRef: input.CustomerRef,
 		Location: input.Location, BuildingArea: input.BuildingArea, Floors: input.Floors, Style: input.Style,
 		Status: ProjectNoteProjectStatusInitial, DesignerID: scope.Actor, Revision: 1, CreatedAt: now, UpdatedAt: now,
 	}
@@ -1397,7 +1399,7 @@ func (s *Service) ProjectNoteNoticeEligible(ctx context.Context, eventID string,
 		if project.Owner != notice.Owner {
 			return nil
 		}
-		if err = s.projectNoteReadAccess(ctx, r, project, opened.ActorID); err != nil {
+		if err = s.projectNoteGrant(ctx, r, project); err != nil {
 			var denied *Error
 			if errors.As(err, &denied) && (denied.Status == 401 || denied.Status == 403 || denied.Status == 404) {
 				return nil

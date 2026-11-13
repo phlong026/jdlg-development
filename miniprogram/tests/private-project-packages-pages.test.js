@@ -360,3 +360,21 @@ test('history outage does not block an otherwise authorized package manager', as
   assert.equal(manager.data.loading, false);
   assert.match(manager.data.notice, /分享记录/);
 });
+
+test('package media failure keeps valid text, feedback replies and permits per-asset retry', async () => {
+  let failing = true;
+  const version = { version_id: 'version-one', body_format: 'plain', body: '可阅读正文', media: [{ media_id: 'image-one', kind: 'image' }] };
+  const page = pageHarness('projectpackageview', {
+    getSharedProjectPackageVersion: async () => ({ version, feedbacks: [{ feedback_id: 'feedback-one', text: '请修改', resolved: true }], resolutions: [{ feedback_id: 'feedback-one', reply: '已调整门厅' }] }),
+    downloadSharedProjectPackageMedia: async () => { if (failing) throw Object.assign(new Error('临时图片失败'), { statusCode: 404 }); return '/tmp/recovered.jpg'; },
+  });
+  page.onLoad({ pps: 'package-token' });
+  page._visible = true; page._epoch = 1; page._accountToken = 'session-token'; page._packageToken = 'package-token';
+  await page.openVersion({ currentTarget: { dataset: { id: 'version-one' } } });
+  assert.equal(page.data.pageView, 'version');
+  assert.equal(page.data.versionView.version.body, '可阅读正文');
+  assert.equal(page.data.versionView.feedbacks[0].resolution_reply, '已调整门厅');
+  assert.equal(page.data.mediaFailuresCount, 1);
+  failing = false; await page.retryMediaDownloads();
+  assert.equal(page.data.mediaFailuresCount, 0); assert.equal(page.data.media[0].local_path, '/tmp/recovered.jpg');
+});

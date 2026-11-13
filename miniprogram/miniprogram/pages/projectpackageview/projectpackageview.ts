@@ -98,16 +98,40 @@ Page({
       const assets = [];
       if (versionView.version && versionView.version.cover) assets.push(versionView.version.cover);
       for (const asset of versionView.version && versionView.version.media || []) if (!assets.some(item => item.media_id === asset.media_id)) assets.push(asset);
-      let media = await Promise.all(assets.map(asset => loadSharedPackageMedia(this._packageToken, versionID, asset)));
-      if (!this.current(epoch)) return;
+      const request = this._versionRequest = (this._versionRequest || 0) + 1;
+      let media = new Array(assets.length);
+      let cursor = 0, validity;
+      const worker = async () => {
+        while (cursor < assets.length) {
+          const index = cursor++, asset = assets[index];
+          try { media[index] = await loadSharedPackageMedia(this._packageToken, versionID, asset); }
+          catch (error) {
+            const status = Number(error && error.statusCode);
+            if (status === 401 || status === 403) throw error;
+            if (status === 404) {
+              validity = validity || api.getSharedProjectPackageVersion(this._packageToken, versionID);
+              await validity;
+            }
+            media[index] = Object.assign({}, asset, { local_path: '', preview_error: '素材加载失败' });
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(4, assets.length) }, worker));
+      if (!this.current(epoch) || request !== this._versionRequest) return;
       const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : { windowWidth: 375 };
       media = fitNoteMedia(media, windowInfo);
       const articleBlocks = versionView.version.body_format === 'article_v2' ? fitNoteBlocks(renderArticleDocument(versionView.version.body, media, windowInfo.windowWidth * 636 / 750, 'package-version'), media, windowInfo) : [];
+      const replies = new Map((versionView.resolutions || []).map(item => [item.feedback_id, item.reply || '']));
+      versionView.feedbacks = (versionView.feedbacks || []).map(item => Object.assign({}, item, { resolution_reply: item.reply || replies.get(item.feedback_id) || '' }));
       const versionKey = String(versionView.version && versionView.version.version_id || versionID);
-      this.setData({ versionView, media, mediaGroups: groupNoteImages(media, media, windowInfo), galleryPositions: {}, articleBlocks, pageView: 'version', busy: false, mediaFailuresCount: 0, confirmed: !!versionView.confirmation, readAcknowledged: this._acknowledgedVersions.has(versionKey) });
-    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, notice: error.message || '方案加载失败' }); }
+      this.setData({ versionView, media, mediaGroups: groupNoteImages(media, media, windowInfo), galleryPositions: {}, articleBlocks, pageView: 'version', busy: false, mediaFailuresCount: mediaFailureCount(media), notice: mediaFailureCount(media) ? '部分素材加载失败，可重试；正文仍可阅读。' : '', confirmed: !!versionView.confirmation, readAcknowledged: this._acknowledgedVersions.has(versionKey) });
+    } catch (error) { if (this.current(epoch)) {
+      if ([401, 403, 404].includes(Number(error.statusCode))) { this.clearProtected(); this.setData({ loading: false, error: error.message || '方案暂不可访问', loginRequired: Number(error.statusCode) === 401 }); }
+      else this.setData({ busy: false, notice: error.message || '方案加载失败' });
+    } }
   },
   handleBack() {
+    this._versionRequest = (this._versionRequest || 0) + 1;
     if (this.data.pageView === 'version') {
       this.setData({ pageView: 'directory', versionView: null, media: [], mediaGroups: [], galleryPositions: {}, articleBlocks: [], mediaFailuresCount: 0, feedbackText: '', satisfaction: '', notice: '' });
       return;
@@ -187,7 +211,7 @@ Page({
       catch (_) { /* 保留失败状态，由用户再次重试 */ }
     }));
     this._mediaRetrying = false;
-    if (!this.current(epoch)) return;
+    if (!this.current(epoch) || !this.data.versionView || this.data.versionView.version.version_id !== version.version_id) return;
     const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : { windowWidth: 375, windowHeight: 667 };
     const media = fitNoteMedia((this.data.media || []).map(item => updated.get(item.media_id) || item), windowInfo);
     const articleBlocks = version.body_format === 'article_v2' ? fitNoteBlocks(renderArticleDocument(version.body, media, windowInfo.windowWidth * 636 / 750, 'package-version'), media, windowInfo) : [];
