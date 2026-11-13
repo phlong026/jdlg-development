@@ -63,3 +63,5 @@ npm run check:tracking-routes
 首批实现的接口、默认关闭开关、迁移/回退及未完成项见[三期接入说明](docs/phase3/README.md)。本地构建不代表生产部署或服务号真实验收。
 
 设计师独立 AI 视频的页面、后台价格配置、素材与草稿接口、验证和未开放项见[2026-11-13 实现说明](docs/phase3/ai-video-studio-20261113/README.md)。新模块的付费生成仍受账务与执行就绪门禁保护。
+
+工作台链路逐项修复及服务号开通依赖见[修复计划](docs/phase3/workbench-chain-fixes-20261113/PLAN.md)和[服务号配置门禁](docs/phase3/workbench-chain-fixes-20261113/official-account.md)。服务号独立配置项见`service/env.example`，缺少真实账号和模板时保持关闭。
