@@ -3192,3 +3192,14 @@ test('customer deep link preselects only a freshly authorized exact customer', a
     page.onUnload();
   }
 });
+
+test('member media 404 revalidates fixed project and version while true revocation clears the view', async () => {
+  let denied = false, reads = 0;
+  const page = pageHarness('projectnoteview', {
+    version: async () => { reads++; if (denied) throw Object.assign(new Error('成员已撤销'), { statusCode: 403 }); return { project: { project_id: 'p' }, version: { version_id: 'v', body_format: 'plain', body: '合法成员正文', media: [{ media_id: 'missing-image', kind: 'image' }] } }; },
+    download: async () => { throw Object.assign(new Error('图片暂不可用'), { statusCode: 404 }); },
+  });
+  page.onLoad({ project_id: 'p' }); page._memberVersionID = 'v'; await page.onShow();
+  assert.equal(reads, 2); assert.equal(page.data.view.version.body, '合法成员正文'); assert.equal(page.data.mediaFailuresCount, 1);
+  denied = true; await page.revalidateShared(); assert.equal(page.data.view, null); assert.match(page.data.error, /访问权限/);
+});

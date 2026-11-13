@@ -178,7 +178,9 @@ Page({
               shareValidity = shareValidity || (async () => {
                 try {
                   const fresh = await this.readSharedView();
-                  const same = !!(fresh && fresh.share && String(fresh.share.share_id || '') === String(view.share && view.share.share_id || ''));
+                  const same = this._memberProjectID
+                    ? !!(fresh && fresh.project && fresh.version && String(fresh.project.project_id || '') === this._memberProjectID && String(fresh.version.version_id || '') === this._memberVersionID)
+                    : !!(fresh && fresh.share && String(fresh.share.share_id || '') === String(view.share && view.share.share_id || ''));
                   return same ? { ok: true } : { ok: false, error: Object.assign(new Error('分享内容已更新'), { statusCode: 403 }) };
                 } catch (error) { return { ok: false, error }; }
               })();
@@ -222,7 +224,9 @@ Page({
     try {
       const view = await this.readSharedView();
       if (!this.current(epoch)) return;
-      const sameShare = String(view.share && view.share.share_id || '') === String(cached.share && cached.share.share_id || '');
+      const sameShare = this._memberProjectID
+        ? String(view.project && view.project.project_id || '') === this._memberProjectID
+        : String(view.share && view.share.share_id || '') === String(cached.share && cached.share.share_id || '');
       const sameVersion = String(view.version && view.version.version_id || '') === String(cached.version && cached.version.version_id || '');
       if (!sameShare || !sameVersion) throw Object.assign(new Error('分享已变更'), { statusCode: 403 });
       const unchanged = String(view.version && view.version.revision || '') === String(cached.version && cached.version.revision || '') && (this.data.media || []).length >= 0;
