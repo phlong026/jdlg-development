@@ -3106,3 +3106,24 @@ test('the AI insertion queue times out instead of waiting forever', async () => 
   assert.ok(Date.now() - started >= 180, '必须等待到超时');
   assert.equal(page.data.noteBody, '原文', '超时后不得插入');
 });
+
+test('pending media survives normal unload and a fresh onLoad onShow for the same account', async () => {
+  const storage = { token: 'session-token', userInfo: { id: 101 } };
+  const wxStubs = { getStorageSync: key => storage[key], setStorageSync: (key, value) => { storage[key] = value; }, removeStorageSync: key => { delete storage[key]; } };
+  const first = pageHarness('projectnotes', {}, wxStubs);
+  first._token = 'session-token'; first._visible = true; first._epoch = 1;
+  first.setData({ selectedProject: { project_id: 'p' }, note: { note_id: 'n1', revision: 1 } });
+  first.stashPendingMedia(first.mediaFailureOwnerKey(), [{ file: { tempFilePath: '/tmp/p.jpg' }, asset: { media_id: 'pending-image', kind: 'image' } }]);
+  first.onUnload();
+  assert.ok(storage.project_note_pending_media_v1, 'unload must retain account-scoped recovery records');
+  const second = pageHarness('projectnotes', { listProjectNoteProjects: async () => ({ items: [] }), workbenchContext: async () => ({ owners: ['designer-101'] }) }, wxStubs);
+  second.onLoad({}); await second.onShow();
+  second._selectedNoteID = 'n1';
+  second.applyProjectDetail({ project: { project_id: 'p' }, notes: [{ note_id: 'n1', revision: 1, title: '方案', body: '保留正文', body_format: 'plain' }], versions: [] }, '', null, null, 'editor');
+  assert.ok(second.data.noteMedia.some(item => item.media_id === 'pending-image'));
+  storage.userInfo = { id: 102 };
+  const third = pageHarness('projectnotes', {}, wxStubs);
+  third._selectedNoteID = 'n1';
+  third.applyProjectDetail({ project: { project_id: 'p' }, notes: [{ note_id: 'n1', revision: 1, title: '方案', body: '正文', body_format: 'plain' }], versions: [] }, '', null, null, 'editor');
+  assert.equal(third.data.noteMedia.some(item => item.media_id === 'pending-image'), false);
+});

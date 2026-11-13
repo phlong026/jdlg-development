@@ -236,7 +236,7 @@ Page({
   clearProtected() {
     // 保护性清空递增失效代际：在途上传/回调据此判断自己是否已作废，不得重建已清空的受保护状态。
     this._protectedGeneration = (this._protectedGeneration || 0) + 1;
-    this._noteFormBaseline = null; this._projectFormBaseline = null; this._loadedFormState = null; this.resetDraftInstance(); this._noteMediaFailures = null; this._noteMediaPending = null; this._noteMediaUpload = null; this._pendingPickerFeedback = null; this._hydrateResumePending = false; writePendingMediaStore({}); this._aiPanelRequest = (this._aiPanelRequest || 0) + 1; this._aiPanelLaunch = null; this.abortNoteAI();
+    this._noteFormBaseline = null; this._projectFormBaseline = null; this._loadedFormState = null; this.resetDraftInstance(); this._noteMediaFailures = null; this._noteMediaPending = null; this._noteMediaUpload = null; this._pendingPickerFeedback = null; this._hydrateResumePending = false; this._aiPanelRequest = (this._aiPanelRequest || 0) + 1; this._aiPanelLaunch = null; this.abortNoteAI();
     this.setData(Object.assign(blankProtected(), { loading: false, loginRequired: false, accessRecheckRequired: false, error: '', notice: '', busy: false }));
   },
 
