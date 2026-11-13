@@ -225,6 +225,8 @@ const GENERATED_TASK_PROGRESS_STORAGE_PREFIX = 'generated_task_progress_';
 
 Page({
   contentSaveUnloaded: false,
+  contentSaveAccountToken: '',
+  contentSaveOperation: null as { token: string; taskNo: string } | null,
   data: {
     taskData: {} as TaskData,
     contentSaving: false,
@@ -304,6 +306,10 @@ Page({
   enterpriseWechatAutoResumeInProgress: false,
 
   onLoad(options) {
+    this.contentSaveUnloaded = false;
+    this.contentSaveOperation = null;
+    this.contentSaveAccountToken = String(wx.getStorageSync('token') || '');
+    this.setData({ contentSaving: false });
     this.initNavLayout();
     this.loadTemplateTabConfig();
     const decodedTaskNo = options?.task_no ? decodeURIComponent(options.task_no) : '';
@@ -607,6 +613,7 @@ Page({
   },
 
   onShow() {
+    this.syncContentSaveAccount();
     const taskNo = String(this.data.taskData?.task_no || '').trim();
     const taskStatus = String(this.data.taskData?.status || '');
     if (this.data.showEnterpriseWechatModal && this.data.pendingDownloadType) {
@@ -880,6 +887,7 @@ Page({
 
   onUnload() {
     this.contentSaveUnloaded = true;
+    this.contentSaveOperation = null;
     this.persistCurrentProgressState();
     this.stopPolling();
     this.stopVisualProgress();
@@ -2047,15 +2055,26 @@ Page({
   },
 
   // B1 直连管线：把本次生成结果一键转存为内容工作台的图文草稿，随后进入编辑器排版发布。
+  syncContentSaveAccount() {
+    const token = String(wx.getStorageSync('token') || '');
+    if (token !== this.contentSaveAccountToken) {
+      this.contentSaveAccountToken = token;
+      this.contentSaveOperation = null;
+      this.setData({ contentSaving: false });
+    }
+    return token;
+  },
   async saveAsContent() {
+    const token = this.syncContentSaveAccount();
     if (this.data.contentSaving) return;
     const taskNo = String(this.data.taskData?.task_no || '');
     if (!taskNo || this.data.taskData?.status !== 'success') {
       wx.showToast({ title: '生成成功后才能保存为内容', icon: 'none' });
       return;
     }
-    const token = String(wx.getStorageSync('token') || '');
-    const current = () => !this.contentSaveUnloaded && token === String(wx.getStorageSync('token') || '') && taskNo === String(this.data.taskData?.task_no || '');
+    const operation = { token, taskNo };
+    this.contentSaveOperation = operation;
+    const current = () => this.contentSaveOperation === operation && !this.contentSaveUnloaded && token === String(wx.getStorageSync('token') || '') && taskNo === String(this.data.taskData?.task_no || '');
     const confirmCopy = () => new Promise(resolve => wx.showModal({ title: '另存新草稿？', content: '原内容已删除、撤回或不可访问，生成结果仍保留。', confirmText: '另存新草稿', success: result => resolve(result.confirm), fail: () => resolve(false) }));
     this.setData({ contentSaving: true });
     try {
@@ -2099,7 +2118,12 @@ Page({
         return;
       }
       wx.showToast({ title: (error instanceof Error && error.message) || '保存失败，请重试', icon: 'none' });
-    } finally { if (current()) this.setData({ contentSaving: false }); }
+    } finally {
+      if (this.contentSaveOperation === operation) {
+        this.contentSaveOperation = null;
+        if (!this.contentSaveUnloaded && token === String(wx.getStorageSync('token') || '')) this.setData({ contentSaving: false });
+      }
+    }
   },
 
   publishToSquare() {
