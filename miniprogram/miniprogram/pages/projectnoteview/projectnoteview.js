@@ -403,17 +403,24 @@ Page({
     this._mediaRetrying = true;
     this.setData({ notice: '正在重新加载素材…' });
     const updated = new Map();
-    let cursor = 0;
+    let cursor = 0, accessError, validity;
     const worker = async () => {
       while (cursor < failures.length) {
         const item = failures[cursor++];
         try { updated.set(item.media_id, await this.loadSharedAsset(item)); }
-        catch (_) { /* 保持失败状态，等下次重试 */ }
+        catch (error) {
+          if ([401, 403].includes(Number(error.statusCode))) accessError = error;
+          if (Number(error.statusCode) === 404) {
+            validity = validity || this.readSharedView();
+            try { await validity; } catch (failure) { accessError = failure; }
+          }
+        }
       }
     };
     await Promise.all([worker(), worker(), worker(), worker()]);
     this._mediaRetrying = false;
     if (!this.current(epoch)) return;
+    if (accessError) { const failure = shareErrorOf(accessError); this.clearProtected(); this.setData({ loading: false, loginRequired: failure.loginRequired, error: failure.text }); return; }
     const media = (this.data.media || []).map(item => updated.get(item.media_id) || item);
     const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
     const failuresLeft = mediaFailureCount(media);

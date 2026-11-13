@@ -378,3 +378,12 @@ test('package media failure keeps valid text, feedback replies and permits per-a
   failing = false; await page.retryMediaDownloads();
   assert.equal(page.data.mediaFailuresCount, 0); assert.equal(page.data.media[0].local_path, '/tmp/recovered.jpg');
 });
+
+test('leaving package version before its request returns does not reopen the private version', async () => {
+  let release;
+  const page = pageHarness('projectpackageview', { getSharedProjectPackageVersion: () => new Promise(resolve => { release = resolve; }) });
+  page.onLoad({ pps: 'package-token' }); page._accountToken = 'session-token'; page._epoch = 1;
+  const pending = page.openVersion({ currentTarget: { dataset: { id: 'v1' } } });
+  page.handleBack(); release({ version: { version_id: 'v1', body: '旧正文', body_format: 'plain', media: [] } }); await pending;
+  assert.equal(page.data.versionView, null); assert.equal(page.data.pageView, 'directory');
+});

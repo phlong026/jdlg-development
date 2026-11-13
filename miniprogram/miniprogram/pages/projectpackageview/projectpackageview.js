@@ -90,14 +90,13 @@ Page({
   async openVersion(event) {
     const versionID = String(event.currentTarget.dataset.id || '');
     if (!versionID || this.data.busy) return;
-    const epoch = this._epoch; this.setData({ busy: true, notice: '' });
+    const epoch = this._epoch, request = this._versionRequest = (this._versionRequest || 0) + 1; this.setData({ busy: true, notice: '' });
     try {
       const versionView = await api.getSharedProjectPackageVersion(this._packageToken, versionID);
-      if (!this.current(epoch)) return;
+      if (!this.current(epoch) || request !== this._versionRequest) return;
       const assets = [];
       if (versionView.version && versionView.version.cover) assets.push(versionView.version.cover);
       for (const asset of versionView.version && versionView.version.media || []) if (!assets.some(item => item.media_id === asset.media_id)) assets.push(asset);
-      const request = this._versionRequest = (this._versionRequest || 0) + 1;
       let media = new Array(assets.length);
       let cursor = 0, validity;
       const worker = async () => {
@@ -205,12 +204,20 @@ Page({
     this._mediaRetrying = true;
     this.setData({ notice: '正在重新加载视频…' });
     const updated = new Map();
+    let accessError, validity;
     await Promise.all(failures.map(async item => {
       try { updated.set(item.media_id, Object.assign(await loadSharedPackageMedia(this._packageToken, version.version_id, item), { preview_error: '' })); }
-      catch (_) { /* 保留失败状态，由用户再次重试 */ }
+      catch (error) {
+        if ([401, 403].includes(Number(error.statusCode))) accessError = error;
+        if (Number(error.statusCode) === 404) {
+          validity = validity || api.getSharedProjectPackageVersion(this._packageToken, version.version_id);
+          try { await validity; } catch (failure) { accessError = failure; }
+        }
+      }
     }));
     this._mediaRetrying = false;
     if (!this.current(epoch) || !this.data.versionView || this.data.versionView.version.version_id !== version.version_id) return;
+    if (accessError) { this.clearProtected(); this.setData({ loading: false, loginRequired: Number(accessError.statusCode) === 401, error: accessError.message || '方案暂不可访问' }); return; }
     const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : { windowWidth: 375, windowHeight: 667 };
     const media = fitNoteMedia((this.data.media || []).map(item => updated.get(item.media_id) || item), windowInfo);
     const articleBlocks = version.body_format === 'article_v2' ? fitNoteBlocks(renderArticleDocument(version.body, media, windowInfo.windowWidth * 636 / 750, 'package-version'), media, windowInfo) : [];
