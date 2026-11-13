@@ -139,6 +139,8 @@ Page({
     settingsExpanded: false, mediaExpanded: false, moreExpanded: false, tagsText: '', pinned: false,
   },
   onLoad(options) {
+    this._unloaded = false;
+    this._contentSaveActive = null;
     this.setData({ id: String(options.id || '') });
     const channel = this.getOpenerEventChannel && this.getOpenerEventChannel();
     const sourceToken = String(wx.getStorageSync('token') || '');
