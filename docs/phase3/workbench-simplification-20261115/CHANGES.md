@@ -1,6 +1,6 @@
 # 本轮详细修改清单
 
-已完成53个既有文件的代码/测试/接口说明整改，另补本目录交付文档。原生及发布状态见[VERIFICATION.md](VERIFICATION.md)。
+原三个功能提交覆盖53个既有文件的代码/测试/接口说明整改，另补本目录交付文档。其后追加视觉收敛、租户锁修复及素材访客窗口修复；追加修复提交为7a8479c（5文件）、086535f（13文件）、c6561eb（3文件）；存在重叠，最终唯一文件数以整体diff为准，不把各提交文件数相加当作唯一总数。原生及发布状态见[VERIFICATION.md](VERIFICATION.md)。
 
 ## 内容创作
 
@@ -94,3 +94,14 @@
 项目名称与合法归属、笔记标题与非空正文、服务端preview_token、固定版本/私有媒体权限、指定成员正式确认等必要规则继续保留。未新增自动保存、自动发布或自动扣费。
 
 本目录另提供32项任务、验收表、接口契约、审查结果和发布回退步骤。
+
+## 原生验收后的追加修改
+
+- 内容工作台：已发布动作缩短为“分享”；新建图标使用主题色。图文/视频编辑器合并标题和介绍区，压缩空白，保留AI辅助；视频归属放入内容设置，不扩大权限。
+- 项目详情：版本、资料、成员和记录收进可展开“更多管理”，进入其他项目时重置展开状态；编辑区继续保留保存笔记/发给客户。
+- 上述视觉收敛涉及13个前端文件，独立审查P0/P1=0；具体修改位于既有contentworkbench、contentedit、projectnotes及对应测试，375/390宽各18态已完成原生截图及button/layout边界检查，无横向溢出，视觉P0/P1=0、P2=4非阻断。
+- [service/tracking/store.go](../../../service/tracking/store.go)：租户锁从INSERT IGNORE后SELECT FOR UPDATE改为单条ON DUPLICATE KEY UPDATE，避免并发重复键共享锁升级死锁。
+- [service/tracking/store_mysql_test.go](../../../service/tracking/store_mysql_test.go)：新增真实MySQL并发回归；旧24并发1213红、新20轮绿。同步[read_transaction_test.go](../../../service/tracking/read_transaction_test.go)、[scoped_sql_test.go](../../../service/tracking/scoped_sql_test.go)及[share_tracking_legacy_transaction_test.go](../../../service/route/share_tracking_legacy_transaction_test.go)的锁行为断言。
+- 素材→访客首次onShow重置as_of已在customers/shares两分支修复，真实素材as_of保持一致、红绿回归通过；最终独立审查APPROVE、P0/P1/P2=0。修改涉及sharevisits TS/JS与对应回归测试，见c6561eb。
+
+最新1701/1701 JS（最终日志/tmp/jdlg-mini-final-20261115.log）与Go全量/vet通过；真实角色、管理预览0请求、无权限拒绝、客户绑定/解除及隔离媒体适配边界见[VERIFICATION.md](VERIFICATION.md)。系统键盘、手机相册、真机及原生微信选收件人未执行；追加三提交已在隔离worktree反向revert，精确恢复febfe4c树053a70974cb422457200fa1566b7366a69d6ece0。DevTools门禁已过，PR/合并/部署/上传仍待执行。

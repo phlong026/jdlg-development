@@ -17,20 +17,43 @@
       "scope": "customers",
       "commit": "1dc6721bc2c265ea1487b28e4780489ef5f023de",
       "files": 28
+    },
+    {
+      "scope": "tenant-lock",
+      "commit": "7a8479c70fe7bdf43cc6b40ec733cee589c8d409",
+      "files": 5
+    },
+    {
+      "scope": "native-layout",
+      "commit": "086535fd49874f4ddd68da1fc9575ffa8d74d81e",
+      "files": 13
+    },
+    {
+      "scope": "material-snapshot",
+      "commit": "c6561eb94abc7b82c6995c60dd300ce4cd0b5c6e",
+      "files": 3
     }
   ],
   "miniprogram": {
-    "tests": 1696,
-    "passed": 1696,
+    "tests": 1701,
+    "passed": 1701,
     "failed": 0,
     "skipped": 0,
-    "native_wxml_compiler_enabled": true
+    "native_wxml_compiler_enabled": true,
+    "log": "/tmp/jdlg-mini-final-20261115.log"
   },
   "backend": {
     "go_test_all": true,
     "go_vet_all": true,
     "CGO_ENABLED": "0",
-    "race": "pending Linux CI"
+    "race": "pending Linux CI",
+    "mysql_tenant_lock": {
+      "implementation": "single ON DUPLICATE KEY UPDATE",
+      "old_concurrency": 24,
+      "old_error": "MySQL 1213 deadlock",
+      "new_rounds_passed": 20,
+      "real_mysql": true
+    }
   },
   "admin": {
     "tests": 776,
@@ -43,7 +66,8 @@
     "baseline_diagnostic_lines": 188,
     "current_diagnostic_lines": 188,
     "added_diagnostics": 0,
-    "full_typecheck_passed": false
+    "full_typecheck_passed": false,
+    "comparison": "最终刷新仍188行；规范化路径及行列后新增0"
   },
   "source_checks": {
     "changed_js_syntax": 19,
@@ -68,19 +92,142 @@
     "backend": "APPROVE",
     "frontend": "APPROVE",
     "remaining_P0": 0,
-    "remaining_P1": 0
+    "remaining_P1": 0,
+    "scope": "原三个功能提交的审查；不自动覆盖追加修复",
+    "backend_additional": {
+      "scope": "ODKU租户锁修复",
+      "formal_verdict": "COMMENT",
+      "P0": 0,
+      "P1": 0,
+      "P2": 0,
+      "limitation": "审查者无LSP；采用compiler、vet及真实SQL替代，不记为APPROVE"
+    },
+    "frontend_additional": {
+      "scope": "13文件视觉收敛",
+      "P0": 0,
+      "P1": 0
+    },
+    "snapshot_fix": {
+      "scope": "customers/shares首次onShow快照修复",
+      "formal_verdict": "APPROVE",
+      "P0": 0,
+      "P1": 0,
+      "P2": 0,
+      "regression": "两分支红绿通过"
+    },
+    "visual": {
+      "P0": 0,
+      "P1": 0,
+      "P2": 4,
+      "nonblocking_issues": [
+        {
+          "page": "02",
+          "priority": "P2",
+          "issue": "新建图标对比偏弱",
+          "blocking": false
+        },
+        {
+          "page": "03",
+          "priority": "P2",
+          "issue": "缩略图封面叠层偏挤",
+          "blocking": false
+        },
+        {
+          "page": "12",
+          "priority": "P2",
+          "issue": "查看说明视觉权重偏高",
+          "blocking": false
+        },
+        {
+          "page": "18",
+          "priority": "P2",
+          "issue": "设置3项文案略长",
+          "blocking": false
+        }
+      ]
+    }
   },
   "rollback": {
     "reverse_patch_check": true,
     "isolated_revert_three_commits": true,
-    "restored_tree": "aaa14ca124e6f6182a22b16719693452252c0a1c"
+    "restored_tree": "aaa14ca124e6f6182a22b16719693452252c0a1c",
+    "scope": "原三个功能提交及追加三个修复提交分别完成隔离回退验证",
+    "additional_three_commits": {
+      "passed": true,
+      "worktree": "/tmp/jdlg-revert-native-20261115",
+      "command": "git revert --no-commit c6561eb 086535f 7a8479c",
+      "restored_commit": "febfe4c",
+      "restored_tree": "053a70974cb422457200fa1566b7366a69d6ece0",
+      "exact_tree_match": true
+    }
   },
   "native_uat": {
-    "status": "blocked on target AppID developer access",
-    "last_cli_result": "code 10: 登录用户不是该小程序的开发者",
-    "last_checked_local": "2026-11-15 16:44:13 Asia/Shanghai",
-    "pages_passed": false,
-    "real_role_uat_passed": false
+    "status": "passed in DevTools: 18 states at each 375/390 width; phone pending",
+    "app_id": "wx94fdc48861913ede",
+    "official_auto": "success",
+    "pages_passed": true,
+    "real_role_uat_passed": false,
+    "real_device": "not executed",
+    "wechat_native_recipient_selection": "not executed",
+    "partial_results": [
+      "设计师账号3：创建项目、保存不冻结/不创建分享、单步准备客户预览",
+      "客户账号4：读取设计师准备的同一固定版本",
+      "真实公开分享batch200：page_view=1、visible_segment=2、page_end=1，均归因self=0",
+      "公开图文2：真实image上传、保存、排序/封面、可选预览、直接发布",
+      "视频：真实素材库选择、保存、直接发布、播放2秒；营销字段可空",
+      "真实素材→访客as_of保持一致，customers/shares两分支回归通过",
+      "真实管理预览entry/events请求均为0；role5工作台与管理预览拒绝",
+      "项目详情真实客户绑定及解除通过，均等待busy完成后核验"
+    ],
+    "media_test_boundary": "局部TLS自签媒体仅在隔离测试副本下载真实字节至sandbox适配；源代码安全逻辑未改；不代表正式TLS/真机媒体路径通过",
+    "open_issues": [],
+    "pages_passed_scope": "DevTools only",
+    "real_role_uat_passed_scope": "完整手机/生产角色验收未执行；本地真实后端角色结果单列",
+    "real_local_backend_roles_passed": true,
+    "phone_passed": false,
+    "production_passed": false,
+    "system_keyboard": "not verified",
+    "phone_album": "not verified",
+    "visual": {
+      "widths": [
+        375,
+        390
+      ],
+      "states_per_width": 18,
+      "native_screenshots": true,
+      "button_layout_boundary_checks": true,
+      "horizontal_overflow": false,
+      "P0": 0,
+      "P1": 0,
+      "P2": 4,
+      "nonblocking_issues": [
+        {
+          "page": "02",
+          "priority": "P2",
+          "issue": "新建图标对比偏弱",
+          "blocking": false
+        },
+        {
+          "page": "03",
+          "priority": "P2",
+          "issue": "缩略图封面叠层偏挤",
+          "blocking": false
+        },
+        {
+          "page": "12",
+          "priority": "P2",
+          "issue": "查看说明视觉权重偏高",
+          "blocking": false
+        },
+        {
+          "page": "18",
+          "priority": "P2",
+          "issue": "设置3项文案略长",
+          "blocking": false
+        }
+      ]
+    },
+    "lifecycle_test_boundary": "DevTools多窗口导致hide时，自动化调用真实page.onShow恢复生命周期；不伪造响应"
   },
   "delivery": {
     "pushed": false,
@@ -88,6 +235,8 @@
     "merged": false,
     "backend_deployed": false,
     "admin_deployed": false,
-    "miniprogram_uploaded": false
-  }
+    "miniprogram_uploaded": false,
+    "devtools_gate_passed": true
+  },
+  "evidence_source": "根代理本轮实际测试/原生/回退记录；1701最终JS日志已核对；文档同步未重跑业务测试"
 }
