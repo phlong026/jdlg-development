@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -81,6 +82,39 @@ func createWorkbenchShare(t *testing.T, svc *tracking.Service, scope tracking.Sc
 		t.Fatal(err)
 	}
 	return created["share_token"].(string)
+}
+
+func TestWorkbenchManagedPreviewReadsExactVersionWithinScope(t *testing.T) {
+	scope := tracking.Scope{Tenant: "workbench", Actor: 11, Owners: []string{"owner-a"}, Manage: true}
+	router, svc := newWorkbenchHandlerFixture(t, &scope)
+	ctx := context.Background()
+	draft, err := svc.SaveContent(ctx, scope, "", tracking.Draft{Title: "第一版", Body: "第一版正文", BodyFormat: "plain", Rights: "own", Owner: "owner-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	preview, err := svc.Preview(ctx, scope, draft.ID, draft.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	published, err := svc.Publish(ctx, scope, draft.ID, draft.Revision, preview["preview_token"].(string), "managed-preview-v1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	version := published["content"].(tracking.Content).Version
+	rec := workbenchRequest(t, router, http.MethodGet, "/workbench/contents/"+draft.ID+"/versions/"+strconv.Itoa(version), nil)
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), "第一版正文") {
+		t.Fatalf("managed preview = %d %s", rec.Code, rec.Body.String())
+	}
+
+	foreign := tracking.Scope{Tenant: "workbench", Actor: 12, Owners: []string{"owner-b"}, Manage: true}
+	if _, err = svc.ReadManagedContent(ctx, foreign, draft.ID, version); err == nil {
+		t.Fatal("foreign owner read exact managed version")
+	}
+	viewer := scope
+	viewer.Manage = false
+	if _, err = svc.ReadManagedContent(ctx, viewer, draft.ID, version); err == nil {
+		t.Fatal("view-only grant entered management preview")
+	}
 }
 
 func TestShareEntryDestinationUsesFixedOriginAndDoesNotRequireManageGrant(t *testing.T) {

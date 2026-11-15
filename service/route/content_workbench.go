@@ -178,6 +178,15 @@ func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service,
 		}
 		trackingResponse(c, items[0], nil)
 	})
+	g.GET("/contents/:id/versions/:version", func(c *gin.Context) {
+		version, err := strconv.Atoi(c.Param("version"))
+		if err != nil || version < 1 {
+			trackingResponse(c, nil, &tracking.Error{Status: 400, Message: "素材版本无效"})
+			return
+		}
+		out, err := svc.ReadManagedContent(c.Request.Context(), scope(c), c.Param("id"), version)
+		trackingResponse(c, out, err)
+	})
 	writes := g.Group("", func(c *gin.Context) {
 		if !workbenchEnabled() {
 			trackingResponse(c, nil, &tracking.Error{Status: 403, Message: "手机内容制作暂未开通"})

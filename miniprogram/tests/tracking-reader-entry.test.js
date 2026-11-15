@@ -15,11 +15,11 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
 const untilReady = async (page, tries = 20) => { for (let i = 0; i < tries && !page.data.contentReady; i++) await settle(); };
 const direct = { content_id: 'content_one', content_version: '1', st: 'original_share' };
 
-function runtime({ accepted = false, deferScene = false, deferConfig = false } = {}) {
+function runtime({ accepted = false, deferScene = false, deferConfig = false, profileGate = false } = {}) {
   let pageDefinition, appDefinition, currentPage, mono = 1000;
   const storage = accepted ? { share_tracking_consent_v1: { version: 'v1' } } : {};
   const reads = [];
-  const entries = [], events = [], pendingScenes = [], pendingConfigs = [], modals = [];
+  const entries = [], events = [], pendingScenes = [], pendingConfigs = [], modals = [], shownMenus = [];
   const configuration = { enabled: true, consent_version: 'v1', privacy_notice: notice };
   if(accepted) storage.share_tracking_consent_choice_v1={accepted:true,explicit:true,version:'v1',notice};
   const ok = (request, data) => request.success({ statusCode: 200, data: { code: 0, data } });
@@ -32,6 +32,8 @@ function runtime({ accepted = false, deferScene = false, deferConfig = false } =
     getRandomValues: ({ success }) => success({ randomValues: new Uint8Array(24).fill(7).buffer }),
     getWindowInfo: () => ({ windowWidth: 400, windowHeight: 800 }),
     showModal: options => modals.push(options),
+    showShareMenu: options => shownMenus.push(options),
+    hideShareMenu() {},
     request(request) {
       const suffix = request.url.split('/api/v1/miniprogram/tracking')[1];
       if (suffix === '/config') {
@@ -72,12 +74,32 @@ function runtime({ accepted = false, deferScene = false, deferConfig = false } =
     App: definition => { appDefinition = definition; },
     getCurrentPages: () => currentPage ? [currentPage] : []
   };
+  if (profileGate) {
+    const profileSandbox = { ...sandbox, module: { exports: {} }, exports: {},
+      require: name => name.endsWith('profile-validation')
+        ? require(path.join(root, 'components/nickname-guard/profile-validation.js'))
+        : ({ generateRequestParams: () => ({}), paramsToHeaders: () => ({}) }) };
+    vm.runInNewContext(fs.readFileSync(path.join(root, 'utils/profile-access.js'), 'utf8'), profileSandbox);
+    profileSandbox.module.exports.install();
+    sandbox.Page = profileSandbox.Page;
+    sandbox.App = profileSandbox.App;
+  }
   vm.runInNewContext(fs.readFileSync(path.join(root, 'utils/tracking/index.js'), 'utf8'), sandbox);
   const adapter = sandbox.module.exports;
   adapter.install(); sandbox.App({}); appDefinition.onShow({});
   vm.runInNewContext(fs.readFileSync(path.join(root, route + '.js'), 'utf8'), {
     Page: sandbox.Page, exports: {}, wx, Date, Math, Promise,
-    require: name => name.endsWith('/tracking/index') ? adapter : name.endsWith('/tracking/api') ? api : name.endsWith('/content-presentation') ? require(path.join(root, 'utils/content-presentation')) : require(path.join(root, 'utils/tracking/video'))
+    require: name => name.endsWith('/tracking/index') ? adapter
+      : name.endsWith('/tracking/api') ? api
+      : name.endsWith('/phase3-api') ? {
+        WORKBENCH: '/api/v1/miniprogram/workbench',
+        request: async requestPath => {
+          reads.push(requestPath);
+          return { title: '管理固定版', body: '只读正文', media: [] };
+        }
+      }
+      : name.endsWith('/content-presentation') ? require(path.join(root, 'utils/content-presentation'))
+      : require(path.join(root, 'utils/tracking/video'))
   });
   const page = {
     ...pageDefinition, route, data: JSON.parse(JSON.stringify(pageDefinition.data)),
@@ -85,7 +107,7 @@ function runtime({ accepted = false, deferScene = false, deferConfig = false } =
   };
   currentPage = page;
   return {
-    adapter, page, entries, events, reads, storage, modals, pendingScenes, pendingConfigs,
+    adapter, page, entries, events, reads, storage, modals, pendingScenes, pendingConfigs, shownMenus,
     // 阅读器就绪流程会重发 /config，解析全部待定请求
     resolveConfig() { while (pendingConfigs.length) ok(pendingConfigs.shift(), configuration); },
     async mount(options = direct) { page.onLoad({ ...options }); page.onShow(); page.onReady(); await settle(); },
@@ -137,6 +159,32 @@ test('real adapter still tracks an ordinary direct reader entry without a share 
   assert.ok(t.entries.length >= 1, 'ordinary no-st entry must not be disabled by the plain-share exception');
   assert.equal(t.entries.at(-1).share_token, undefined);
   assert.ok(t.views().length >= 1);
+});
+
+test('real wrapper keeps authenticated management preview outside tracking and native sharing', async () => {
+  const t = runtime({ accepted: true });
+  await t.adapter.refreshConfig();
+  await t.mount({ management_preview:'1', content_id:'content_one', content_version:'1' });
+  await untilReady(t.page); await settle();
+  assert.equal(t.page.data.contentReady,true);
+  assert.equal(t.entries.length,0);
+  assert.equal(t.events.length,0);
+  assert.equal(t.views().length,0);
+  assert.equal(t.adapter.getSDK().get(t.page),undefined);
+  assert.equal(t.shownMenus.length,0);
+});
+
+test('profile then tracking wrappers keep management preview isolated across background return', async () => {
+  const t = runtime({ accepted: true, profileGate: true });
+  await t.adapter.refreshConfig();
+  await t.mount({ management_preview:'1', content_id:'content_one', content_version:'1' });
+  await untilReady(t.page); t.background(); await t.foregroundAfter(5000); await settle();
+  assert.equal(t.page.data.contentReady,true);
+  assert.equal(t.entries.length,0);
+  assert.equal(t.events.length,0);
+  assert.equal(t.views().length,0);
+  assert.equal(t.adapter.getSDK().get(t.page),undefined);
+  assert.equal(t.shownMenus.length,0);
 });
 
 test('explicit consent while the scene is still resolving preserves the legitimate initial share', async () => {

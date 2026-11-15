@@ -269,7 +269,7 @@ func readActiveTrackingManagementAccess(ctx context.Context, db *sql.DB, actor i
 	return access, err
 }
 func trackingFilter(c *gin.Context) (tracking.Filter, error) {
-	f := tracking.Filter{Content: c.Query("content_id"), Identity: c.Query("identity"), Intent: c.Query("intent"), Search: c.Query("q"), ContentSearch: c.Query("content_q"), VisitorSearch: c.Query("visitor_q"), Owner: c.Query("owner"), Sort: c.Query("sort"), Direction: c.Query("direction"), Cursor: c.Query("cursor"), ShareCursor: c.Query("share_cursor"), Related: c.Query("include_related") == "true", Visitor: c.Query("visitor"), Channel: c.Query("channel"), Group: c.Query("group"), CreatedWindow: c.Query("created_window") == "1"}
+	f := tracking.Filter{Content: c.Query("content_id"), Route: c.Query("route_key"), Identity: c.Query("identity"), Intent: c.Query("intent"), Search: c.Query("q"), ContentSearch: c.Query("content_q"), VisitorSearch: c.Query("visitor_q"), Owner: c.Query("owner"), Sort: c.Query("sort"), Direction: c.Query("direction"), Cursor: c.Query("cursor"), ShareCursor: c.Query("share_cursor"), Related: c.Query("include_related") == "true", Visitor: c.Query("visitor"), Channel: c.Query("channel"), Group: c.Query("group"), CreatedWindow: c.Query("created_window") == "1"}
 	for name, target := range map[string]*time.Time{"start": &f.Start, "end": &f.End, "as_of": &f.AsOf} {
 		if raw := c.Query(name); raw != "" {
 			t, e := time.Parse(time.RFC3339Nano, raw)

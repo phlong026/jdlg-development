@@ -19,7 +19,7 @@ function runtime(feed,stubs={}){
 }
 
 const feed=[
- {view_id:'v1',occurred_at:'2026-11-13T06:26:00Z',title:'现代简约庭院别墅设计方案',type:'article',visible_ms:26000,video_watch_ms:24000,progress_available:true,progress_pct:80,content_page_views:3,cover:{media_id:'cover-1',kind:'image'},source:{kind:'share',channel:'app_message'},visitor:{visitor_key:'u:7',nickname:'张先生',avatar_url:'https://avatar.example/7',identity_state:'identified',intent:{level:'high'}}},
+ {view_id:'v1',occurred_at:'2026-11-13T06:26:00Z',title:'现代简约庭院别墅设计方案',type:'article',route_key:'pages/contentreader/contentreader',content_id:'content-0001',content_version:2,visible_ms:26000,video_watch_ms:24000,progress_available:true,progress_pct:80,content_page_views:3,cover:{media_id:'cover-1',kind:'image'},source:{kind:'share',channel:'app_message'},visitor:{visitor_key:'u:7',nickname:'张先生',avatar_url:'https://avatar.example/7',identity_state:'identified',intent:{level:'high'}}},
  {view_id:'v2',occurred_at:'2026-11-13T05:48:00Z',title:'原木奶油风客厅',type:'video',visible_ms:18000,video_watch_ms:0,progress_available:false,content_page_views:2,cover:{url:'/media/2',kind:'image'},source:{kind:'share',channel:'timeline'},visitor:{visitor_key:'a:anon',nickname:'',identity_state:'anonymous',intent:{level:'unknown'}}},
 ];
 
@@ -116,6 +116,39 @@ test('访问卡头像进入既有客户详情并携带筛选快照，复制只�
  page.copyVisitCustomerName({currentTarget:{dataset:{index:0}}});
  page.copyVisitCustomerName({currentTarget:{dataset:{index:1}}});
  assert.deepEqual(clipboard,['张先生']);
+});
+
+test('素材榜先进入受固定版本约束的客户列表，分享批次保留为次入口',async()=>{
+ const {page,navigation}=runtime([]);page.onLoad({});page.setData({materials:[{content_id:'content-0001',content_version:2,route_key:'pages/contentreader/contentreader',title:'庭院方案'}],rangeIndex:2,filterStart:'2026-11-01T00:00:00Z',filterEnd:'2026-11-08T00:00:00Z',materials_as_of:'2026-11-08T00:00:00Z',shareWindowCursor:'parent-window',shareWindowIndex:2});
+ page.openMaterial({currentTarget:{dataset:{index:0}}});page.openMaterialShares({currentTarget:{dataset:{index:0}}});
+ assert.match(navigation[0],/tab=customers&view_mode=people/);assert.match(navigation[0],/route_key=pages%2Fcontentreader%2Fcontentreader/);assert.match(navigation[0],/content_version=2/);
+ assert.match(navigation[0],/share_cursor=parent-window/);assert.doesNotMatch(navigation[0],/share_window_index=/);assert.match(navigation[0],/as_of=2026-11-08T00%3A00%3A00Z/);
+ assert.match(navigation[1],/tab=shares/);
+ page.onLoad({tab:'customers',view_mode:'people',share_cursor:'parent-window',share_window_index:'2'});
+ page.acceptShareWindow({as_of:'2026-11-08T00:00:00Z',share_window:{current_cursor:'material-window'}});
+ assert.equal(page.data.shareWindowCursor,'material-window');assert.equal(page._shareWindows[0],'material-window');
+ page.setData({activeTab:'customers',customerViewMode:'people',contentFilter:'content-0001',contentVersion:2,contentRoute:'pages/contentreader/contentreader'});
+ await page.clearContentFilter();assert.equal(page.data.shareWindowCursor,'');assert.deepEqual(Array.from(page._shareWindows),['']);
+});
+
+test('素材访客查询和客户详情持续携带route、content与version，标题进入管理预览',async()=>{
+ const visitorQueries=[];const {page,navigation}=runtime(feed,{listMyVisitors:async query=>{visitorQueries.push(query);return{items:[{visitor_key:'u:7',nickname:'张先生'}],as_of:'2026-11-13T08:00:00Z'}}});
+ page.onLoad({tab:'customers',view_mode:'people',route_key:'pages%2Fcontentreader%2Fcontentreader',content_id:'content-0001',content_version:'2',title:'庭院方案'});page._token='login-token';page._epochCustomers=1;
+ await page.loadCustomers(true,1);assert.equal(visitorQueries[0].route_key,'pages/contentreader/contentreader');assert.equal(visitorQueries[0].content_id,'content-0001');assert.equal(visitorQueries[0].content_version,2);
+ page.openCustomer({currentTarget:{dataset:{index:0}}});assert.match(navigation[0],/content_id=content-0001/);assert.match(navigation[0],/route_key=pages%2Fcontentreader%2Fcontentreader/);
+ page.setData({customerVisits:[{...page.data.customerVisits[0],route_key:'pages/contentreader/contentreader',content_id:'content-0001',content_version:2,can_manage_preview:true}]});page.openVisitContent({currentTarget:{dataset:{index:0}}});assert.match(navigation[1],/management_preview=1/);assert.match(navigation[1],/content_version=2/);
+});
+
+test('合集和缺少固定版本的内容不绑定管理预览，内容区域回退客户卡入口',()=>{
+ const {page,navigation}=runtime([]);page.setData({customerVisits:[
+  {route_key:'pages/collectionreader/collectionreader',content_id:'collection-1',content_version:2,can_manage_preview:false},
+  {route_key:'pages/contentreader/contentreader',content_id:'content-1',content_version:0,can_manage_preview:false},
+ ]});
+ page.openVisitContent({currentTarget:{dataset:{index:0}}});page.openVisitContent({currentTarget:{dataset:{index:1}}});
+ assert.equal(navigation.length,0);
+ const wxml=fs.readFileSync(path.join(root,'sharevisits.wxml'),'utf8');
+ assert.match(wxml,/wx:if="{{item\.can_manage_preview}}"[\s\S]*catchtap="openVisitContent"/);
+ assert.match(wxml,/wx:else class="visit-content"/);
 });
 
 test('封面解析失败只降级单卡，不阻塞访问列表',async()=>{

@@ -18,6 +18,17 @@ page {
   margin: 0 -18px 12px;
 }
 
+.management-preview-badge {
+  margin: 4px 0 12px;
+  padding: 8px 12px;
+  border: 1px solid #dfc9ad;
+  border-radius: 12px;
+  color: #7b552f;
+  background: #f4eadf;
+  font-size: 13px;
+  text-align: center;
+}
+
 .reader-brand {
   display: flex;
   align-items: center;

@@ -365,7 +365,14 @@ const PLAIN_SHARE_ROUTES=new Set(['pages/contentreader/contentreader','pages/col
 function plainShareMode(route,options) {
   return PLAIN_SHARE_ROUTES.has(String(route||'').replace(/^\//,''))&&String(options&&options.untracked_share||'')==='1';
 }
+function managementPreviewMode(route,options) {
+  return String(route||'').replace(/^\//,'')==='pages/contentreader/contentreader'&&String(options&&options.management_preview||'')==='1';
+}
 function showTimelineShareMenu(page, hasCustomTimelineShare) {
+  if(page.__trackingManagementPreview===true){
+    if(typeof wx.hideShareMenu==='function')wx.hideShareMenu({menus:['shareAppMessage','shareTimeline']});
+    return;
+  }
   const launch=safely(()=>typeof wx.getLaunchOptionsSync==='function'?wx.getLaunchOptionsSync():null,null);
   if(launch&&launch.scene===1154)return;
   const contentBlocked=page.data&&Object.prototype.hasOwnProperty.call(page.data,'contentReady')&&page.data.contentReady!==true;
@@ -435,12 +442,13 @@ function wrapPage(definition) {
       this.__trackingOptions=options||{};
       const route=String(this.route||'').replace(/^\//,'');
       this.__trackingPlainShare=plainShareMode(route,options);
-      if (routes.policy(route).collect&&!this.__trackingPlainShare) {
+      this.__trackingManagementPreview=managementPreviewMode(route,options);
+      if (routes.policy(route).collect&&!this.__trackingPlainShare&&!this.__trackingManagementPreview) {
         const s=getSDK(); if (s) {
           s.register(this,route,routes.binding(route,options||{}),(options||{}).st,(options||{}).ht);
           this.__trackingTimelineStop=s.observe(this,()=>{if(this.__trackingConsentVisible===true){safely(()=>warmTimeline(this));showTimelineShareMenu(this,hasCustomTimelineShare);}});
         }
-      } else if (!hasCustomTimelineShare) return;
+      } else if (!hasCustomTimelineShare&&!this.__trackingManagementPreview) return;
       const original=this.setData;
       if(typeof original!=='function')return;
       this.setData=function(data,callback) {
@@ -455,7 +463,7 @@ function wrapPage(definition) {
     return invoke('onLoad',this,arguments);
   };
   result.onReady=function() { const output=invoke('onReady',this,arguments); safely(()=>{this.__trackingRendered=true; updateReady(this);warmTimeline(this);if(this.__trackingConsentVisible===true)showTimelineShareMenu(this,hasCustomTimelineShare);}); return output; };
-  result.onShow=function() { const output=invoke('onShow',this,arguments); safely(()=>{consentPageVisible(this,true);const s=getSDK();if(s)s.show(this);updateReady(this);warmTimeline(this);showTimelineShareMenu(this,hasCustomTimelineShare);}); return output; };
+  result.onShow=function() { const output=invoke('onShow',this,arguments); safely(()=>{consentPageVisible(this,!this.__trackingManagementPreview);const s=getSDK();if(s&&this.__trackingManagementPreview!==true)s.show(this);updateReady(this);warmTimeline(this);showTimelineShareMenu(this,hasCustomTimelineShare);}); return output; };
   result.onHide=function() { safely(()=>{consentPageVisible(this,false);cancelTimeline(this);if(sdk)sdk.hide(this,false);}); return invoke('onHide',this,arguments); };
   result.onUnload=function() { safely(()=>{consentPageVisible(this,false);cancelTimeline(this);if(this.__trackingTimelineStop)this.__trackingTimelineStop();if(sdk)sdk.hide(this,true);}); return invoke('onUnload',this,arguments); };
   result.onShareAppMessage=function() {

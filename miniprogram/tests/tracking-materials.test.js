@@ -68,7 +68,7 @@ test('reader share metadata stays inside native share boundaries and video copy 
  assert.match(source,/view\s*&&\s*view\.shareCopy/);
  assert.match(source,/view\s*&&\s*view\.momentsCopy/);
  assert.match(template,/bindtap="copyVideoCopy"/);
- assert.match(template,/wx:if="\{\{presentationView\.kind === 'video'\}\}" class="reader-actions video-reader-actions"/);
+ assert.match(template,/wx:if="\{\{!managementPreview && presentationView\.kind === 'video'\}\}" class="reader-actions video-reader-actions"/);
 });
 
 test('reader privacy choice stays explicit after content and moves settings to the settings page',()=>{

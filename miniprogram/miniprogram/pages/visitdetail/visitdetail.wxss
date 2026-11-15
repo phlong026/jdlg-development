@@ -209,6 +209,17 @@ button::after {
   background: #a87943;
 }
 
+.customer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin: 16rpx 0 24rpx;
+}
+
+.customer-actions button { min-width: 220rpx; flex: 1; }
+.material-context { margin-bottom: 20rpx; padding: 14rpx 18rpx; border-radius: 14rpx; color: #76512f; background: #f0e5d6; font-size: 23rpx; }
+.text-action { width: auto; margin: 4rpx 0 18rpx; padding: 0; color: #8b5e3c; background: transparent; font-size: 24rpx; }
+
 .lead-done {
   margin-top: 24rpx;
   padding: 24rpx;

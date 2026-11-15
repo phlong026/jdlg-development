@@ -4,6 +4,18 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { spawnSync } = require('node:child_process');
+
+const wxmlCompiler = process.env.WXML_COMPILER || '/Applications/wechatwebdevtools.app/Contents/Resources/app.asar.unpacked/node_modules/wcc-exec/wcc';
+function compiledWXML(page, data) {
+  const root = path.resolve(__dirname, '../miniprogram');
+  const file = `./pages/${page}/${page}.wxml`;
+  const result = spawnSync(wxmlCompiler, [file], { cwd: root, encoding: 'utf8', timeout: 10000 });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const context = { window: {}, console };
+  vm.createContext(context); vm.runInContext(result.stdout, context);
+  return JSON.stringify(context.$gwx(file)(data));
+}
 
 function runtime(name, api) {
   let definition;
@@ -35,9 +47,9 @@ test('客户详情读取真实后端的顶层摘要，不把时长当匿名人�
   assert.equal(calls[0][1].start, '2026-11-01T00:00:00Z');
 });
 
-test('K04 素材钻取保持时间范围和统计快照，返回目标实际使用该范围', () => {
+test('K04 素材钻取保持时间范围、统计快照与父分享窗口', () => {
   const h = runtime('sharevisits', {});
-  h.page.setData({ rangeIndex: 1, filterStart: '2026-11-10T00:00:00Z', filterEnd: '2026-11-13T00:00:00Z', materials_as_of: '2026-11-13T00:00:00Z', materials: [{ content_id: 'content-one', content_version: 2, title: '庭院' }] });
+  h.page.setData({ rangeIndex: 1, filterStart: '2026-11-10T00:00:00Z', filterEnd: '2026-11-13T00:00:00Z', materials_as_of: '2026-11-13T00:00:00Z', shareWindowCursor:'parent-window', shareWindowIndex:2, materials: [{ content_id: 'content-one', content_version: 2, route_key:'pages/contentreader/contentreader', title: '庭院' }] });
   h.page.openMaterial({ currentTarget: { dataset: { index: 0 } } });
   const options = Object.fromEntries(new URL('https://example.invalid' + h.navigation[0]).searchParams);
   const target = runtime('sharevisits', {}).page; target.onLoad(options);
@@ -45,6 +57,57 @@ test('K04 素材钻取保持时间范围和统计快照，返回目标实际使�
   assert.equal(target.filterQuery().start, '2026-11-10T00:00:00Z');
   assert.equal(target.filterQuery().end, '2026-11-13T00:00:00Z');
   assert.equal(target._drillAsOf, '2026-11-13T00:00:00Z');
+  assert.equal(target.filterQuery().as_of, undefined);
+  assert.equal(target.filterQuery().share_cursor, 'parent-window');
+  assert.equal(target._windowAsOf, '2026-11-13T00:00:00Z');
+  assert.equal(target.data.shareWindowIndex, 0);
+  assert.deepEqual(Array.from(target._shareWindows), ['parent-window']);
+});
+
+test('素材访客窗口从本地0起步，进入更早段后可返回钻取初始段', async () => {
+  const queries=[];const h=runtime('sharevisits',{listMyVisitors:async query=>{queries.push({...query});return {items:[],as_of:'2026-11-13T00:00:00Z',share_window:{current_cursor:query.share_cursor==='older-material'?'older-material-bound':'material-window'}};}});h.page.onLoad({tab:'customers',view_mode:'people',content_id:'content-one',content_version:'2',route_key:'pages/contentreader/contentreader',share_cursor:'parent-window',share_window_index:'2'});
+  assert.equal(h.page.data.shareWindowIndex,0);assert.equal(h.page.previousShareWindow(),undefined);assert.equal(queries.length,0);
+  h.page.acceptShareWindow({as_of:'2026-11-13T00:00:00Z',share_window:{current_cursor:'material-window',next_cursor:'older-material'}});
+  h.page.setData({customers:[{visitor_key:'u:77',nickname:'陈先生'}],customers_as_of:'2026-11-13T00:00:00Z'});h.page.openCustomer({currentTarget:{dataset:{index:0}}});
+  const query=new URL('https://example.invalid'+h.navigation[0]).searchParams;
+  assert.equal(h.page.data.shareWindowCursor,'material-window');assert.equal(query.get('share_cursor'),'material-window');
+  h.page._token='account-one';await h.page.nextShareWindow();assert.equal(queries[0].share_cursor,'older-material');assert.equal(h.page.data.shareWindowIndex,1);
+  await h.page.previousShareWindow();assert.equal(queries[1].share_cursor,'material-window');assert.equal(h.page.data.shareWindowIndex,0);
+  h.page.setData({shareWindowNext:'older-material'});await h.page.nextShareWindow();await h.page.resetShareWindow();assert.equal(queries.at(-1).share_cursor,'material-window');assert.equal(h.page.data.shareWindowIndex,0);
+});
+
+test('清除素材筛选同时丢弃素材绑定的分享窗口', async () => {
+  const queries = [];
+  const h = runtime('sharevisits', { listMyVisitors: async query => {
+    queries.push({ ...query });
+    return { items: [], as_of: '2026-11-13T00:00:00Z', share_window: { limit: 400 } };
+  } });
+  h.page._token = 'account-one';
+  h.page.setData({ activeTab: 'customers', customerViewMode: 'people', contentFilter: 'content-one', contentVersion: 2, contentRoute: 'pages/contentreader/contentreader', shareWindowCursor: 'material-window', shareWindowIndex: 2 });
+  await h.page.clearContentFilter();
+  assert.equal(h.page.data.shareWindowCursor, '');
+  assert.equal(h.page.data.shareWindowIndex, 0);
+  assert.equal(queries[0].share_cursor, undefined);
+});
+
+test('客户详情仅对普通内容固定版本显示管理预览入口',()=>{
+ const h=runtime('visitdetail',{});h.page.setData({entries:[{route_key:'pages/collectionreader/collectionreader',content_id:'collection-one',content_version:1,can_manage_preview:false},{route_key:'pages/contentreader/contentreader',content_id:'content-one',content_version:0,can_manage_preview:false}]});
+ h.page.openEntryContent({currentTarget:{dataset:{index:0}}});h.page.openEntryContent({currentTarget:{dataset:{index:1}}});assert.equal(h.navigation.length,0);
+ const wxml=fs.readFileSync(path.join(__dirname,'../miniprogram/pages/visitdetail/visitdetail.wxml'),'utf8');assert.match(wxml,/wx:if="{{item\.can_manage_preview}}"[\s\S]*bindtap="openEntryContent"/);
+});
+
+test('原生编译树只给合法固定版本绑定管理预览点击', { skip: !fs.existsSync(wxmlCompiler) }, () => {
+  const shareBase = { __profileAccessMounted: true, activeTab: 'customers', customerViewMode: 'visits', loading: false, rangeOptions: [], intentOptions: [], sourceOptions: [] };
+  const invalidShare = compiledWXML('sharevisits', { ...shareBase, customerVisits: [{ visit_key: 'collection', title: '合集作品', can_manage_preview: false }] });
+  const validShare = compiledWXML('sharevisits', { ...shareBase, customerVisits: [{ visit_key: 'content', title: '普通内容', can_manage_preview: true }] });
+  assert.doesNotMatch(invalidShare, /openVisitContent|合集作品 ›/);
+  assert.match(validShare, /openVisitContent|普通内容 ›/);
+
+  const detailBase = { __profileAccessMounted: true, mode: 'customer', loading: false, loginRequired: false, denied: false, error: '', visitor_name: '陈先生', projectActivities: [], visibleProjectActivities: [] };
+  const invalidDetail = compiledWXML('visitdetail', { ...detailBase, entries: [{ view_id: 'collection', title: '合集作品', can_manage_preview: false }] });
+  const validDetail = compiledWXML('visitdetail', { ...detailBase, entries: [{ view_id: 'content', title: '普通内容', can_manage_preview: true }] });
+  assert.doesNotMatch(invalidDetail, /openEntryContent|合集作品 ›/);
+  assert.match(validDetail, /openEntryContent|普通内容 ›/);
 });
 
 test('K05 设置保存期间返回，释放旧操作UI锁且不允许旧响应覆盖新状态', async () => {

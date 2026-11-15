@@ -1,6 +1,7 @@
 'use strict';
 const tracking = require('../../utils/tracking/index');
 const api = require('../../utils/tracking/api');
+const workbenchApi = require('../../utils/phase3-api');
 const { createVideoTracker } = require('../../utils/tracking/video');
 const { buildContentPresentation } = require('../../utils/content-presentation');
 const { resolveProtectedMediaURL } = require('../../utils/protected-media');
@@ -45,9 +46,11 @@ function nativeShareTitle(value, fallback) { return String(value || fallback || 
 Page({
     ...noteActions.methods,
     ...noteInteractions.methods,
-    data: { ...noteActions.data, ...noteInteractions.data, loading: true, error: '', content: null, contentReady: false, media: [], articleBlocks: [], presentationView: null, videoStarted: {}, consentNotice: '', consentAvailable: false, consentChoicePending: false, consented: false, mediaErrors: {}, sourceOpen: false, guideVisible: false, webLinkBusy: false, posterBusy: false, posterAvailable: false },
-    onLoad(options) { this.entryGeneration = (this.entryGeneration || 0) + 1; this.hasShown = false; this.entryAttributionAllowed = true; this.options = options || {}; this.players = {}; this.playerVisible = {}; this.observers = []; this.evaluateGuide(); this.loadContent(); },
-    onShow() { this.pageVisible = true; tracking.block(this, false); if (this.hasShown)
+    data: { ...noteActions.data, ...noteInteractions.data, loading: true, error: '', content: null, contentReady: false, media: [], articleBlocks: [], presentationView: null, videoStarted: {}, consentNotice: '', consentAvailable: false, consentChoicePending: false, consented: false, mediaErrors: {}, sourceOpen: false, guideVisible: false, webLinkBusy: false, posterBusy: false, posterAvailable: false, managementPreview: false },
+    onLoad(options) { this.entryGeneration = (this.entryGeneration || 0) + 1; this.hasShown = false; this.managementPreview = String(options && options.management_preview || '') === '1'; this.entryAttributionAllowed = !this.managementPreview; this.options = options || {}; this.players = {}; this.playerVisible = {}; this.observers = []; this.setData({ managementPreview: this.managementPreview }); if (!this.managementPreview)
+        this.evaluateGuide(); this.loadContent(); },
+    onShow() { this.pageVisible = true; if (!this.managementPreview)
+        tracking.block(this, false); if (this.hasShown)
         this.loadContent(); this.hasShown = true; this.syncPlayerVisibility(); },
     onHide() { this.entryGeneration = (this.entryGeneration || 0) + 1; this.entryAttributionAllowed = false; this.pageVisible = false; this.setData({ webLinkBusy: false, noteMenuOpen: false, noteActionBusy: false, collectionsOpen: false }); if (this.invalidateNoteInteractions)
         this.invalidateNoteInteractions(); this.syncPlayerVisibility(); this.pausePlayers(); },
@@ -69,7 +72,7 @@ Page({
             wx.hideShareMenu();
         this.setData(quiet ? { error: '', videoStarted: {} } : { loading: true, error: '', content: null, media: [], articleBlocks: [], presentationView: null, videoStarted: {}, contentReady: false });
         try {
-            const resolvedOptions = await api.resolveReaderOptions(this.options);
+            const resolvedOptions = this.managementPreview ? this.options : await api.resolveReaderOptions(this.options);
             if (sequence !== this.loadSequence)
                 return;
             this.options = { ...resolvedOptions };
@@ -77,7 +80,8 @@ Page({
                 delete this.options.st;
                 delete this.options.ht;
             }
-            tracking.resolvePageOptions(this, this.options, this.boundEntryGeneration !== entryGeneration);
+            if (!this.managementPreview)
+                tracking.resolvePageOptions(this, this.options, this.boundEntryGeneration !== entryGeneration);
             this.boundEntryGeneration = entryGeneration;
             // Only a newly observed external entry may supply attribution. Ordinary
             // foreground content revalidation must not replay a revoked/consumed token.
@@ -88,7 +92,7 @@ Page({
             const id = String(this.options.content_id || ''), version = Number(this.options.content_version);
             if (!/^[A-Za-z0-9_-]{8,128}$/.test(id) || !Number.isInteger(version) || version < 1)
                 throw new Error('内容入口不完整');
-            const configurationPromise = tracking.refreshConfig();
+            const configurationPromise = this.managementPreview ? Promise.resolve({ enabled: false }) : tracking.refreshConfig();
             // Public published content is independently readable, even when analytics is disabled or declined.
             let readPath = '/contents/' + encodeURIComponent(id) + '/versions/' + version;
             const collectionID = this.options.collection_id, collectionVersion = Number(this.options.collection_version), position = Number(this.options.item_position);
@@ -98,7 +102,9 @@ Page({
                     throw new Error('合集入口不完整');
                 readPath = '/project-collections/' + encodeURIComponent(collectionID) + '/versions/' + collectionVersion + '/items/' + position + '/content';
             }
-            const contentRequest = api.request(readPath, 'GET', {}, undefined, true);
+            if (this.managementPreview && inCollection)
+                throw new Error('合集请从合集管理页预览');
+            const contentRequest = this.managementPreview ? workbenchApi.request(workbenchApi.WORKBENCH + '/contents/' + encodeURIComponent(id) + '/versions/' + version) : api.request(readPath, 'GET', {}, undefined, true);
             const [configuration, content] = await Promise.all([configurationPromise, contentRequest]);
             if (inCollection && (content.content_id !== id || Number(content.version) !== version))
                 throw new Error('合集作品已改变');
@@ -156,7 +162,8 @@ Page({
             const articleBlocks = presentationView.blocks;
             const mediaErrors = {};
             presentationView.media.filter(item => item.preview_error || !item.url).forEach(item => { mediaErrors[item.errorKey] = item.preview_error || '素材暂不可用，请重试。'; });
-            this.setData({ content, media, articleBlocks, presentationView, mediaErrors, loading: false, contentReady: true }, () => { this.observePlayers(); if (this.pageVisible && wx.showShareMenu)
+            this.setData({ content, media, articleBlocks, presentationView, mediaErrors, loading: false, contentReady: true }, () => { if (this.managementPreview)
+                return; this.observePlayers(); if (this.pageVisible && wx.showShareMenu)
                 wx.showShareMenu({ menus: ['shareAppMessage', 'shareTimeline'] }); tracking.preheatTimelineShare(this, this.timelineShareValue()); this.refreshPosterAvailability(content, sequence, posterCapabilitySequence); if (presentationView.kind !== 'video' && wx.nextTick)
                 wx.nextTick(() => { if (sequence === this.loadSequence && this.pageVisible !== false && this.loadNoteInteractions)
                     this.loadNoteInteractions(); }); });
@@ -370,6 +377,8 @@ Page({
         }
     },
     onPageScroll(event) {
+        if (this.managementPreview)
+            return;
         const now = Date.now();
         if (now - (this.lastScroll || 0) < 2000)
             return;
@@ -419,9 +428,10 @@ Page({
         }
         catch (e) { }
     },
-    onShareAppMessage() { const content = this.data.content, view = this.data.presentationView; if (!this.data.contentReady || !content)
+    onShareAppMessage() { if (this.managementPreview)
+        return {}; const content = this.data.content, view = this.data.presentationView; if (!this.data.contentReady || !content)
         return {}; const plain = String(this.options.untracked_share || '') === '1' ? '&untracked_share=1' : ''; return { title: nativeShareTitle(view && view.shareCopy, content.title), path: '/' + ROUTE + '?content_id=' + encodeURIComponent(this.options.content_id || '') + '&content_version=' + encodeURIComponent(this.options.content_version || '') + plain, imageUrl: content.cover ? content.cover.url : undefined }; },
-    onShareTimeline() { return this.timelineShareValue(); },
+    onShareTimeline() { return this.managementPreview ? {} : this.timelineShareValue(); },
     // 与 onShareTimeline 同源取值：预热（preheatTimelineShare）以此对象为缓存键，首次分享即带 st 归因令牌
     timelineShareValue() { const content = this.data.content, view = this.data.presentationView; if (!this.data.contentReady || !content)
         return {}; const plain = String(this.options.untracked_share || '') === '1' ? '&untracked_share=1' : ''; return { title: nativeShareTitle(view && view.momentsCopy, content.title), query: 'content_id=' + encodeURIComponent(this.options.content_id || '') + '&content_version=' + encodeURIComponent(this.options.content_version || '') + plain, imageUrl: content.cover ? content.cover.url : undefined }; },

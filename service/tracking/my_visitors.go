@@ -123,9 +123,10 @@ func (a *myVisitorAccumulator) entry(view string) *MyVisitEntry {
 
 // myActorShares collects the actor's newest shares up to the aggregation cap.
 type MyShareWindow struct {
-	Limit      int    `json:"limit"`
-	Truncated  bool   `json:"truncated"`
-	NextCursor string `json:"next_cursor,omitempty"`
+	Limit         int    `json:"limit"`
+	Truncated     bool   `json:"truncated"`
+	CurrentCursor string `json:"current_cursor,omitempty"`
+	NextCursor    string `json:"next_cursor,omitempty"`
 }
 
 type myShareWindowCursor struct {
@@ -135,7 +136,13 @@ type myShareWindowCursor struct {
 }
 
 func myShareWindowSignature(scope Scope, actor int64, f Filter) string {
-	return detailSignature(Filter{AsOf: f.AsOf, Owner: f.Owner}, "my-share-window-v1", actorVisitorKey(actor), scope)
+	signatureFilter := Filter{AsOf: f.AsOf, Owner: f.Owner, Route: f.Route, Content: f.Content, ContentVersion: f.ContentVersion}
+	if f.CreatedWindow {
+		signatureFilter.CreatedWindow = true
+		signatureFilter.Start = f.Start
+		signatureFilter.End = f.End
+	}
+	return detailSignature(signatureFilter, "my-share-window-v1", actorVisitorKey(actor), scope)
 }
 
 func (s *Service) myActorShares(r Repository, scope Scope, actor int64, f Filter) ([]Share, *MyShareWindow, error) {
@@ -145,10 +152,14 @@ func (s *Service) myActorShares(r Repository, scope Scope, actor int64, f Filter
 	if f.ShareCursor != "" {
 		var cursor myShareWindowCursor
 		raw, err := base64.RawURLEncoding.DecodeString(f.ShareCursor)
-		if len(f.ShareCursor) > 4096 || err != nil || json.Unmarshal(raw, &cursor) != nil || cursor.At.IsZero() || cursor.ID == "" || cursor.Signature != myShareWindowSignature(scope, actor, f) {
+		expected := myShareWindowSignature(scope, actor, f)
+		parent := myShareWindowSignature(scope, actor, Filter{AsOf: f.AsOf, Owner: f.Owner, CreatedWindow: f.CreatedWindow, Start: f.Start, End: f.End})
+		materialScoped := f.Route != "" || f.Content != "" || f.ContentVersion > 0
+		if len(f.ShareCursor) > 4096 || err != nil || json.Unmarshal(raw, &cursor) != nil || cursor.At.IsZero() || cursor.ID == "" || cursor.Signature != expected && !(materialScoped && cursor.Signature == parent) {
 			return nil, nil, fail(400, "分享统计窗口已变化，请返回最新分享")
 		}
 		beforeAt, beforeID = cursor.At, cursor.ID
+		window.CurrentCursor = base64.RawURLEncoding.EncodeToString(marshal(myShareWindowCursor{cursor.At, cursor.ID, expected}))
 	}
 	var last actorShareRow
 	for len(out) <= myVisitorShareCap {
@@ -187,8 +198,14 @@ type myShareScanEvent struct {
 // visitor already resolved (identity links + deletion tombstones applied).
 // 删除标记走分块批量查询（复用 deletedMyShareVisitors 的模式，避免 N+1）。
 func (s *Service) myShareEventScan(ctx context.Context, r Repository, scope Scope, actor int64, f Filter) ([]myShareScanEvent, []Share, *MyShareWindow, error) {
+	return s.myShareEventScanForWindow(ctx, r, scope, actor, f, f)
+}
+
+// myShareEventScanForWindow keeps the event/rule time window independent from
+// the share-creation window carried by a signed share cursor.
+func (s *Service) myShareEventScanForWindow(ctx context.Context, r Repository, scope Scope, actor int64, f, shareFilter Filter) ([]myShareScanEvent, []Share, *MyShareWindow, error) {
 	actorKey := actorVisitorKey(actor)
-	shares, window, err := s.myActorShares(r, scope, actor, f)
+	shares, window, err := s.myActorShares(r, scope, actor, shareFilter)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -275,6 +292,34 @@ func myEventContentKey(ev Event, sharesByID map[string]Share) (string, bool) {
 	return ev.Route + "\x00" + contentKey(ev.Content, ev.Version), true
 }
 
+// myEventMatchesMaterial applies the same collection-aware identity used by
+// MyContentStats. That keeps a material drill-down aligned with the number the
+// user tapped, including collection directory and child-item page views.
+func myEventMatchesMaterial(ev Event, sharesByID map[string]Share, f Filter) bool {
+	if f.Route == "" && f.Content == "" && f.ContentVersion == 0 {
+		return true
+	}
+	key, ok := myEventContentKey(ev, sharesByID)
+	if !ok {
+		return false
+	}
+	route, material := key, ""
+	if index := strings.Index(key, "\x00"); index >= 0 {
+		route, material = key[:index], key[index+1:]
+	}
+	if f.Route != "" && route != f.Route {
+		return false
+	}
+	if f.Content == "" {
+		return true
+	}
+	want := contentKey(f.Content, f.ContentVersion)
+	if f.ContentVersion == 0 {
+		return material == f.Content || strings.HasPrefix(material, f.Content+":")
+	}
+	return material == want
+}
+
 func videoProgressPct(ev Event) int {
 	if ev.Duration <= 0 || ev.Position <= 0 {
 		return 0
@@ -322,7 +367,7 @@ func foldMyVisitorAggregates(events []myShareScanEvent, shares []Share, window *
 		visitor := item.visitor
 		ev := item.ev
 		if ev.Type == "page_view" {
-			if !within(ev.Occurred, f) {
+			if !within(ev.Occurred, f) || !myEventMatchesMaterial(ev, byID, f) {
 				continue
 			}
 			a := out.visitors[visitor]
@@ -678,12 +723,21 @@ func (s *Service) MyVisitors(ctx context.Context, scope Scope, actor int64, f Fi
 		if err != nil {
 			return err
 		}
-		includeProjectCustomers(dispAgg.visitors, projectActivities)
+		if f.Route == "" && f.Content == "" && f.ContentVersion == 0 {
+			includeProjectCustomers(dispAgg.visitors, projectActivities)
+		}
 		out.ShareWindow = dispAgg.window
-		ruleAgg, _, err := s.myVisitorAggregates(ctx, r, scope, actor, ruleFilter)
+		ruleShareFilter := ruleFilter
+		ruleShareFilter.Route, ruleShareFilter.Content, ruleShareFilter.ContentVersion = f.Route, f.Content, f.ContentVersion
+		if f.CreatedWindow {
+			ruleShareFilter.CreatedWindow = true
+			ruleShareFilter.Start, ruleShareFilter.End = f.Start, f.End
+		}
+		ruleEvents, ruleShares, ruleWindow, err := s.myShareEventScanForWindow(ctx, r, scope, actor, ruleFilter, ruleShareFilter)
 		if err != nil {
 			return err
 		}
+		ruleAgg := foldMyVisitorAggregates(ruleEvents, ruleShares, ruleWindow, ruleFilter)
 		out.ProjectActivitiesTruncated = projectTruncated
 		keys := make([]string, 0, len(dispAgg.visitors))
 		facts := make([]factView, 0, len(dispAgg.visitors))
@@ -801,12 +855,21 @@ func (s *Service) MyVisitorEntries(ctx context.Context, scope Scope, actor int64
 		if err != nil {
 			return err
 		}
-		includeProjectCustomers(dispAgg.visitors, projectActivities)
+		if f.Route == "" && f.Content == "" && f.ContentVersion == 0 {
+			includeProjectCustomers(dispAgg.visitors, projectActivities)
+		}
 		out.ShareWindow = dispAgg.window
-		ruleAgg, _, err := s.myVisitorAggregates(ctx, r, scope, actor, ruleFilter)
+		ruleShareFilter := ruleFilter
+		ruleShareFilter.Route, ruleShareFilter.Content, ruleShareFilter.ContentVersion = f.Route, f.Content, f.ContentVersion
+		if f.CreatedWindow {
+			ruleShareFilter.CreatedWindow = true
+			ruleShareFilter.Start, ruleShareFilter.End = f.Start, f.End
+		}
+		ruleEvents, ruleShares, ruleWindow, err := s.myShareEventScanForWindow(ctx, r, scope, actor, ruleFilter, ruleShareFilter)
 		if err != nil {
 			return err
 		}
+		ruleAgg := foldMyVisitorAggregates(ruleEvents, ruleShares, ruleWindow, ruleFilter)
 		out.ProjectActivities = projectActivities[f.Visitor]
 		out.ProjectActivitiesTruncated = projectTruncated
 		a, ok := dispAgg.visitors[f.Visitor]

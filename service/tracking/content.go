@@ -454,6 +454,31 @@ func (s *Service) ReadContent(ctx context.Context, id string, version int) (Cont
 	})
 	return out, e
 }
+
+// ReadManagedContent returns one immutable published version to an authorized
+// owner. It is intentionally separate from ReadContent: management preview is
+// authenticated, read-only, and must not create a public visit or notification.
+func (s *Service) ReadManagedContent(ctx context.Context, scope Scope, id string, version int) (Content, error) {
+	var out Content
+	if e := s.authorized(scope); e != nil {
+		return out, e
+	}
+	if !scope.Manage || !validID(id) || version < 1 {
+		return out, fail(403, "无素材管理预览权限")
+	}
+	err := s.readTransaction(ctx, func(r Repository) error {
+		content, e := decode[Content](r, "version", contentKey(id, version))
+		if e != nil || content.ID != id || content.Version != version || !scope.Allows(content.Owner) {
+			return fail(404, "素材版本不可访问")
+		}
+		if content.Presentation == "" {
+			content.Presentation = ContentPresentation(content)
+		}
+		out = content
+		return nil
+	})
+	return out, err
+}
 func (s *Service) AddMedia(ctx context.Context, scope Scope, asset Asset, owner string) error {
 	if e := s.validateMediaWrite(scope, asset, owner); e != nil {
 		return e

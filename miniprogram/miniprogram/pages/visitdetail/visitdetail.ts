@@ -12,7 +12,7 @@ function displayTime(value) {
 function duration(ms) { const seconds = Math.max(0, Math.round(Number(ms || 0) / 1000)); return seconds < 60 ? seconds + '秒' : Math.floor(seconds / 60) + '分' + (seconds % 60) + '秒'; }
 
 Page({
-  data: { mode: 'share', visitor: '', id: '', title: '分享访问详情', loading: true, loadingMore: false, error: '', denied: false, loginRequired: false, items: [], entries: [], next_cursor: '', as_of: '', metric_version: '', identified_count: 0, anonymous_count: 0, intent_level: '', visitor_name: '', customerViews: 0, customerContents: 0, customerDuration: '0秒', canConvertLead: false, leadBusy: false, leadID: 0, leadConverted: false, handoffText: '', conversionReason: '', projectActivities: [], projectActivityCount: 0 },
+  data: { mode: 'share', visitor: '', id: '', title: '分享访问详情', loading: true, loadingMore: false, error: '', denied: false, loginRequired: false, items: [], entries: [], next_cursor: '', as_of: '', metric_version: '', identified_count: 0, anonymous_count: 0, intent_level: '', visitor_name: '', customerViews: 0, customerContents: 0, customerDuration: '0秒', canConvertLead: false, leadBusy: false, leadID: 0, leadConverted: false, handoffText: '', conversionReason: '', projectActivities: [], visibleProjectActivities: [], projectActivitiesExpanded: false, projectActivityCount: 0, contentTitle: '' },
   onLoad(options) {
     const visitorKey = routeValue(options.visitor);
     const id = routeValue(options.id || options.share_id);
@@ -20,6 +20,8 @@ Page({
     this._entryFilters = {};
     if (options.share_cursor) this._entryFilters.share_cursor = routeValue(options.share_cursor);
     for (const key of ['as_of', 'start', 'end']) if (options[key] && !Number.isNaN(new Date(routeValue(options[key])).getTime())) this._entryFilters[key] = routeValue(options[key]);
+    for (const key of ['content_id', 'route_key']) if (options[key]) this._entryFilters[key] = routeValue(options[key]);
+    const contentVersion = Number(options.content_version || 0); if (Number.isInteger(contentVersion) && contentVersion > 0) this._entryFilters.content_version = contentVersion;
     this._mode = visitorKey ? 'customer' : 'share';
     if (this._mode === 'share' && !id) { this.setData({ loading: false, error: '缺少分享记录标识' }); return; }
     this.setData({
@@ -29,6 +31,7 @@ Page({
       title: routeValue(options.title) || '客户访问详情',
       intent_level: routeValue(options.intent),
       visitor_name: routeValue(options.name),
+      contentTitle: routeValue(options.content_title),
     });
   },
   onShow() {
@@ -88,6 +91,10 @@ Page({
       const rows = (detail.items || []).map(entry => ({
         view_id: entry.view_id,
         session_id: entry.session_id,
+        route_key: entry.route_key || '',
+        content_id: entry.content_id || '',
+        content_version: Number(entry.content_version || 0),
+        can_manage_preview: entry.route_key === 'pages/contentreader/contentreader' && !!entry.content_id && Number(entry.content_version || 0) > 0,
         occurred_text: displayTime(entry.occurred_at),
         title: entry.title && !String(entry.title).startsWith('pages/') ? entry.title : '分享内容',
         visible_text: duration(entry.visible_ms),
@@ -108,6 +115,8 @@ Page({
         handoffText: this.handoffLabel(detail.customer_handoff),
         conversionReason: String(detail.conversion_reason || ''),
         projectActivities: (detail.project_activities || []).map(item => ({ ...item, kindText: ({ note_open: '查看方案', note_feedback: '提交反馈', note_confirm: '确认方案', project_linked: '已关联项目' })[item.kind] || '项目动态', occurredText: displayTime(item.occurred_at) })),
+        visibleProjectActivities: (detail.project_activities || []).slice(0, 3).map(item => ({ ...item, kindText: ({ note_open: '查看方案', note_feedback: '提交反馈', note_confirm: '确认方案', project_linked: '已关联项目' })[item.kind] || '项目动态', occurredText: displayTime(item.occurred_at) })),
+        projectActivitiesExpanded: false,
         projectActivitiesTruncated: detail.project_activities_truncated === true,
         intent_level: info.intent && info.intent.level ? info.intent.level : this.data.intent_level,
         loading: false, loadingMore: false,
@@ -140,6 +149,8 @@ Page({
     if ((this.data.projectActivities || []).some(item => item.project_id === id)) wx.navigateTo({ url: '/pages/projectnotes/projectnotes?project_id=' + encodeURIComponent(id) });
   },
   createCustomerProject() { if (/^u:[1-9][0-9]*$/.test(this._visitor || '')) wx.navigateTo({ url: '/pages/projectnotes/projectnotes?customer_ref=' + encodeURIComponent(this._visitor) }); },
+  toggleProjectActivities() { const expanded = !this.data.projectActivitiesExpanded; this.setData({ projectActivitiesExpanded: expanded, visibleProjectActivities: expanded ? this.data.projectActivities : this.data.projectActivities.slice(0, 3) }); },
+  openEntryContent(event) { const entry = this.data.entries[Number(event.currentTarget.dataset.index)]; if (!entry || entry.can_manage_preview !== true) return; wx.navigateTo({ url: '/pages/contentreader/contentreader?management_preview=1&content_id=' + encodeURIComponent(entry.content_id) + '&content_version=' + encodeURIComponent(String(entry.content_version)) }); },
   goBackToCustomers() { wx.navigateBack({ fail: () => wx.redirectTo({ url: '/pages/sharevisits/sharevisits' }) }); },
   retry() { this.load(true); },
   loadMore() { this.load(false, this._epoch); },
