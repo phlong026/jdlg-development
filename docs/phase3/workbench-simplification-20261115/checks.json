@@ -46,7 +46,7 @@
     "go_test_all": true,
     "go_vet_all": true,
     "CGO_ENABLED": "0",
-    "race": "passed locally on Linux arm64; GitHub CI blocked before execution",
+    "race": "passed in GitHub CI and local Linux arm64",
     "mysql_tenant_lock": {
       "implementation": "single ON DUPLICATE KEY UPDATE",
       "old_concurrency": 24,
@@ -72,7 +72,7 @@
       "first_attempt": "environment failure: 512MiB tmpfs exhausted",
       "successful_retry": "dedicated host bind-mounted GOTMPDIR; process exit 0",
       "evidence": "/tmp/jdlg-linux-go-race-20261115.retry.log",
-      "github_ci_passed": false,
+      "github_ci_passed": true,
       "node": "24.21.0",
       "GOMAXPROCS": 2,
       "normal_tests_passed": true,
@@ -251,24 +251,32 @@
         }
       ]
     },
-    "lifecycle_test_boundary": "DevTools多窗口导致hide时，自动化调用真实page.onShow恢复生命周期；不伪造响应"
+    "lifecycle_test_boundary": "DevTools多窗口导致hide时，自动化调用真实page.onShow恢复生命周期；不伪造响应",
+    "production_readonly_smoke_passed": true,
+    "production_readonly_smoke_scope": "authenticated workbench, my-visits/materials empty-state reads, owned fixed-version managed preview with 0 tracking requests and 0 media errors; no creation or customer delivery"
   },
   "delivery": {
     "pushed": true,
     "pr_created": true,
-    "merged": false,
-    "backend_deployed": false,
-    "admin_deployed": false,
-    "miniprogram_uploaded": false,
+    "merged": true,
+    "backend_deployed": true,
+    "admin_deployed": true,
+    "miniprogram_uploaded": true,
     "devtools_gate_passed": true,
     "pr_url": "https://github.com/phlong026/jdlg-development/pull/51",
-    "code_head": "eedfcb9c2ca79936e0de0f2a52689962161e1297",
-    "ci_status": "not started: account payment failure or spending limit restriction",
+    "code_head": "31bd5234b691af81eed13db97c8d8f3eff3f91a7",
+    "ci_status": "all 5 checks passed",
     "ci_runs": [
-      43704533452,
-      43704533465
+      43705627806,
+      43705627760
     ],
-    "ci_job_count": 5
+    "ci_job_count": 5,
+    "merge_commit": "55f836d7a913ccaada4e522f0c5f8db45c5c5a13",
+    "miniprogram_version": "8.0.9",
+    "app_id": "wx94fdc48861913ede",
+    "experience_version_status": "not independently verified",
+    "formally_released": false,
+    "release_receipt": "release-receipt.json"
   },
   "evidence_source": "根代理本轮实际测试/原生/回退记录；1701最终JS日志已核对；文档同步未重跑业务测试",
   "release_readiness": {
@@ -278,7 +286,9 @@
     "candidate_commit": "eedfcb9c2ca79936e0de0f2a52689962161e1297",
     "binary_sha256": "135764731e11ce90b91f160e92a7cad18d160d32182e6b92ea03a168e3f970b3",
     "admin_candidate_build": true,
-    "package_files_verified": 99,
-    "production_untouched": true
+    "package_files_verified": 102,
+    "production_untouched": false,
+    "production_build": true,
+    "source_commit": "55f836d7a913ccaada4e522f0c5f8db45c5c5a13"
   }
 }
