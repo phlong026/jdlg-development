@@ -1,0 +1,629 @@
+{
+  "date": "2026-11-15",
+  "revision": "v3",
+  "source_commit": "f33030a4ae29cdd8f294bc9c3d3b03555e8e75e0",
+  "repo": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/JDLG",
+  "scope": "用户已批准：18页效果图对应的32项整改；开发、验证、PR合并与兼容部署。",
+  "tasks": [
+    {
+      "id": "G01",
+      "priority": "P0",
+      "title": "统一入口名称为AI辅助",
+      "pages": "03、05、09、17、18",
+      "change": "将图文、文章、视频、项目笔记入口及相应辅助页显示统一为AI辅助；内部路由、source类型和接口标识不随文案更名。",
+      "acceptance": "页面、弹窗标题和无障碍标签一致；不遗留旧入口名；生成、采纳、返回原稿能力不变。",
+      "file_groups": [
+        "F2",
+        "F3",
+        "F4"
+      ],
+      "depends": "无",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "G02",
+      "priority": "P1",
+      "title": "统一布局与完整状态",
+      "pages": "全部18页",
+      "change": "沿用现有米白/棕金与原生字体；统一间距、按钮基线、列表分隔、点击区域；补加载、空态、失败及键盘状态。",
+      "acceptance": "375宽和390宽无横向溢出；键盘不挡输入和主要动作；关闭键盘后布局恢复；不会为视觉补造统计或封面请求。",
+      "file_groups": [
+        "F1",
+        "F2",
+        "F4",
+        "F6",
+        "F7"
+      ],
+      "depends": "G01",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "G03",
+      "priority": "P0",
+      "title": "保留AI辅助上下文与计费边界",
+      "pages": "03、05、09",
+      "change": "复用contentwriting和项目现有AI能力；仅主动生成才调用模型；返回时按账号/项目/笔记/修订/草稿签名校验采纳。",
+      "acceptance": "只打开不生成、不扣费；切账号或改稿后迟到结果不覆盖；取消不丢输入；失败可重试；不因改名增加新AI服务。",
+      "file_groups": [
+        "F2",
+        "F3",
+        "F4",
+        "F11"
+      ],
+      "depends": "G01",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "C01",
+      "priority": "P1",
+      "title": "精简新建内容入口",
+      "pages": "01、02",
+      "change": "图文/视频为首要二选一；导入链接保留次级入口；文章/文件收更多；私密项目从项目进入。",
+      "acceptance": "两次明确选择内到空白编辑页；不再多一次平台/样式确认；原导入、文章和文件入口可找到且权限不扩大。",
+      "file_groups": [
+        "F1",
+        "F11"
+      ],
+      "depends": "G02",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "C02",
+      "priority": "P1",
+      "title": "工作台卡片按状态显示动作",
+      "pages": "01",
+      "change": "草稿继续编辑，已发布显示分享，其他动作收更多；保留已有搜索、类型与归属筛选能力。",
+      "acceptance": "草稿不被误分享为公开内容；已发布可复用有效分享；删除/撤回/失权后的卡片状态正确；不新增逐行网络查询。",
+      "file_groups": [
+        "F1",
+        "F11"
+      ],
+      "depends": "C01",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "C03",
+      "priority": "P1",
+      "title": "空白图文页先图片后文字",
+      "pages": "17",
+      "change": "先显示紧凑添加图片入口，再标题与可选介绍；不在无图片时展示独立封面或一串空素材说明。",
+      "acceptance": "空白进入无已保存假状态；添加/取消选图均正常；标题与有效图片校验沿用；介绍可空；无素材和无标题不会发布成功。",
+      "file_groups": [
+        "F2",
+        "F11"
+      ],
+      "depends": "C01",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "C04",
+      "priority": "P1",
+      "title": "图文缩略图和单组选中操作",
+      "pages": "03、04",
+      "change": "把大图编辑加逐图卡片改为横向缩略图；只显示选中图的排序/封面/注释/移除；预览复用现有呈现器。",
+      "acceptance": "9张图不同时出现9组操作；排序、封面和正文回显一致；移除封面后有合理回退；部分上传失败可处理，重试不重复归档成功项。",
+      "file_groups": [
+        "F2",
+        "F11"
+      ],
+      "depends": "C03",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "C05",
+      "priority": "P1",
+      "title": "空白视频页先选择主视频",
+      "pages": "18",
+      "change": "主视频添加为首个动作；未选视频不展示独立封面表单；选后沿用现有封面/缩略图能力，支持替换。",
+      "acceptance": "只选一个主视频；取消不清空原数据；默认封面可用或明确允许后补，不伪装已生成；失败保留标题和介绍；横竖视频不拉伸。",
+      "file_groups": [
+        "F2",
+        "F11"
+      ],
+      "depends": "C01",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "C06",
+      "priority": "P1",
+      "title": "视频选填字段折叠",
+      "pages": "05、06",
+      "change": "默认保留视频、封面、标题、介绍；私聊/朋友圈文案收分享文案，阅读样式收显示设置；不新增外部平台发布功能。",
+      "acceptance": "不填营销文案也可保存/发布合格视频；展开编辑、收起、重进数据不丢；旧videoLayout/shareCopy/momentsCopy兼容；样式明确仅作用于小程序阅读。",
+      "file_groups": [
+        "F2",
+        "F11"
+      ],
+      "depends": "C05",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "C07",
+      "priority": "P0",
+      "title": "保存草稿与可选预览分开",
+      "pages": "03、05、17、18",
+      "change": "底部统一保存草稿/发布；预览放轻量入口；保存只是保存，不触发公开或分享；沿用现有不完整视频草稿规则。",
+      "acceptance": "保存后仍为草稿且可恢复编辑；不调用发布；失败保留输入；只有真正成功才显示已保存；预览不自动公开；不新增默认自动保存。",
+      "file_groups": [
+        "F2",
+        "F11"
+      ],
+      "depends": "C03,C05",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "C08",
+      "priority": "P0",
+      "title": "直接发布保留服务端预览校验",
+      "pages": "03—06、17、18",
+      "change": "用户点发布时内部顺序保存最新稿→申请当前修订preview_token→publish；用户无需先打开预览画面；复用现有幂等键和发布后阅读页跳转。",
+      "acceptance": "不绕过preview_token或服务端内容检查；保存后改字/切账号则停止；连点不重复发布；token过期、409、超时有明确恢复；草稿、发布、撤回状态真实。",
+      "file_groups": [
+        "F2",
+        "F11"
+      ],
+      "depends": "C07",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "P01",
+      "priority": "P1",
+      "title": "极简新建项目和默认归属",
+      "pages": "15",
+      "change": "普通新建首屏仅项目名，多合法归属时保留紧凑选择；客户和资料后补；保持当前创建后自动进入新笔记。",
+      "acceptance": "名称为空不能创建；单归属不重复选择；无权限归属拒绝；创建成功只建一个项目；客户深链保留已有合法预选/创建关联，不丢上游客户意图。",
+      "file_groups": [
+        "F4",
+        "F8",
+        "F11"
+      ],
+      "depends": "P02,P03",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "P02",
+      "priority": "P0",
+      "title": "补齐项目创建后修改客户关联",
+      "pages": "08、15",
+      "change": "扩既有项目PATCH的可选customer_ref：未提供保留、空串解除、非空绑定/改绑；复用可信本人客户验证及当前revision检查，保留旧POST契约。",
+      "acceptance": "合法绑定/改绑/解除可持久化；他人客户/非法ref/旧revision不写；其他项目资料不丢；旧创建客户端可用；不把crm_id当customer_ref；不新增表。",
+      "file_groups": [
+        "F8",
+        "F12"
+      ],
+      "depends": "先写失败契约与权限测试",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "P03",
+      "priority": "P1",
+      "title": "详情补绑/更换/解除客户入口",
+      "pages": "08",
+      "change": "把原候选搜索、分页、更早窗口和取消能力放到项目资料；调用P02，保留现有客户详情发起新项目场景。",
+      "acceptance": "不填客户也可记笔记；事后可补绑、改绑、解除；取消不写入；切账号不串关联；摘要随当前关联更新，历史访问不被删；不捏造实际绑定时间。",
+      "file_groups": [
+        "F4",
+        "F8",
+        "F11"
+      ],
+      "depends": "P02",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "P04",
+      "priority": "P1",
+      "title": "项目笔记编辑页减项",
+      "pages": "09",
+      "change": "只留项目摘要、标题、正文、紧凑素材与AI辅助；单一可选预览入口；删除编辑区重复版本生成和历史卡片。",
+      "acceptance": "当前标题、非空正文校验不变；素材选填；长正文、图片、横竖视频正常；结构化只读原文不降级；不存在重复主按钮或默认多排管理操作。",
+      "file_groups": [
+        "F4",
+        "F11"
+      ],
+      "depends": "G02,G03",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "P05",
+      "priority": "P0",
+      "title": "内部保存即完成",
+      "pages": "09",
+      "change": "底部稳定保存笔记/发给客户；移除保存后下一步生成版本再分享的强提示；保存后重建当前表单基线。",
+      "acceptance": "新建/编辑保存只调保存接口，不冻结、不创建分享、不导航发送；只提示已保存；返回无假未保存警告；保存失败和晚回包不清掉新输入。",
+      "file_groups": [
+        "F4",
+        "F11"
+      ],
+      "depends": "P04",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "P06",
+      "priority": "P0",
+      "title": "发给客户串联必要步骤",
+      "pages": "09、10",
+      "change": "新增最小prepareSend编排；捕获账号/项目/笔记/实例/修订与签名；必要时保存，取得匹配固定版本和有效分享，再开既有客户预览。",
+      "acceptance": "首次新笔记一次准备动作到发送预览；未改稿可靠复用，改稿生成新快照；不串调带切页副作用的三个旧按钮方法；用户仍手动选择微信接收人。",
+      "file_groups": [
+        "F4",
+        "F5",
+        "F11"
+      ],
+      "depends": "P05",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "P07",
+      "priority": "P0",
+      "title": "发送失败检查点与恢复",
+      "pages": "09、10",
+      "change": "记录保存/冻结/分享各阶段成功结果；冻结超时先读回核对；分享重试用原key/expiry，token缺失提供明确恢复，不私自撤回旧链接。",
+      "acceptance": "保存成功不重复建笔记；冻结成功不重复冻结；结果不明不盲重试；分享/导航失败可恢复；切账号/项目、保存中改字、后台返回、401/403/409均不串发。",
+      "file_groups": [
+        "F4",
+        "F8",
+        "F11",
+        "F12"
+      ],
+      "depends": "P06",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "P08",
+      "priority": "P1",
+      "title": "管理能力后置但可达",
+      "pages": "08、16",
+      "change": "历史版本、项目成员、项目记录、导出及分享撤回收详情/更多；反馈和确认保留按版本查看，不成为创建或普通发送前置。",
+      "acceptance": "创建不要求邀请成员或指定确认人；正式方案确认仍检查有效成员与指定确认人；导出选择精确版本；撤回仅影响目标分享；返回恢复正确项目和笔记。",
+      "file_groups": [
+        "F4",
+        "F5",
+        "F11",
+        "F12"
+      ],
+      "depends": "P04",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "P09",
+      "priority": "P0",
+      "title": "复用客户预览与旧版本规则",
+      "pages": "10",
+      "change": "沿用既有projectnoteview；保持私有媒体、固定版本、旧分享、反馈/确认语义，界面按新主流程校正必要显示。",
+      "acceptance": "分享准备不显示客户已收到；修改草稿不改旧链接内容；撤回/删除/失权后拒绝；未登录按原规则处理；普通有效链接阅读不强制成为项目成员。",
+      "file_groups": [
+        "F5",
+        "F4",
+        "F11",
+        "F12"
+      ],
+      "depends": "P06,P07",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "T01",
+      "priority": "P1",
+      "title": "保留客户三Tab与单行筛选",
+      "pages": "11",
+      "change": "复用现有客户查看/素材跟踪/分享记录；默认仍逐次记录；下拉显示当前查看方式；压缩技术窗口文案但保留分页能力。",
+      "acceptance": "无新增一排Tab或重复筛选；换模式保留日期/搜索/意向/来源；访问次数不当人数；更早范围实际可读，不能把当前分享段称为全历史。",
+      "file_groups": [
+        "F6",
+        "F11"
+      ],
+      "depends": "G02",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "T02",
+      "priority": "P1",
+      "title": "访问卡片层级与双入口",
+      "pages": "11",
+      "change": "统一客户、内容、来源、时间和指标；保留content_id/version/route_key；姓名进客户，封面/标题进可用的精确版本管理预览。",
+      "acceptance": "图文停留与视频观看含义清楚；进度不超过100%；累计次数口径保留；点标题不误开客户；无合法版本入口不显示假按钮；预览不污染客户统计。",
+      "file_groups": [
+        "F6",
+        "F7",
+        "F10",
+        "F11"
+      ],
+      "depends": "T07",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "T03",
+      "priority": "P0",
+      "title": "客户承接动作前置",
+      "pages": "12",
+      "change": "转为线索/承接状态与关联项目放身份指标下方；按服务端权限和当前状态显示，不新增没有数据支持的电话/微信动作。",
+      "acceptance": "授权客户可办理；匿名或无联系授权不能转线索；重复点击不重复建；失败可重试；已转状态真实；关联项目只用可信客户ref，异步已受理不冒充已分配跟进。",
+      "file_groups": [
+        "F7",
+        "F11"
+      ],
+      "depends": "G02",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "T04",
+      "priority": "P1",
+      "title": "客户详情记录按需展开",
+      "pages": "12",
+      "change": "项目动态默认最近2—3条、浏览记录分段加载；移除正文重复返回按钮；返回原入口保留筛选和滚动。",
+      "acceptance": "多记录不挤走顶部业务动作；查看更多不漏记录；公开浏览与私密项目动态仍分区；从素材/客户/分享进入都返回原位置；迟到响应不串上下文。",
+      "file_groups": [
+        "F7",
+        "F6",
+        "F11"
+      ],
+      "depends": "T03",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "T05",
+      "priority": "P0",
+      "title": "补指定素材访客过滤",
+      "pages": "13、14",
+      "change": "扩现有my-visitors及entries对route/content/version的实际过滤；复用MyContentStats归组和visitor_key去重；素材模式排除无浏览的纯项目关联客户。",
+      "acceptance": "同素材同版本跨两条本人分享的同客计1人、次数累加；不同版本/素材/同事数据不串；匿名识别后按既有身份解析去重；合集归组一致；游标绑定过滤范围；默认无筛选结果和全局意向规则不变。",
+      "file_groups": [
+        "F9",
+        "F12"
+      ],
+      "depends": "先写跨分享/版本/权限/分页失败测试",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "T06",
+      "priority": "P1",
+      "title": "素材直达访客列表",
+      "pages": "13、14",
+      "change": "openMaterial进入受素材约束的访客视图，分享批次改为次入口；客户详情继续携带素材、版本、时间窗口和分享游标。",
+      "acceptance": "素材→访客→客户详情，无强制分享批次中间页；列表/详情人数次数一致；返回不丢范围；无访问空态正确；不以前端截取一页数据冒充全部访客。",
+      "file_groups": [
+        "F6",
+        "F7",
+        "F11"
+      ],
+      "depends": "T05",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "T07",
+      "priority": "P0",
+      "title": "精确版本管理预览与统计隔离",
+      "pages": "11、14",
+      "change": "核对并复用精确版本读取，增加受管理权限控制的只读预览模式或最小所需接口；不能仅加preview=1假定跟踪已关闭。",
+      "acceptance": "本人管理预览不增加客户访问/通知；普通客户访问仍正常计量；无权限不能借预览读私有内容；历史版本不变成最新稿；合集/子项路由正确；本人查看排除和匿名计量回归通过。",
+      "file_groups": [
+        "F10",
+        "F6",
+        "F7",
+        "F11"
+      ],
+      "depends": "T05中内容与版本上下文契约",
+      "status": "代码、自动化及独立审查通过；原生/真实角色验收待执行"
+    },
+    {
+      "id": "V01",
+      "priority": "P0",
+      "title": "先行为测试后实现并跑完整相关检查",
+      "pages": "全部",
+      "change": "扩现有测试，不复制大型harness；同步TS/JS产物；运行相关完整JS、类型检查、原生WXML编译、Go相关包及全量/vet，做凭证和依赖扫描。",
+      "acceptance": "覆盖各任务正反例；零本次回归，不跳失败用例；未执行检查明确标注；新生成物与源一致；不新增无请求依赖；无真实凭据进提交。",
+      "file_groups": [
+        "F11",
+        "F12"
+      ],
+      "depends": "各功能增量",
+      "status": "本地全量与编译通过；Linux race待PR CI；全工程类型基线188诊断无新增"
+    },
+    {
+      "id": "V02",
+      "priority": "P0",
+      "title": "18页原生视觉与状态验收",
+      "pages": "全部",
+      "change": "对照18页设计，在开发者工具和手机分别核对布局；补空态、加载、错误、长文本、键盘、不同媒体比例、权限不足。",
+      "acceptance": "所有主要动作可见可点，未被胶囊/安全区/键盘遮挡；无横向溢出和图片拉伸；折叠字段能找到；图片示意不当功能完成证据。",
+      "file_groups": [
+        "F1",
+        "F2",
+        "F4",
+        "F6",
+        "F7"
+      ],
+      "depends": "G02及对应页面实现",
+      "status": "待用户调整AppID/开发者权限；18态工具及真机验收未执行"
+    },
+    {
+      "id": "V03",
+      "priority": "P0",
+      "title": "真实角色端到端验收",
+      "pages": "三条主链",
+      "change": "用专用验收数据走公开创作保存/发布、私密项目保存/发送、客户跟踪承接/素材访客；记录真实设计师、接收客户和无权限账号结果。",
+      "acceptance": "设计师与客户看到同一固定版本；仅保存不公开不分享；删除/撤回不越权；统计与数据事实一致；内部计量不当实际送达；模拟器/真机/生产证据分别记录。",
+      "file_groups": [
+        "F11",
+        "F12"
+      ],
+      "depends": "C08,P09,T06,T07",
+      "status": "真实设计师、收件客户及无权限账号验收未执行"
+    },
+    {
+      "id": "D01",
+      "priority": "P1",
+      "title": "接口文档、修改清单与可回退提交",
+      "pages": "全部",
+      "change": "同步customer_ref PATCH、素材过滤、保存/发布/发送流程文档；按逻辑提交中文Lore；记录实际文件、检查和回退方法。",
+      "acceptance": "清单与最终diff一致；旧契约兼容说明完整；代码revert可验证；无未经授权的数据迁移；不暂存现有无关部署文档。",
+      "file_groups": [
+        "F8",
+        "F9"
+      ],
+      "depends": "V01",
+      "status": "3个功能本地提交与交付文档已整理；推送/PR待原生验收"
+    },
+    {
+      "id": "D02",
+      "priority": "P1",
+      "title": "兼容发布与上线核验",
+      "pages": "交付",
+      "change": "确认实施后按同一发布批次先部署兼容后端，再上传小程序；分别核验开发/体验/审核/正式版本和公网健康，保存备份及回执。",
+      "acceptance": "新旧前端均可用；路由存在不代替登录实测；后端、上传、审核、正式发布分别记录；未通过真实验收不报生产完成；管理后台共用接口做兼容回归。",
+      "file_groups": [
+        "F13"
+      ],
+      "depends": "V01,V02,V03,D01及相应发布授权",
+      "status": "依用户门禁等待原生验收；未创建PR/合并/部署/上传"
+    }
+  ],
+  "groups": {
+    "F1": {
+      "name": "内容工作台",
+      "files": [
+        "miniprogram/miniprogram/pages/contentworkbench/contentworkbench.ts",
+        "miniprogram/miniprogram/pages/contentworkbench/contentworkbench.js",
+        "miniprogram/miniprogram/pages/contentworkbench/contentworkbench.wxml",
+        "miniprogram/miniprogram/pages/contentworkbench/contentworkbench.wxss"
+      ]
+    },
+    "F2": {
+      "name": "图文与视频编辑器",
+      "files": [
+        "miniprogram/miniprogram/pages/contentedit/contentedit.ts",
+        "miniprogram/miniprogram/pages/contentedit/contentedit.js",
+        "miniprogram/miniprogram/pages/contentedit/contentedit.wxml",
+        "miniprogram/miniprogram/pages/contentedit/contentedit.wxss"
+      ]
+    },
+    "F3": {
+      "name": "AI辅助与回填",
+      "files": [
+        "miniprogram/miniprogram/pages/contentwriting/contentwriting.wxml",
+        "miniprogram/miniprogram/pages/contentwriting/contentwriting.ts",
+        "miniprogram/miniprogram/pages/contentwriting/contentwriting.js",
+        "docs/phase3/project-note-writing-channel-20261030.md"
+      ]
+    },
+    "F4": {
+      "name": "项目笔记主页面",
+      "files": [
+        "miniprogram/miniprogram/pages/projectnotes/projectnotes-core.js",
+        "miniprogram/miniprogram/pages/projectnotes/projectnotes.wxml",
+        "miniprogram/miniprogram/pages/projectnotes/projectnotes.wxss"
+      ]
+    },
+    "F5": {
+      "name": "客户阅读及发送预览（优先复用）",
+      "files": [
+        "miniprogram/miniprogram/pages/projectnoteview/projectnoteview.ts",
+        "miniprogram/miniprogram/pages/projectnoteview/projectnoteview.js",
+        "miniprogram/miniprogram/pages/projectnoteview/projectnoteview.wxml"
+      ]
+    },
+    "F6": {
+      "name": "客户跟踪及素材列表",
+      "files": [
+        "miniprogram/miniprogram/pages/sharevisits/sharevisits.ts",
+        "miniprogram/miniprogram/pages/sharevisits/sharevisits.js",
+        "miniprogram/miniprogram/pages/sharevisits/sharevisits.wxml",
+        "miniprogram/miniprogram/pages/sharevisits/sharevisits.wxss"
+      ]
+    },
+    "F7": {
+      "name": "客户详情",
+      "files": [
+        "miniprogram/miniprogram/pages/visitdetail/visitdetail.ts",
+        "miniprogram/miniprogram/pages/visitdetail/visitdetail.js",
+        "miniprogram/miniprogram/pages/visitdetail/visitdetail.wxml",
+        "miniprogram/miniprogram/pages/visitdetail/visitdetail.wxss"
+      ]
+    },
+    "F8": {
+      "name": "项目客户关联后端与SDK",
+      "files": [
+        "service/tracking/project_notes.go",
+        "service/route/project_notes.go",
+        "service/route/project_customer_link.go",
+        "miniprogram/miniprogram/utils/phase3-api.ts",
+        "miniprogram/miniprogram/utils/phase3-api.js",
+        "miniprogram/miniprogram/utils/customer-link-api.ts",
+        "miniprogram/miniprogram/utils/customer-link-api.js"
+      ]
+    },
+    "F9": {
+      "name": "素材访客过滤后端",
+      "files": [
+        "service/tracking/my_visitors.go",
+        "service/route/share_tracking_my.go",
+        "service/route/share_tracking.go",
+        "service/tracking/my_shares.go"
+      ]
+    },
+    "F10": {
+      "name": "内容读取及预览（按核对结果最小修改）",
+      "files": [
+        "miniprogram/miniprogram/pages/contentreader/contentreader.ts",
+        "miniprogram/miniprogram/pages/contentreader/contentreader.js",
+        "miniprogram/miniprogram/pages/contentreader/contentreader.wxml",
+        "service/route/content_workbench.go"
+      ]
+    },
+    "F11": {
+      "name": "现有前端行为测试",
+      "files": [
+        "miniprogram/tests/phase3-content-studio.test.js",
+        "miniprogram/tests/phase3-content-editor-ui.test.js",
+        "miniprogram/tests/phase3-content-writing.test.js",
+        "miniprogram/tests/content-ai-resume.test.js",
+        "miniprogram/tests/project-note-media.test.js",
+        "miniprogram/tests/private-project-notes.test.js",
+        "miniprogram/tests/private-project-invitations.test.js",
+        "miniprogram/tests/private-project-packages-pages.test.js",
+        "miniprogram/tests/customer-visit-feed.test.js",
+        "miniprogram/tests/sharevisits-display.test.js",
+        "miniprogram/tests/customer-workflow-rectification.test.js",
+        "miniprogram/tests/visitdetail-lifecycle.test.js",
+        "miniprogram/tests/content-reader-actions.test.js",
+        "miniprogram/tests/content-reader-release.test.js"
+      ]
+    },
+    "F12": {
+      "name": "后端行为测试",
+      "files": [
+        "service/route/project_customer_link_gate_test.go",
+        "service/route/project_customer_relationship_test.go",
+        "service/tracking/project_notes_workflow_test.go",
+        "service/tracking/project_notes_version_test.go",
+        "service/tracking/my_project_customers_test.go",
+        "service/tracking/my_visitors_test.go",
+        "service/tracking/my_visit_feed_test.go",
+        "service/route/share_tracking_my_test.go",
+        "service/route/content_workbench_test.go"
+      ]
+    },
+    "F13": {
+      "name": "生产发布包、版本记录、回滚说明",
+      "files": [],
+      "kind": "planned_delivery_artifacts"
+    }
+  },
+  "implementation_branch": "feat/workbench-simplification-20261115",
+  "code_commits": [
+    {
+      "scope": "content",
+      "commit": "6c4417598675579350a0a455e7e372b205a2ae9a",
+      "files": 16
+    },
+    {
+      "scope": "project",
+      "commit": "2fcfc47d037e6a5be4ebea66689b4cd1574423f3",
+      "files": 9
+    },
+    {
+      "scope": "customers",
+      "commit": "1dc6721bc2c265ea1487b28e4780489ef5f023de",
+      "files": 28
+    }
+  ]
+}

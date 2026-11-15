@@ -1,0 +1,93 @@
+{
+  "date": "2026-11-15",
+  "branch": "feat/workbench-simplification-20261115",
+  "source_baseline": "f33030a4ae29cdd8f294bc9c3d3b03555e8e75e0",
+  "code_commits": [
+    {
+      "scope": "content",
+      "commit": "6c4417598675579350a0a455e7e372b205a2ae9a",
+      "files": 16
+    },
+    {
+      "scope": "project",
+      "commit": "2fcfc47d037e6a5be4ebea66689b4cd1574423f3",
+      "files": 9
+    },
+    {
+      "scope": "customers",
+      "commit": "1dc6721bc2c265ea1487b28e4780489ef5f023de",
+      "files": 28
+    }
+  ],
+  "miniprogram": {
+    "tests": 1696,
+    "passed": 1696,
+    "failed": 0,
+    "skipped": 0,
+    "native_wxml_compiler_enabled": true
+  },
+  "backend": {
+    "go_test_all": true,
+    "go_vet_all": true,
+    "CGO_ENABLED": "0",
+    "race": "pending Linux CI"
+  },
+  "admin": {
+    "tests": 776,
+    "passed": 776,
+    "production_build": true,
+    "audit_vulnerabilities": 0
+  },
+  "miniprogram_audit_vulnerabilities": 0,
+  "typescript": {
+    "baseline_diagnostic_lines": 188,
+    "current_diagnostic_lines": 188,
+    "added_diagnostics": 0,
+    "full_typecheck_passed": false
+  },
+  "source_checks": {
+    "changed_js_syntax": 19,
+    "gofmt": true,
+    "auth_signer": true,
+    "tracking_outputs": true,
+    "route_policy_count": 78,
+    "public_routes": 23,
+    "excluded_routes": 55,
+    "wxml": 215,
+    "wxs": 33,
+    "wxss": 172,
+    "wxss_root_imports_resolved_only_in_temp_copy": true,
+    "credential_pattern_findings": 0,
+    "protected_crypto_untouched": true
+  },
+  "release_tools": {
+    "protected_builder_tests": 1,
+    "release_tool_tests": 28
+  },
+  "review": {
+    "backend": "APPROVE",
+    "frontend": "APPROVE",
+    "remaining_P0": 0,
+    "remaining_P1": 0
+  },
+  "rollback": {
+    "reverse_patch_check": true,
+    "isolated_revert_three_commits": true,
+    "restored_tree": "aaa14ca124e6f6182a22b16719693452252c0a1c"
+  },
+  "native_uat": {
+    "status": "blocked on target AppID developer access",
+    "last_cli_result": "code 10: 登录用户不是该小程序的开发者",
+    "last_checked_local": "2026-11-15 16:44:13 Asia/Shanghai",
+    "pages_passed": false,
+    "real_role_uat_passed": false
+  },
+  "delivery": {
+    "pushed": false,
+    "pr_created": false,
+    "merged": false,
+    "backend_deployed": false,
+    "admin_deployed": false,
+    "miniprogram_uploaded": false
+  }
+}
