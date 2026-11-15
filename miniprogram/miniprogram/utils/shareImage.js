@@ -6,10 +6,6 @@ exports.prefetchShareCardImage = prefetchShareCardImage;
 const asset_1 = require("./asset");
 const SHARE_CARD_WIDTH = 1000;
 const SHARE_CARD_HEIGHT = 800;
-const SHARE_CARD_OUTER_PADDING = 44;
-const SHARE_CARD_INNER_PADDING = 24;
-const SHARE_CARD_RADIUS = 30;
-const SHARE_CARD_IMAGE_RADIUS = 22;
 const shareImagePromiseCache = {};
 const shareImageResultCache = {};
 function buildShareImageCacheKey(sourceUrl) {
@@ -31,7 +27,7 @@ function ensureDirectory(dirPath) {
             recursive: true,
             success: () => resolve(),
             fail: (error) => {
-                const errorMessage = String((error === null || error === void 0 ? void 0 : error.errMsg) || '');
+                const errorMessage = String(error?.errMsg || '');
                 if (errorMessage.includes('file already exists')) {
                     resolve();
                     return;
@@ -91,20 +87,6 @@ function writeBase64Image(cacheKey, dataUrl) {
         }
     });
 }
-function drawRoundedRect(ctx, x, y, width, height, radius) {
-    const safeRadius = Math.min(radius, width / 2, height / 2);
-    ctx.beginPath();
-    ctx.moveTo(x + safeRadius, y);
-    ctx.lineTo(x + width - safeRadius, y);
-    ctx.arcTo(x + width, y, x + width, y + safeRadius, safeRadius);
-    ctx.lineTo(x + width, y + height - safeRadius);
-    ctx.arcTo(x + width, y + height, x + width - safeRadius, y + height, safeRadius);
-    ctx.lineTo(x + safeRadius, y + height);
-    ctx.arcTo(x, y + height, x, y + height - safeRadius, safeRadius);
-    ctx.lineTo(x, y + safeRadius);
-    ctx.arcTo(x, y, x + safeRadius, y, safeRadius);
-    ctx.closePath();
-}
 function computeContainSize(srcWidth, srcHeight, maxWidth, maxHeight) {
     if (srcWidth <= 0 || srcHeight <= 0 || maxWidth <= 0 || maxHeight <= 0) {
         return {
@@ -137,7 +119,7 @@ function computeCoverRect(srcWidth, srcHeight, dstWidth, dstHeight) {
         height,
     };
 }
-async function createShareCardImage(sourceUrl, height) {
+async function createShareCardImage(sourceUrl, height, fit) {
     if (typeof wx.createOffscreenCanvas === 'undefined') {
         return '';
     }
@@ -152,70 +134,33 @@ async function createShareCardImage(sourceUrl, height) {
         width: SHARE_CARD_WIDTH,
         height: height,
     });
-    const ctx = canvas === null || canvas === void 0 ? void 0 : canvas.getContext('2d');
+    const ctx = canvas?.getContext('2d');
     if (!canvas || !ctx) {
         return '';
     }
     const image = await loadCanvasImage(canvas, sourcePath);
     const sourceWidth = Number(imageInfo.width || image.width || 0);
     const sourceHeight = Number(imageInfo.height || image.height || 0);
-    const backgroundGradient = ctx.createLinearGradient(0, 0, SHARE_CARD_WIDTH, height);
-    backgroundGradient.addColorStop(0, '#f5ecdf');
-    backgroundGradient.addColorStop(1, '#e7d6c1');
-    ctx.fillStyle = backgroundGradient;
+    // JPEG has no alpha channel; transparent source pixels must not turn black.
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, SHARE_CARD_WIDTH, height);
-    const backgroundRect = computeCoverRect(sourceWidth, sourceHeight, SHARE_CARD_WIDTH, height);
-    ctx.save();
-    ctx.globalAlpha = 0.16;
-    ctx.drawImage(image, backgroundRect.x, backgroundRect.y, backgroundRect.width, backgroundRect.height);
-    ctx.restore();
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.34)';
-    ctx.fillRect(0, 0, SHARE_CARD_WIDTH, height);
-    const frameX = SHARE_CARD_OUTER_PADDING;
-    const frameY = SHARE_CARD_OUTER_PADDING;
-    const frameWidth = SHARE_CARD_WIDTH - SHARE_CARD_OUTER_PADDING * 2;
-    const frameHeight = height - SHARE_CARD_OUTER_PADDING * 2;
-    ctx.save();
-    ctx.shadowColor = 'rgba(82, 58, 32, 0.16)';
-    ctx.shadowBlur = 30;
-    ctx.shadowOffsetY = 10;
-    drawRoundedRect(ctx, frameX, frameY, frameWidth, frameHeight, SHARE_CARD_RADIUS);
-    ctx.fillStyle = 'rgba(255, 250, 244, 0.95)';
-    ctx.fill();
-    ctx.restore();
-    ctx.save();
-    drawRoundedRect(ctx, frameX, frameY, frameWidth, frameHeight, SHARE_CARD_RADIUS);
-    ctx.strokeStyle = 'rgba(201, 181, 153, 0.72)';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.restore();
-    const imageX = frameX + SHARE_CARD_INNER_PADDING;
-    const imageY = frameY + SHARE_CARD_INNER_PADDING;
-    const imageMaxWidth = frameWidth - SHARE_CARD_INNER_PADDING * 2;
-    const imageMaxHeight = frameHeight - SHARE_CARD_INNER_PADDING * 2;
-    const containSize = computeContainSize(sourceWidth, sourceHeight, imageMaxWidth, imageMaxHeight);
-    const finalImageX = imageX + Math.round((imageMaxWidth - containSize.width) / 2);
-    const finalImageY = imageY + Math.round((imageMaxHeight - containSize.height) / 2);
-    ctx.save();
-    ctx.shadowColor = 'rgba(82, 58, 32, 0.14)';
-    ctx.shadowBlur = 20;
-    ctx.shadowOffsetY = 8;
-    drawRoundedRect(ctx, finalImageX, finalImageY, containSize.width, containSize.height, SHARE_CARD_IMAGE_RADIUS);
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.82)';
-    ctx.fill();
-    ctx.restore();
-    ctx.save();
-    drawRoundedRect(ctx, finalImageX, finalImageY, containSize.width, containSize.height, SHARE_CARD_IMAGE_RADIUS);
-    ctx.clip();
-    ctx.drawImage(image, finalImageX, finalImageY, containSize.width, containSize.height);
-    ctx.restore();
+    if (fit === 'contain') {
+        // Invitation posters must keep their text and QR code fully visible.
+        const size = computeContainSize(sourceWidth, sourceHeight, SHARE_CARD_WIDTH, height);
+        ctx.drawImage(image, Math.round((SHARE_CARD_WIDTH - size.width) / 2), Math.round((height - size.height) / 2), size.width, size.height);
+    }
+    else {
+        // Native share cards have a fixed ratio; crop the edges instead of adding a frame.
+        const rect = computeCoverRect(sourceWidth, sourceHeight, SHARE_CARD_WIDTH, height);
+        ctx.drawImage(image, rect.x, rect.y, rect.width, rect.height);
+    }
     const dataUrl = await canvasToDataURL(canvas);
-    const cacheKey = buildShareImageCacheKey(`${height}:${sourceUrl}`);
+    const cacheKey = buildShareImageCacheKey(`${fit}:${height}:${sourceUrl}`);
     return writeBase64Image(cacheKey, dataUrl);
 }
-async function prepareImage(sourceUrl, height) {
+async function prepareImage(sourceUrl, height, fit = 'cover') {
     const cleanUrl = normalizeShareSourceUrl(sourceUrl);
-    const key = `${height}:${cleanUrl}`;
+    const key = `${fit}:${height}:${cleanUrl}`;
     if (!cleanUrl) {
         return '';
     }
@@ -223,7 +168,7 @@ async function prepareImage(sourceUrl, height) {
         return shareImageResultCache[key];
     }
     if (!shareImagePromiseCache[key]) {
-        shareImagePromiseCache[key] = createShareCardImage(cleanUrl, height)
+        shareImagePromiseCache[key] = createShareCardImage(cleanUrl, height, fit)
             .then((result) => {
             const cleanResult = String(result || '').trim();
             if (cleanResult) {
@@ -241,8 +186,8 @@ async function prepareImage(sourceUrl, height) {
     }
     return shareImagePromiseCache[key];
 }
-function prepareShareCardImage(sourceUrl) {
-    return prepareImage(sourceUrl, SHARE_CARD_HEIGHT);
+function prepareShareCardImage(sourceUrl, fit = 'cover') {
+    return prepareImage(sourceUrl, SHARE_CARD_HEIGHT, fit);
 }
 function prepareTimelineShareImage(sourceUrl) {
     return prepareImage(sourceUrl, SHARE_CARD_WIDTH);

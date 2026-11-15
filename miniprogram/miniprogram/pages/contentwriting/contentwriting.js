@@ -369,7 +369,7 @@ Page({
     ].join('\n\n');
     this.setData({ navigating: true, error: '', notice: '' });
     wx.navigateTo({
-      url: '/pages/chat/chat?mode=chat&source=content-writing&title=AI文案',
+      url: '/pages/chat/chat?mode=chat&source=content-writing&title=AI辅助',
       events: {
         contentWritingResult: result => {
           if (this._unloaded) return;
@@ -440,7 +440,7 @@ Page({
     // 账号已变化的迟到回执同样不得关闭本页；交由 onShow 的统一清空处理。
     if (pending.token !== String(wx.getStorageSync('token') || '')) {
       this.clearReturnAck();
-      this.setData({ navigating: false, notice: '账号已变化，AI 文案未带回原页面；请返回后重新发起。' });
+      this.setData({ navigating: false, notice: '账号已变化，AI辅助结果未带回原页面；请返回后重新发起。' });
       return;
     }
     const state = String(ack.state || '');
@@ -460,7 +460,7 @@ Page({
       if (this._unloaded) return;
       // 微任务执行前账号仍可能变化，导航前再核对一次。
       if (pending.token !== String(wx.getStorageSync('token') || '')) {
-        this.setData({ navigating: false, notice: '账号已变化，AI 文案未带回原页面；请返回后重新发起。' });
+        this.setData({ navigating: false, notice: '账号已变化，AI辅助结果未带回原页面；请返回后重新发起。' });
         return;
       }
       wx.navigateBack({ delta: 1, fail: () => this.setData({ error: '文案已带回原页面，请返回继续编辑' }) });

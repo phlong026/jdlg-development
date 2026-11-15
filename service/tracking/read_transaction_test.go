@@ -20,7 +20,7 @@ type probeSQL struct {
 	options []driver.TxOptions
 	queries []string
 	execs   []string
-	gate    chan struct{} // when set, the tenant-lock query waits on it
+	gate    chan struct{} // when set, the tenant-lock statement waits on it
 }
 type probeConnector struct{ p *probeSQL }
 
@@ -45,18 +45,18 @@ func (c probeConn) BeginTx(_ context.Context, opts driver.TxOptions) (driver.Tx,
 func (c probeConn) ExecContext(_ context.Context, q string, _ []driver.NamedValue) (driver.Result, error) {
 	c.p.mu.Lock()
 	c.p.execs = append(c.p.execs, q)
+	gate := c.p.gate
 	c.p.mu.Unlock()
+	if gate != nil && strings.Contains(q, "tracking_tenant_lock") {
+		<-gate
+	}
 	return driver.RowsAffected(1), nil
 }
 func (c probeConn) QueryContext(_ context.Context, q string, _ []driver.NamedValue) (driver.Rows, error) {
 	c.p.mu.Lock()
 	c.p.queries = append(c.p.queries, q)
-	gate := c.p.gate
 	c.p.mu.Unlock()
 	if strings.Contains(q, "tracking_tenant_lock") {
-		if gate != nil {
-			<-gate
-		}
 		return &probeRows{columns: []string{"tenant_id"}, values: [][]driver.Value{{"tenant"}}}, nil
 	}
 	return &probeRows{columns: []string{"kind", "record_id", "owner_id", "visitor_key", "session_id", "content_id", "share_id", "occurred_at", "payload"}}, nil
@@ -126,7 +126,7 @@ func TestSQLReadTransactionIsLockFreeSnapshotAndRejectsWrites(t *testing.T) {
 	if err = NewSQLStore(writeDB, 0, 0).Transaction(context.Background(), "tenant", func(Repository) error { return nil }); err != nil {
 		t.Fatal(err)
 	}
-	if len(w.execs) == 0 || !strings.Contains(w.execs[0], "tracking_tenant_lock") || len(w.queries) == 0 || !strings.Contains(w.queries[0], "FOR UPDATE") {
+	if len(w.execs) != 1 || !strings.Contains(w.execs[0], "INSERT INTO tracking_tenant_lock") || !strings.Contains(w.execs[0], "ON DUPLICATE KEY UPDATE") || len(w.queries) != 0 {
 		t.Fatalf("write transaction lost its lock: execs=%v queries=%v", w.execs, w.queries)
 	}
 }
@@ -144,7 +144,7 @@ func TestSQLStoreSlotsBoundPoolUseAndHonorCancellation(t *testing.T) {
 	deadline := time.Now().Add(2 * time.Second)
 	for {
 		p.mu.Lock()
-		waiting := len(p.queries) > 0
+		waiting := len(p.execs) > 0
 		p.mu.Unlock()
 		if waiting {
 			break

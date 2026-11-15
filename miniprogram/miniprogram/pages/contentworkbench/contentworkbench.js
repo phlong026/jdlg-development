@@ -28,7 +28,7 @@ function contentRow(item, previous) {
     kind, kind_label: { note: '项目笔记', document: '文件', gallery: '图集笔记', video: '视频笔记', article: '文章' }[kind],
     source_label: source ? platformText(source) : '',
     status_label: { published: '已发布', revoked: '已撤回', draft: '草稿' }[item.status] || '草稿',
-    action_label: item.status === 'published' && Number(item.version) > 0 ? '查看并分享' : item.status === 'draft' ? '继续编辑' : '查看内容',
+    action_label: item.status === 'published' && Number(item.version) > 0 ? '分享' : item.status === 'draft' ? '继续编辑' : '查看内容',
     date_label: date && !Number.isNaN(date.getTime()) ? (date.getMonth() + 1) + '月' + date.getDate() + '日' : '',
     cover_path: previous && previous.cover_path && previous.version === item.version && previous.cover?.media_id === item.cover?.media_id ? previous.cover_path : '', cover_error: false,
     view_count: Number(item.page_views || 0),
@@ -44,7 +44,7 @@ Page({
     loading: true, loadingMore: false, error: '', denied: false, disabled: false, loginRequired: false, hasShareVisitAccess: false,
     context: null, items: [], next_cursor: '', snapshot: null,
     importServiceEnabled: false, importEnabled: false, importCapabilityLoading: true, importCapabilityReason: '', importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0,
-    importRights: '', importBusy: false, importError: '', imports: [], importPolling: false,
+    importRights: '', importBusy: false, importError: '', imports: [], importPolling: false, createMenuOpen: false, createMoreOpen: false,
   },
   onLoad(options) { this.setData({ view: options && options.view === 'import' ? 'import' : 'studio' }); },
   onShow() {
@@ -80,11 +80,11 @@ Page({
       keyword: '', searchTerm: '', ownerFilter: '', category: 'all',
       loginRequired: false, loading: false, loadingMore: false, importServiceEnabled: false, importEnabled: false, importCapabilityLoading: true, importCapabilityReason: '',
       importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0, importRights: '', importBusy: false,
-      importError: '', imports: [], importPolling: false,
+      importError: '', imports: [], importPolling: false, createMenuOpen: false, createMoreOpen: false,
       ...state,
     });
   },
-  onHide() { this._shareAccessRequestId = (this._shareAccessRequestId || 0) + 1; this._visible = false; this._epoch = (this._epoch || 0) + 1; this.stopImportPoll(); },
+  onHide() { this._shareAccessRequestId = (this._shareAccessRequestId || 0) + 1; this._visible = false; this._epoch = (this._epoch || 0) + 1; this.setData({ createMenuOpen: false, createMoreOpen: false }); this.stopImportPoll(); },
   onUnload() { this._shareAccessRequestId = (this._shareAccessRequestId || 0) + 1; this._visible = false; this._epoch = (this._epoch || 0) + 1; this._importActionActive = null; this.setData({ hasShareVisitAccess: false, importBusy: false }); this.stopImportPoll(); },
   current(epoch) { return this._visible !== false && epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
   onPullDownRefresh() {
@@ -223,15 +223,15 @@ Page({
   },
   openNotes() { this.navigate('/pages/projectnotes/projectnotes'); },
   openAIWriting() { this.navigate('/pages/contentwriting/contentwriting'); },
-  openCreateMenu() {
-    wx.showActionSheet({
-      itemList: ['图集笔记', '视频笔记', '写文章', '上传文件', '导入链接', '项目笔记'],
-      success: result => {
-        const routes = ['/pages/contentedit/contentedit?kind=gallery', '/pages/contentedit/contentedit?kind=video', '/pages/contentedit/contentedit?kind=article', '/pages/contentedit/contentedit?action=document', '/pages/contentworkbench/contentworkbench?view=import', '/pages/projectnotes/projectnotes'];
-        const url = routes[Number(result.tapIndex)];
-        if (url) this.navigate(url);
-      },
-    });
+  noop() {},
+  openCreateMenu() { this.setData({ createMenuOpen: true, createMoreOpen: false }); },
+  closeCreateMenu() { this.setData({ createMenuOpen: false, createMoreOpen: false }); },
+  openMoreCreateMenu() { this.setData({ createMoreOpen: !this.data.createMoreOpen }); },
+  chooseCreate(event) {
+    const route = String(event.currentTarget.dataset.route || '');
+    if (!route) return;
+    this.closeCreateMenu();
+    this.navigate(route);
   },
   pasteImportLink() { wx.getClipboardData({ success: result => this.setImportURL({ detail: { value: result.data } }), fail: () => wx.showToast({ title: '未能读取剪贴板，请手动粘贴', icon: 'none' }) }); },
   refreshImportList() { return this.loadImports(this._epoch); },
@@ -393,6 +393,19 @@ Page({
     const id = String(event.currentTarget.dataset.id || '');
     if (id) this.navigate('/pages/contentedit/contentedit?id=' + encodeURIComponent(id));
   },
+  openContentMore(event) {
+    const id = String(event.currentTarget.dataset.id || '');
+    const item = this.data.items.find(row => row.content_id === id);
+    if (!item || item.read_only || !this.current(this._epoch)) return;
+    const actions = item.status === 'published' ? ['编辑内容', '删除内容'] : ['删除内容'];
+    const epoch = this._epoch, revision = Number(item.revision);
+    wx.showActionSheet({ itemList: actions, success: result => {
+      if (!this.current(epoch)) return;
+      if (item.status === 'published' && result.tapIndex === 0) { this.editContent({ currentTarget: { dataset: { id } } }); return; }
+      const deleteIndex = item.status === 'published' ? 1 : 0;
+      if (result.tapIndex === deleteIndex) this.confirmContentDelete(id, revision, epoch);
+    } });
+  },
   deleteContentMenu(event) {
 	const id = String(event.currentTarget.dataset.id || '');
 	const item = this.data.items.find(row => row.content_id === id);
@@ -402,12 +415,15 @@ Page({
 	const epoch = this._epoch, revision = Number(item.revision);
 	wx.showActionSheet({ itemList: ['删除内容'], success: result => {
 		if (result.tapIndex !== 0 || !this.current(epoch)) return;
-		const current = this.data.items.find(row => row.content_id === id);
-		if (!current || Number(current.revision) !== revision) return;
-		wx.showModal({ title: '删除内容', content: '删除后已发出的访问入口将失效，素材与历史记录保留。', confirmText: '删除', confirmColor: '#c4543a', success: modal => {
-			if (modal.confirm) this.performContentDelete(id, revision, epoch);
-		} });
+		this.confirmContentDelete(id, revision, epoch);
 	} });
+  },
+  confirmContentDelete(id, revision, epoch) {
+    const current = this.data.items.find(row => row.content_id === id);
+    if (!current || Number(current.revision) !== revision || !this.current(epoch)) return;
+    wx.showModal({ title: '删除内容', content: '删除后已发出的访问入口将失效，素材与历史记录保留。', confirmText: '删除', confirmColor: '#c4543a', success: modal => {
+      if (modal.confirm) this.performContentDelete(id, revision, epoch);
+    } });
   },
   async performContentDelete(id, revision, epoch) {
 	if (!this.current(epoch)) return;

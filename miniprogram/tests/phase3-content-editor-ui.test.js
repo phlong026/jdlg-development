@@ -79,9 +79,156 @@ test('editor exposes separate draft, preview, publish and published-reader actio
   assert.equal(navigations[0], '/pages/contentreader/contentreader?content_id=content-one&content_version=3');
 });
 
-test('returning from preview keeps edits and invalidates the old publish token', async () => {
+test('publish saves the latest draft, requests a current preview token, then publishes without opening preview', async () => {
+  const calls = [];
+  const { page, navigations } = loadEditor({
+    saveContent: async draft => { calls.push(['save', draft.title]); return { content_id: 'content-one', revision: 2, version: 0, status: 'draft' }; },
+    previewContent: async (id, revision) => { calls.push(['preview', id, revision]); return { preview_token: 'preview-current', content: { title: '庭院方案', body_format: 'article_v2', body: '{"schema":1,"blocks":[{"kind":"paragraph","text":"正文"}]}' } }; },
+    publishContent: async (id, revision, token) => { calls.push(['publish', id, revision, token]); return { content: { content_id: id, revision: 3, version: 1, status: 'published' } }; },
+  });
+  page.setData({ title: '庭院方案', owner_id: 'owner-a', blocks: [{ kind: 'paragraph', text: '正文' }] });
+
+  await page.publish();
+
+  assert.deepEqual(calls, [
+    ['save', '庭院方案'],
+    ['preview', 'content-one', 2],
+    ['publish', 'content-one', 2, 'preview-current'],
+  ]);
+  assert.equal(page.data.status, 'published');
+  assert.equal(page.data.preview, null, '发布完不应强制渲染预览页');
+  assert.equal(navigations.length, 0, '阅读页跳转由现有延迟逻辑触发');
+});
+
+test('publish stops after save when the user changes the draft during the request', async () => {
+  let finishSave;
+  let previews = 0;
+  const { page } = loadEditor({
+    saveContent: () => new Promise(resolve => { finishSave = resolve; }),
+    previewContent: async () => { previews += 1; return { preview_token: 'must-not-run' }; },
+  });
+  page.setData({ title: '原标题', owner_id: 'owner-a', blocks: [{ kind: 'paragraph', text: '正文' }] });
+  const pending = page.publish();
+  page.setData({ title: '保存期间改了标题' });
+  finishSave({ content_id: 'content-one', revision: 2, version: 0, status: 'draft' });
+  await pending;
+  assert.equal(previews, 0);
+  assert.match(page.data.notice, /未保存修改/);
+});
+
+test('an uncertain publish retry reuses the saved revision and preview token instead of creating another draft revision', async () => {
+  let saves = 0, previews = 0, publications = 0;
+  const { page } = loadEditor({
+    saveContent: async () => { saves += 1; return { content_id: 'content-one', revision: 2, version: 0, status: 'draft' }; },
+    previewContent: async () => { previews += 1; return { preview_token: 'preview-current' }; },
+    publishContent: async id => {
+      publications += 1;
+      if (publications === 1) throw new Error('网络超时，结果待确认');
+      return { content: { content_id: id, revision: 3, version: 1, status: 'published' } };
+    },
+  });
+  page.setData({ title: '庭院方案', owner_id: 'owner-a', blocks: [{ kind: 'paragraph', text: '正文' }] });
+
+  await page.publish();
+  assert.match(page.data.error, /结果待确认/);
+  await page.publish();
+
+  assert.equal(saves, 1);
+  assert.equal(previews, 1);
+  assert.equal(publications, 2);
+  assert.equal(page.data.status, 'published');
+});
+
+test('a 409 publish conflict discards the checkpoint and asks the next retry to validate again', async () => {
+  let saves = 0, previews = 0, publications = 0;
+  const { page } = loadEditor({
+    saveContent: async () => { saves += 1; return { content_id: 'content-one', revision: 2, version: 0, status: 'draft' }; },
+    previewContent: async () => { previews += 1; return { preview_token: `preview-${previews}` }; },
+    publishContent: async id => {
+      publications += 1;
+      if (publications === 1) { const error = new Error('预览已过期'); error.statusCode = 409; throw error; }
+      return { content: { content_id: id, revision: 3, version: 1, status: 'published' } };
+    },
+  });
+  page.setData({ title: '庭院方案', owner_id: 'owner-a', blocks: [{ kind: 'paragraph', text: '正文' }] });
+
+  await page.publish();
+  assert.match(page.data.error, /校验已过期/);
+  await page.publish();
+
+  assert.equal(saves, 2);
+  assert.equal(previews, 2);
+  assert.equal(publications, 2);
+});
+
+test('a 409 from an opened preview clears its stale token so retry saves and validates again', async () => {
+  const calls = [];
   let publications = 0;
-  const { page } = loadEditor({ publishContent: async () => { publications += 1; } });
+  const { page } = loadEditor({
+    saveContent: async () => { calls.push('save'); return { content_id: 'content-one', revision: 3, version: 0, status: 'draft' }; },
+    previewContent: async (id, revision) => { calls.push(['preview', id, revision]); return { preview_token: 'preview-fresh' }; },
+    publishContent: async (id, revision, token) => {
+      calls.push(['publish', id, revision, token]);
+      publications += 1;
+      if (publications === 1) { const error = new Error('预览已过期'); error.statusCode = 409; throw error; }
+      return { content: { content_id: id, revision: 4, version: 1, status: 'published' } };
+    },
+  });
+  page.setData({
+    id: 'content-one', revision: 2, title: '庭院方案', owner_id: 'owner-a',
+    blocks: [{ kind: 'paragraph', text: '正文' }],
+    preview: { preview_token: 'preview-stale' }, previewBlocks: [{ kind: 'paragraph', text: '正文' }],
+    previewCover: { media_id: 'cover-stale' }, previewLayoutBlocks: [{ kind: 'layout' }], previewLayoutReadOnly: true,
+  });
+
+  await page.publish();
+  assert.equal(page.data.preview, null, '过期的可选预览不能继续被发布重试复用');
+  assert.equal(page.data.previewBlocks.length, 0);
+  assert.equal(page.data.previewCover, null);
+  assert.equal(page.data.previewLayoutBlocks.length, 0);
+  assert.equal(page.data.previewLayoutReadOnly, false);
+
+  await page.publish();
+
+  assert.deepEqual(calls, [
+    ['publish', 'content-one', 2, 'preview-stale'],
+    'save',
+    ['preview', 'content-one', 3],
+    ['publish', 'content-one', 3, 'preview-fresh'],
+  ]);
+  assert.equal(page.data.status, 'published');
+});
+
+test('edits made after the publish request stay unsaved and do not get mistaken for the published snapshot', async () => {
+  let finishPublish;
+  const { page, navigations, toasts } = loadEditor({
+    saveContent: async () => ({ content_id: 'content-one', revision: 2, version: 0, status: 'draft' }),
+    previewContent: async () => ({ preview_token: 'preview-current' }),
+    publishContent: () => new Promise(resolve => { finishPublish = resolve; }),
+  });
+  page.setData({ title: '请求时标题', owner_id: 'owner-a', blocks: [{ kind: 'paragraph', text: '请求时正文' }] });
+  const pending = page.publish();
+  await new Promise(resolve => setImmediate(resolve));
+  page.setData({ title: '发布请求后新改的标题' });
+  finishPublish({ content: { content_id: 'content-one', revision: 3, version: 1, status: 'published' } });
+  await pending;
+
+  assert.equal(page.data.status, 'published', '服务端真实成功必须反映');
+  assert.equal(page.data.title, '发布请求后新改的标题', '新输入不得丢失');
+  assert.match(page.data.notice, /已发布.*未保存修改/);
+  assert.notEqual(page._savedSignature, page.draftSignature(), '当前新输入不得被标记为已发布');
+  assert.equal(navigations.length, 0, '有新修改时不自动跳走');
+  page.openPublished();
+  assert.match(toasts.at(-1).title, /尚未发布/);
+});
+
+test('returning from preview keeps edits and forces direct publish to request a new token', async () => {
+  let publications = 0;
+  let previews = 0;
+  const { page } = loadEditor({
+    previewContent: async () => { previews += 1; return { preview_token: 'fresh-preview' }; },
+    publishContent: async id => { publications += 1; return { content: { content_id: id, revision: 3, version: 1, status: 'published' } }; },
+  });
   page.setData({ title: '庭院方案', owner_id: 'owner-a', blocks: [{ kind: 'paragraph', text: '保留正文' }], preview: { preview_token: 'old-preview' }, previewBlocks: [{ text: '旧预览' }] });
   page.returnToEdit();
   assert.equal(page.data.title, '庭院方案');
@@ -89,7 +236,8 @@ test('returning from preview keeps edits and invalidates the old publish token',
   assert.equal(page.data.preview, null);
   assert.equal(page.data.previewBlocks.length, 0);
   await page.publish();
-  assert.equal(publications, 0);
+  assert.equal(previews, 1);
+  assert.equal(publications, 1);
 });
 
 test('new content type opens its chooser once after authorization without triggering for saved content', () => {
@@ -402,11 +550,11 @@ test('native media chooser ignores success after account or content ownership ch
   assert.equal(uploads, 1, '同账号返回时应使用回调当下 epoch，不被 onShow 误丢弃');
 });
 
-test('video owner stays visible at the top and validation scrolls directly to actionable fields', () => {
+test('video owner stays available in content settings and validation opens the actionable fields', () => {
   const wxml = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
-  assert.match(wxml, /video-workspace-head[^>]*>\s*<picker wx:if="\{\{context\.owner_choices\.length > 1\}\}"[^>]*bindchange="setOwner"/);
+  assert.doesNotMatch(wxml, /video-workspace-head/);
   assert.match(wxml, /wx:if="\{\{fieldErrors\.owner_id\}\}" class="field-error"/);
-  assert.match(wxml, /wx:if="\{\{presentation !== 'video' && context\.owner_choices\.length > 1\}\}"/);
+  assert.match(wxml, /wx:if="\{\{context\.owner_choices\.length > 1\}\}"[^>]*class="field"[\s\S]*bindchange="setOwner"/);
 
   const { page, scrolls } = loadEditor();
   page.setData({ presentation: 'video', context: { media_upload_configured: true, video_resumable_upload: true, owner_choices: [{ owner_id: 'one' }, { owner_id: 'two' }] }, owner_id: '' });
@@ -419,6 +567,17 @@ test('video owner stays visible at the top and validation scrolls directly to ac
   assert.equal(page.draftInput(), null);
   assert.equal(page.data.fieldErrors.video, '请添加主视频');
   assert.equal(scrolls.at(-1).scrollTop, 0);
+});
+
+test('empty gallery exposes AI assistance and both social editors use one compact copy group', () => {
+  const wxml = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
+  const style = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxss'), 'utf8');
+  assert.match(wxml, /presentation === 'gallery'[\s\S]*class="editor-copy-group gallery-copy-group"[\s\S]*bindtap="openAIWriting"[^>]*>AI辅助</);
+  assert.match(wxml, /class="editor-copy-group video-copy-group"/);
+  assert.match(wxml, /class="compact-intro"/);
+  assert.match(style, /\.compact-intro\s*\{[^}]*min-height:\s*72rpx[^}]*height:\s*72rpx/);
+  assert.doesNotMatch(wxml, /class="panel video-title-card"/);
+  assert.doesNotMatch(wxml, /class="copy-card video-copy-card"[^>]*>\s*<text class="field-label">视频介绍/);
 });
 
 test('video copy actions copy only the requested generated field and explain empty copy', () => {
@@ -457,6 +616,49 @@ test('editor wxml wires the new block editing affordances', () => {
   const editorStyle = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxss'), 'utf8');
   assert.match(editorStyle, /\.list-editor|\.list-item-row/);
   assert.match(editorStyle, /\.caption-input/);
+});
+
+test('gallery uses compact thumbnails with one selected-image toolbar and video options stay folded', () => {
+  const editorWxml = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
+  const editorStyle = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxss'), 'utf8');
+  assert.match(editorWxml, /class="gallery-thumbs"/);
+  assert.match(editorWxml, /class="gallery-selected-tools"/);
+  assert.doesNotMatch(editorWxml, /class="editor-gallery"/, '有图后不再占用一屏显示大图编辑区');
+  assert.doesNotMatch(editorWxml, /wx:for="\{\{imageBlocks\}\}"[^>]*class="gallery-item"/);
+  assert.match(editorStyle, /\.gallery-thumbs/);
+  assert.match(editorWxml, />分享文案</);
+  assert.match(editorWxml, />显示设置</);
+  assert.doesNotMatch(editorWxml, /class="video-layout-card"/);
+});
+
+test('the selected gallery image stays selected while its caption and order change', () => {
+  const { page } = loadEditor();
+  const blocks = [
+    { kind: 'image', media_id: 'image-a', caption: '' },
+    { kind: 'image', media_id: 'image-b', caption: '' },
+  ];
+  const media = [
+    { kind: 'image', media_id: 'image-a', local_path: '/tmp/a.jpg' },
+    { kind: 'image', media_id: 'image-b', local_path: '/tmp/b.jpg' },
+  ];
+  page.setData({ presentation: 'gallery', blocks, media, imageBlocks: blocks.map((block, blockIndex) => ({ ...block, blockIndex })) });
+  page.selectGalleryImage({ currentTarget: { dataset: { index: 1 } } });
+  page.editCaption({ currentTarget: { dataset: { index: 1 } }, detail: { value: '南立面' } });
+  assert.equal(page.data.selectedImageBlock.media_id, 'image-b');
+  assert.equal(page.data.selectedImageBlock.caption, '南立面');
+
+  page.moveBlock({ currentTarget: { dataset: { index: 1, step: -1 } } });
+  assert.equal(page.data.blocks[0].media_id, 'image-b');
+  assert.equal(page.data.selectedImageBlock.media_id, 'image-b');
+  assert.equal(page.data.selectedImageBlock.blockIndex, 0);
+});
+
+test('editor footer keeps preview optional and exposes save and direct publish together', () => {
+  const editorWxml = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
+  assert.match(editorWxml, /class="preview-link" bindtap="saveAndPreview"/);
+  assert.match(editorWxml, /bindtap="saveDraft"[^>]*>保存草稿</);
+  assert.match(editorWxml, /bindtap="publish"[^>]*>发布</);
+  assert.doesNotMatch(editorWxml, />预览发布</);
 });
 
 test('U6 form polish: sticky error banner, rights wording and rejection toast carry the reason', () => {

@@ -268,7 +268,7 @@ Page({
                 posterImageUrl,
                 shareImageUrl: posterImageUrl,
             });
-            void (0, shareImage_1.prepareShareCardImage)(posterImageUrl).then((shareImageUrl) => {
+            void (0, shareImage_1.prepareShareCardImage)(posterImageUrl, 'contain').then((shareImageUrl) => {
                 if (shareImageUrl) {
                     this.setData({ shareImageUrl });
                 }

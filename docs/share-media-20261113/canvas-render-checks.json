@@ -1,0 +1,52 @@
+{
+  "cases": [
+    {
+      "label": "作品图片",
+      "heading": "调整前",
+      "width": 1000,
+      "height": 800,
+      "blackEdgeSamples": 0
+    },
+    {
+      "label": "作品图片",
+      "heading": "调整后",
+      "width": 1000,
+      "height": 800,
+      "blackEdgeSamples": 0
+    },
+    {
+      "label": "横屏视频封面",
+      "heading": "调整前",
+      "width": 1000,
+      "height": 800,
+      "blackEdgeSamples": 0
+    },
+    {
+      "label": "横屏视频封面",
+      "heading": "调整后",
+      "width": 1000,
+      "height": 800,
+      "blackEdgeSamples": 0
+    },
+    {
+      "label": "竖屏视频封面",
+      "heading": "调整前",
+      "width": 1000,
+      "height": 800,
+      "blackEdgeSamples": 0
+    },
+    {
+      "label": "竖屏视频封面",
+      "heading": "调整后",
+      "width": 1000,
+      "height": 800,
+      "blackEdgeSamples": 0
+    }
+  ],
+  "transparentSourceCornerRGBA": [
+    255,
+    255,
+    255,
+    255
+  ]
+}

@@ -35,6 +35,7 @@ test('客户Tab聚合榜映射意向标签与时长，且他人不出现',async(
  assert.equal(items.length,2);
  assert.equal(items[0].intent_level,'high');
  assert.equal(items[0].duration_text,'1分5秒');
+ assert.equal(items[0].last_visit_text,'2026-10-27 10:00');
  assert.equal(items[1].intent_level,'unknown');
  // q 搜索过滤
  page.setData({customerQuery:'陈'});
@@ -50,6 +51,17 @@ test('素材Tab热度榜带去重人数与转发数',async()=>{
  assert.equal(page.data.materials.length,2);
  assert.equal(page.data.materials[0].visitor_count,2);
  assert.equal(page.data.materials[0].forwards,1);
+});
+
+test('素材榜快速翻页不会作废上一页延迟封面',async()=>{
+ let releaseFirst,calls=0;
+ const firstCover=new Promise(resolve=>{releaseFirst=resolve});
+ const listMyContentStats=async()=>calls++===0?{items:[{route_key:'r',content_id:'c1',cover:{kind:'image',media_id:'m1'}}],next_cursor:'next'}:{items:[{route_key:'r',content_id:'c2',cover:{kind:'image',media_id:'m2'}}]};
+ const {page}=runtime([],{listMyContentStats,downloadWorkbenchMedia:id=>id==='m1'?firstCover:Promise.resolve('wxfile://m2')});
+ page._token='login-token';page._epochMaterials=1;
+ await page.loadMaterials(true,1);await page.loadMaterials(false);
+ releaseFirst('wxfile://m1');await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(page.data.materials.find(item=>item.content_id==='c1').cover,'wxfile://m1');
 });
 
 test('三Tab结构与键集齐备（wxml 契约）',()=>{

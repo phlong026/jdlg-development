@@ -3201,6 +3201,333 @@ test('project creation selects only a returned customer and retains paging and o
   assert.equal(created[0].customer_ref, 'u:202'); assert.equal(created[0].owner_id, 'designer-101');
 });
 
+test('project detail can bind, replace and unbind an authorized customer after creation', async () => {
+  const patches = [];
+  const page = pageHarness('projectnotes', {
+    updateProjectNoteProject: async (_id, patch) => { patches.push(patch); return { project_id: 'p1', name: '张宅', revision: patch.expected_revision + 1, customer_ref: patch.customer_ref }; },
+  });
+  page._token = 'session-token'; page._visible = true; page._epoch = 1;
+  page.setData({ pageView: 'detail', selectedProject: { project_id: 'p1', name: '张宅', revision: 3, customer_ref: '' }, projectCustomers: [{ customer_ref: 'u:202', nickname: '张女士' }], customerPickerOpen: true });
+  await page.selectProjectCustomer({ currentTarget: { dataset: { ref: 'u:202' } } });
+  assert.equal(JSON.stringify(patches[0]), JSON.stringify({ customer_ref: 'u:202', expected_revision: 3 }));
+  assert.equal(page.data.selectedProject.customer_ref, 'u:202');
+  assert.equal(page.data.customerName, '张女士');
+  await page.clearProjectCustomer();
+  assert.equal(JSON.stringify(patches[1]), JSON.stringify({ customer_ref: '', expected_revision: 4 }));
+  assert.equal(page.data.selectedProject.customer_ref, '');
+});
+
+test('project note template keeps project creation minimal and editor actions to save or send', () => {
+  const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
+  const createView = template.slice(template.indexOf("<block wx:elif=\"{{pageView === 'create'}}\">"), template.indexOf("<block wx:elif=\"{{pageView === 'detail'"));
+  const editorView = template.slice(template.indexOf("<block wx:elif=\"{{pageView === 'editor'"), template.indexOf("<block wx:elif=\"{{pageView === 'version'"));
+  assert.match(createView, /项目名称/);
+  assert.doesNotMatch(createView, /选择本人客户|搜索客户昵称|项目地点|建筑面积/);
+  assert.equal((editorView.match(/>保存笔记</g) || []).length, 2, '新建和已保存状态各保留一个保存动作');
+  assert.equal((editorView.match(/>发给客户</g) || []).length, 1);
+  assert.doesNotMatch(editorView, /生成方案版本|历史版本|下一步/);
+});
+
+test('project detail keeps one safe-area new-note action and folds management tools by default', () => {
+  const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
+  const detailView = template.slice(template.indexOf("<block wx:elif=\"{{pageView === 'detail'"), template.indexOf("<block wx:elif=\"{{pageView === 'editor'"));
+  assert.equal((detailView.match(/bindtap="startNewNote"/g) || []).length, 1);
+  assert.match(detailView, /class="detail-dock"/);
+  assert.match(detailView, />新建笔记</);
+  assert.match(detailView, /bindtap="toggleProjectManagement"/);
+  assert.match(detailView, /wx:if="{{projectManagementOpen}}"/);
+  assert.match(detailView, /方案版本/);
+  assert.match(detailView, /分享资料/);
+  assert.match(detailView, /项目成员/);
+  assert.match(detailView, /项目记录/);
+
+  const page = pageHarness('projectnotes', {});
+  assert.equal(page.data.projectManagementOpen, false);
+  page.toggleProjectManagement(); assert.equal(page.data.projectManagementOpen, true);
+  page.toggleProjectManagement(); assert.equal(page.data.projectManagementOpen, false);
+});
+
+test('minimal project creation promises the existing automatic note step', () => {
+  const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
+  const createView = template.slice(template.indexOf("<block wx:elif=\"{{pageView === 'create'}}\">"), template.indexOf("<block wx:elif=\"{{pageView === 'detail'"));
+  assert.match(createView, />创建并写笔记</);
+  assert.doesNotMatch(createView, />创建项目</);
+});
+
+test('saving a project note completes the internal task and preserves edits typed during the request', async () => {
+  let resolveSave;
+  const page = pageHarness('projectnotes', {
+    saveProjectNote: async (_id, draft) => new Promise(resolve => { resolveSave = () => resolve({ project_id: 'p', note_id: 'n', revision: 3, ...draft }); }),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p' }, note: { project_id: 'p', note_id: 'n', revision: 2, title: '原题', body: '原文', body_format: 'plain', media_ids: [] }, noteTitle: '已修改', noteBody: '保存这一版', noteMedia: [] });
+  const saving = page.saveProjectNote();
+  page.setData({ noteBody: '请求中继续输入' });
+  resolveSave();
+  await saving;
+  assert.equal(page.data.noteBody, '请求中继续输入');
+  assert.equal(page.data.note.revision, 3, '已成功保存的修订号可继续用于下一次保存');
+  assert.match(page.data.notice, /已保存/);
+  assert.doesNotMatch(page.data.notice, /下一步|生成方案版本|创建分享/);
+});
+
+test('send stops when media changes while its prerequisite save is in flight', async () => {
+  let finishSave, freezes = 0;
+  const page = pageHarness('projectnotes', {
+    saveProjectNote: async (_id, draft) => new Promise(resolve => { finishSave = () => resolve({ project_id: 'p', note_id: 'n', revision: 3, ...draft }); }),
+    freezeProjectNoteVersion: async () => { freezes++; return {}; }, mutationKey: () => 'key',
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page.ensureDraftInstance(true);
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p' }, note: { project_id: 'p', note_id: 'n', revision: 2, title: '方案', body: '正文', body_format: 'plain', media_ids: [] }, noteTitle: '方案', noteBody: '修改正文', noteMedia: [] });
+  const sending = page.prepareProjectNoteSend();
+  page.setData({ noteMedia: [{ media_id: 'new-image', kind: 'image' }] });
+  finishSave(); await sending;
+  assert.equal(freezes, 0);
+  assert.equal(page.data.noteMedia[0].media_id, 'new-image');
+});
+
+test('send to customer saves, freezes and creates one private preview without claiming delivery', async () => {
+  const calls = [], navigations = [];
+  const page = pageHarness('projectnotes', {
+    createProjectNote: async (_projectID, draft) => { calls.push('save'); return { project_id: 'p', note_id: 'n', revision: 1, ...draft }; },
+    freezeProjectNoteVersion: async (_noteID, revision) => { calls.push('freeze:' + revision); return { project_id: 'p', note_id: 'n', version_id: 'v1', revision: 1, title: '首版', body: '方案正文', body_format: 'plain', media: [], project_snapshot: { name: '', location: '', building_area: 0, floors: 0, style: '' } }; },
+    createProjectNoteShare: async (_versionID, _expires, key) => { calls.push('share:' + key); return { share_id: 's1', version_id: 'v1', share_token: 'private-token' }; },
+    mutationKey: () => 'send-key',
+  }, { navigateTo: options => navigations.push(options.url) });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._newNote = true; page.ensureDraftInstance(true);
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p' }, noteTitle: '首版', noteBody: '方案正文', noteMedia: [] });
+  await page.prepareProjectNoteSend();
+  assert.deepEqual(calls, ['save', 'freeze:1', 'share:send-key']);
+  assert.equal(navigations[0], '/pages/projectnoteview/projectnoteview?pns=private-token');
+  assert.doesNotMatch(page.data.notice, /已收到|已送达/);
+});
+
+test('send recovery reads back an exact frozen snapshot after a lost response without freezing twice', async () => {
+  let freezeCalls = 0;
+  const fixed = { project_id: 'p', note_id: 'n', version_id: 'v1', revision: 2, title: '已保存', body: '固定正文', body_format: 'plain', cover: null, media: [], project_snapshot: { name: '', location: '', building_area: 0, floors: 0, style: '' } };
+  const page = pageHarness('projectnotes', {
+    freezeProjectNoteVersion: async () => { freezeCalls++; throw Object.assign(new Error('网络中断'), { networkError: true }); },
+    getProjectNoteProject: async () => ({ project: { project_id: 'p' }, versions: [{ version_id: 'v1', note_id: 'n', revision: 2 }] }),
+    getProjectNoteVersion: async () => fixed,
+    createProjectNoteShare: async () => ({ share_id: 's1', version_id: 'v1', share_token: 'private-token' }),
+    mutationKey: () => 'recovery-key',
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page.ensureDraftInstance(true);
+  const note = { project_id: 'p', note_id: 'n', revision: 2, title: '已保存', body: '固定正文', body_format: 'plain', media_ids: [] };
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p' }, note, noteTitle: note.title, noteBody: note.body, noteMedia: [] });
+  page._noteFormBaseline = page.noteFormSignature();
+  await page.prepareProjectNoteSend();
+  assert.equal(freezeCalls, 1);
+  assert.equal(page.data.frozenVersion.version_id, 'v1');
+  assert.equal(page.data.activeShare.share_token, 'private-token');
+});
+
+test('an unresolved freeze checkpoint is read back again and never blindly frozen twice', async () => {
+  let freezes = 0, reads = 0;
+  const page = pageHarness('projectnotes', {
+    freezeProjectNoteVersion: async () => { freezes++; throw Object.assign(new Error('网络中断'), { networkError: true }); },
+    getProjectNoteProject: async () => { reads++; return { project: { project_id: 'p' }, versions: [] }; },
+    mutationKey: () => 'uncertain-key',
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page.ensureDraftInstance(true);
+  const note = { project_id: 'p', note_id: 'n', revision: 2, title: '已保存', body: '固定正文', body_format: 'plain', media_ids: [] };
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p' }, note, noteTitle: note.title, noteBody: note.body, noteMedia: [] });
+  page._noteFormBaseline = page.noteFormSignature();
+  await page.prepareProjectNoteSend(); await page.prepareProjectNoteSend();
+  assert.equal(freezes, 1);
+  assert.equal(reads, 2);
+  assert.match(page.data.error, /结果暂不明确/);
+});
+
+test('send rejects a mismatched freeze response before creating a share', async () => {
+  let shares = 0;
+  const note = { project_id: 'p', note_id: 'n', revision: 2, title: '已保存', body: '固定正文', body_format: 'plain', media_ids: [] };
+  const page = pageHarness('projectnotes', {
+    freezeProjectNoteVersion: async () => ({ project_id: 'p', note_id: 'n', version_id: 'wrong', revision: 2, title: '已保存', body: '另一份正文', body_format: 'plain', media: [] }),
+    createProjectNoteShare: async () => { shares++; return { share_id: 'new', version_id: 'v1', share_token: 'new-token' }; }, mutationKey: () => 'key',
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page.ensureDraftInstance(true);
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p' }, note, noteTitle: note.title, noteBody: note.body, noteMedia: [], activeShare: { share_id: 'old', version_id: 'wrong', share_token: 'old-token', expires_at: '2020-01-01T00:00:00Z' } });
+  page._noteFormBaseline = page.noteFormSignature();
+  await page.prepareProjectNoteSend();
+  assert.equal(shares, 0);
+  assert.match(page.data.error, /固定版本与当前笔记不一致/);
+});
+
+test('send ignores an expired cached share for the exact version', async () => {
+  let shares = 0;
+  const note = { project_id: 'p', note_id: 'n', revision: 2, title: '已保存', body: '固定正文', body_format: 'plain', media_ids: [] };
+  const fixed = { project_id: 'p', note_id: 'n', version_id: 'v1', revision: 2, title: note.title, body: note.body, body_format: 'plain', cover: null, media: [], project_snapshot: { name: '', location: '', building_area: 0, floors: 0, style: '' } };
+  const page = pageHarness('projectnotes', {
+    createProjectNoteShare: async () => { shares++; return { share_id: 'new', version_id: 'v1', share_token: 'new-token' }; }, mutationKey: () => 'key',
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page.ensureDraftInstance(true);
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p' }, note, noteTitle: note.title, noteBody: note.body, noteMedia: [], frozenVersion: fixed, activeShare: { share_id: 'old', version_id: 'v1', share_token: 'old-token', expires_at: '2020-01-01T00:00:00Z' } });
+  page._noteFormBaseline = page.noteFormSignature();
+  await page.prepareProjectNoteSend();
+  assert.equal(shares, 1);
+  assert.equal(page.data.activeShare.share_token, 'new-token');
+});
+
+test('send never reuses a fixed version whose project snapshot is stale', async () => {
+  let freezes = 0;
+  const note = { project_id: 'p', note_id: 'n', revision: 2, title: '已保存', body: '固定正文', body_format: 'plain', media_ids: [] };
+  const oldVersion = { project_id: 'p', note_id: 'n', version_id: 'old', revision: 2, title: note.title, body: note.body, body_format: 'plain', cover: null, media: [], project_snapshot: { name: '旧项目名', location: '旧址', building_area: 100, floors: 2, style: '旧风格', revision: 3 } };
+  const newVersion = { ...oldVersion, version_id: 'new', project_snapshot: { name: '新项目名', location: '新址', building_area: 128, floors: 3, style: '新风格', revision: 8 } };
+  const page = pageHarness('projectnotes', {
+    freezeProjectNoteVersion: async () => { freezes++; return newVersion; },
+    createProjectNoteShare: async () => ({ share_id: 's', version_id: 'new', share_token: 'token' }), mutationKey: () => 'key',
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page.ensureDraftInstance(true);
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p', name: '新项目名', location: '新址', building_area: 128, floors: 3, style: '新风格', revision: 9 }, note, noteTitle: note.title, noteBody: note.body, noteMedia: [], frozenVersion: oldVersion });
+  page._noteFormBaseline = page.noteFormSignature();
+  await page.prepareProjectNoteSend();
+  assert.equal(freezes, 1);
+  assert.equal(page.data.frozenVersion.version_id, 'new');
+});
+
+test('send stops when an active exact-version share lost its one-time token', async () => {
+  let shares = 0;
+  const note = { project_id: 'p', note_id: 'n', revision: 2, title: '已保存', body: '固定正文', body_format: 'plain', media_ids: [] };
+  const fixed = { project_id: 'p', note_id: 'n', version_id: 'v1', revision: 2, title: note.title, body: note.body, body_format: 'plain', cover: null, media: [], project_snapshot: { name: '张宅', location: '', building_area: 0, floors: 0, style: '' } };
+  const page = pageHarness('projectnotes', {
+    createProjectNoteShare: async () => { shares++; return { share_id: 'new', version_id: 'v1', share_token: 'new-token' }; }, mutationKey: () => 'key',
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page.ensureDraftInstance(true);
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p', name: '张宅' }, note, noteTitle: note.title, noteBody: note.body, noteMedia: [], frozenVersion: fixed, activeShare: { share_id: 'existing', version_id: 'v1', revoked: false, expires_at: '2099-01-01T00:00:00Z' } });
+  page._noteFormBaseline = page.noteFormSignature();
+  await page.prepareProjectNoteSend();
+  assert.equal(shares, 0);
+  assert.match(page.data.error, /凭证|恢复/);
+});
+
+test('send retry does not create another share after a tokenless replay', async () => {
+  let shares = 0;
+  const note = { project_id: 'p', note_id: 'n', revision: 2, title: '已保存', body: '固定正文', body_format: 'plain', media_ids: [] };
+  const fixed = { project_id: 'p', note_id: 'n', version_id: 'v1', revision: 2, title: note.title, body: note.body, body_format: 'plain', cover: null, media: [], project_snapshot: { name: '张宅', location: '', building_area: 0, floors: 0, style: '' } };
+  const page = pageHarness('projectnotes', {
+    createProjectNoteShare: async () => { shares++; return { share_id: 'existing', version_id: 'v1', expires_at: '2099-01-01T00:00:00Z' }; }, mutationKey: () => 'key',
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page.ensureDraftInstance(true);
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p', name: '张宅' }, note, noteTitle: note.title, noteBody: note.body, noteMedia: [], frozenVersion: fixed });
+  page._noteFormBaseline = page.noteFormSignature();
+  await page.prepareProjectNoteSend(); await page.prepareProjectNoteSend();
+  assert.equal(shares, 1);
+  assert.match(page.data.error, /凭证|恢复/);
+});
+
+test('changing project metadata after share failure freezes and shares a new snapshot', async () => {
+  const frozen = [], shareVersions = [], keys = [];
+  let shareCall = 0;
+  const note = { project_id: 'p', note_id: 'n', revision: 2, title: '已保存', body: '固定正文', body_format: 'plain', media_ids: [] };
+  const page = pageHarness('projectnotes', {
+    freezeProjectNoteVersion: async () => {
+      const project = page.data.selectedProject;
+      const version = { project_id: 'p', note_id: 'n', version_id: 'v' + (frozen.length + 1), revision: 2, title: note.title, body: note.body, body_format: 'plain', cover: null, media: [], project_snapshot: { name: project.name, location: project.location || '', building_area: project.building_area || 0, floors: project.floors || 0, style: project.style || '' } };
+      frozen.push(version); return version;
+    },
+    createProjectNoteShare: async (versionID, _expires, key) => { shareVersions.push(versionID); keys.push(key); shareCall++; if (shareCall === 1) throw Object.assign(new Error('网络中断'), { networkError: true }); return { share_id: 's2', version_id: versionID, share_token: 'token-2' }; },
+    mutationKey: prefix => prefix + '-' + (keys.length + 1),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page.ensureDraftInstance(true);
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p', name: '旧项目名', location: '旧址', revision: 3 }, note, noteTitle: note.title, noteBody: note.body, noteMedia: [] });
+  page._noteFormBaseline = page.noteFormSignature();
+  await page.prepareProjectNoteSend();
+  page.setData({ selectedProject: { ...page.data.selectedProject, name: '新项目名', location: '新址', revision: 5 } });
+  await page.prepareProjectNoteSend();
+  assert.deepEqual(frozen.map(item => item.version_id), ['v1', 'v2']);
+  assert.deepEqual(shareVersions, ['v1', 'v2']);
+  assert.notEqual(keys[0], keys[1]);
+  assert.equal(page.data.activeShare.version_id, 'v2');
+});
+
+test('changing project metadata while freeze is pending stops the old send', async () => {
+  let finishFreeze, shares = 0;
+  const note = { project_id: 'p', note_id: 'n', revision: 2, title: '已保存', body: '固定正文', body_format: 'plain', media_ids: [] };
+  const page = pageHarness('projectnotes', {
+    freezeProjectNoteVersion: async () => new Promise(resolve => { finishFreeze = () => resolve({ project_id: 'p', note_id: 'n', version_id: 'v1', revision: 2, title: note.title, body: note.body, body_format: 'plain', cover: null, media: [], project_snapshot: { name: '旧项目名', location: '', building_area: 0, floors: 0, style: '' } }); }),
+    createProjectNoteShare: async () => { shares++; return {}; }, mutationKey: () => 'key',
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page.ensureDraftInstance(true);
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p', name: '旧项目名', revision: 3 }, note, noteTitle: note.title, noteBody: note.body, noteMedia: [] });
+  page._noteFormBaseline = page.noteFormSignature();
+  const sending = page.prepareProjectNoteSend(); await Promise.resolve();
+  page.setData({ selectedProject: { ...page.data.selectedProject, name: '新项目名', revision: 4 } });
+  finishFreeze(); await sending;
+  assert.equal(shares, 0);
+  assert.equal(page.data.busy, false);
+  assert.match(page.data.notice, /停止|尚未发送/);
+});
+
+test('first send continues after save even when the setData render callback is asynchronous', async () => {
+  let freezes = 0, shares = 0;
+  const callbacks = [];
+  const page = pageHarness('projectnotes', {
+    createProjectNote: async (_project, draft) => ({ project_id: 'p', note_id: 'n', revision: 1, ...draft }),
+    freezeProjectNoteVersion: async (_note, revision) => { freezes++; return { project_id: 'p', note_id: 'n', version_id: 'v1', revision, title: '首版', body: '正文', body_format: 'plain', cover: null, media: [], project_snapshot: { name: '张宅', location: '', building_area: 0, floors: 0, style: '' } }; },
+    createProjectNoteShare: async () => { shares++; return { share_id: 's1', version_id: 'v1', share_token: 'token' }; }, mutationKey: () => 'key',
+  });
+  page.setData = function(values, done) { Object.assign(this.data, values); if (done) callbacks.push(done); };
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._newNote = true; page.ensureDraftInstance(true);
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p', name: '张宅' }, noteTitle: '首版', noteBody: '正文', noteMedia: [] });
+  await page.prepareProjectNoteSend();
+  assert.equal(freezes, 1);
+  assert.equal(shares, 1);
+  callbacks.forEach(callback => callback());
+});
+
+test('send stops when the same note revision changes while freeze is pending', async () => {
+  let finishFreeze, shares = 0;
+  const fixed = { project_id: 'p', note_id: 'n', version_id: 'v1', revision: 2, title: '已保存', body: '固定正文', body_format: 'plain', media: [] };
+  const page = pageHarness('projectnotes', {
+    freezeProjectNoteVersion: async () => new Promise(resolve => { finishFreeze = () => resolve(fixed); }),
+    createProjectNoteShare: async () => { shares++; return {}; }, mutationKey: () => 'key',
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page.ensureDraftInstance(true);
+  const note = { project_id: 'p', note_id: 'n', revision: 2, title: '已保存', body: '固定正文', body_format: 'plain', media_ids: [] };
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p' }, note, noteTitle: note.title, noteBody: note.body, noteMedia: [] });
+  page._noteFormBaseline = page.noteFormSignature();
+  const sending = page.prepareProjectNoteSend(); await Promise.resolve();
+  page.setData({ note: { ...note, revision: 3 } });
+  finishFreeze(); await sending;
+  assert.equal(shares, 0);
+});
+
+test('send preparation stops after an account change and never freezes the old account draft', async () => {
+  let finishSave, freezes = 0;
+  const storage = { token: 'account-a', userInfo: { id: 101 } };
+  const page = pageHarness('projectnotes', {
+    createProjectNote: async (_project, draft) => new Promise(resolve => { finishSave = () => resolve({ project_id: 'p', note_id: 'n', revision: 1, ...draft }); }),
+    freezeProjectNoteVersion: async () => { freezes++; return {}; }, mutationKey: () => 'key',
+  }, { getStorageSync: key => storage[key] || '' });
+  page._visible = true; page._token = 'account-a'; page._epoch = 1; page._newNote = true; page.ensureDraftInstance(true);
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p' }, noteTitle: '首版', noteBody: '正文', noteMedia: [] });
+  const sending = page.prepareProjectNoteSend();
+  storage.token = 'account-b'; storage.userInfo = { id: 202 }; page._token = 'account-b';
+  finishSave(); await sending;
+  assert.equal(freezes, 0);
+});
+
+test('editing during version freeze stops send and keeps the newer text editable', async () => {
+  let finishFreeze, shares = 0;
+  const page = pageHarness('projectnotes', {
+    freezeProjectNoteVersion: async () => new Promise(resolve => { finishFreeze = () => resolve({ project_id: 'p', note_id: 'n', version_id: 'v1', revision: 2 }); }),
+    createProjectNoteShare: async () => { shares++; return {}; }, mutationKey: () => 'key',
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page.ensureDraftInstance(true);
+  const note = { project_id: 'p', note_id: 'n', revision: 2, title: '已保存', body: '固定正文', body_format: 'plain', media_ids: [] };
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p' }, note, noteTitle: note.title, noteBody: note.body, noteMedia: [] });
+  page._noteFormBaseline = page.noteFormSignature();
+  const sending = page.prepareProjectNoteSend();
+  await Promise.resolve();
+  page.setData({ noteBody: '冻结期间继续修改' });
+  finishFreeze(); await sending;
+  assert.equal(shares, 0);
+  assert.equal(page.data.noteBody, '冻结期间继续修改');
+  assert.equal(page.data.busy, false);
+  assert.match(page.data.notice, /停止|尚未发送/);
+});
+
 test('returning to an adopted article note preserves structured body media and cover when saving its title', async () => {
   const body = JSON.stringify({ schema: 1, blocks: [{ kind: 'paragraph', text: '原正文' }, { kind: 'video', media_id: 'adopted-video' }] });
   let note = { project_id: 'p', note_id: 'n', revision: 2, title: '原题', body, body_format: 'article_v2', media_ids: ['adopted-video'], cover_media_id: 'original-cover' }, saved;

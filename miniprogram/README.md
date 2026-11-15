@@ -38,6 +38,8 @@ npm run test:tracking
 
 微信控制卡片外框、小程序名称与原生文字布局。标题包含换行符，但模拟器会合并为自然折行，不能据此声称已实现固定两行标题。
 
+作品图片与视频封面经 `utils/shareImage` 生成时，直接等比居中铺满好友卡片（1000 × 800）或朋友圈方图（1000 × 1000），不再绘制背景、白色底板、阴影或内层圆角。与目标比例不同的素材会裁掉边缘；裁切只影响分享封面，不修改原图或视频文件。邀请海报显式使用 `contain`，以白底保留全部文字和二维码。微信分享卡片的 `imageUrl` 仍应为封面图片，不能填视频播放接口。验证与视觉对比见[分享封面调整记录](../docs/share-media-20261113/CHANGELOG.md)。
+
 专项验证：`node --test tests/cloud-image.test.js tests/cloud-asset-package.test.js tests/home-share.test.js tests/aicost-*.test.js tests/cost-estimate-share-image.test.js tests/timeline-image.test.js tests/timeline-sharing.test.js tests/template-detail-moments-share.test.js`。
 
 云端文件校验、实际包体、开发版本上传及验证边界见 `../docs/cloud-assets-20261022/README.md`。开发版本上传与微信审核、正式发布是不同阶段。

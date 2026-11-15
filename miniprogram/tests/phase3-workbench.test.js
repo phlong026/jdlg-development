@@ -552,18 +552,19 @@ test('unsupported video capabilities explain the next user action without backen
   assert.equal(page.data.error, '当前版本暂不能保存视频文案，内容已保留，请联系管理员更新');
 });
 
-test('video editor uses a compact workspace instead of the full-height media stage', () => {
+test('video editor leads with a full-width preview and keeps secondary copy settings folded', () => {
   const wxml = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.wxml'), 'utf8');
   const style = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.wxss'), 'utf8');
-  assert.match(wxml, /presentation !== 'video'.*class="mode-tabs"/);
   assert.match(wxml, /class="video-media-card"/);
-  assert.match(wxml, /AI 生成文案/);
+  assert.match(wxml, />AI辅助</);
   assert.match(wxml, /maxlength="2000"/);
-  assert.match(style, /\.video-thumbnail\s*\{[^}]*width:\s*188rpx/);
+  assert.match(style, /\.video-thumbnail\s*\{[^}]*width:\s*100%[^}]*height:\s*360rpx/);
   assert.match(wxml, /class="video-media-summary"/);
+  assert.match(wxml, /videoShareExpanded/);
+  assert.match(wxml, /videoDisplayExpanded/);
   assert.match(wxml, /data-field="shareCopy" bindtap="copyVideoField"/);
   assert.match(wxml, /data-field="momentsCopy" bindtap="copyVideoField"/);
-  assert.ok(wxml.indexOf('class="video-media-card"') < wxml.indexOf('class="panel video-title-card"'));
+  assert.ok(wxml.indexOf('class="video-media-card"') < wxml.indexOf('class="editor-copy-group video-copy-group"'));
 });
 
 test('video preview builder receives the resolved private cover path on initial load and retry', async () => {

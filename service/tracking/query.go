@@ -120,8 +120,12 @@ func (s *Service) Normalize(f Filter) (Filter, error) {
 		return f, fail(400, "访问分组方式无效")
 	}
 	f.Search, f.ContentSearch, f.VisitorSearch = strings.TrimSpace(f.Search), strings.TrimSpace(f.ContentSearch), strings.TrimSpace(f.VisitorSearch)
+	f.Route = strings.TrimSpace(f.Route)
 	if len(f.Search) > 100 || len(f.ContentSearch) > 100 || len(f.VisitorSearch) > 100 {
 		return f, fail(400, "搜索超限")
+	}
+	if len(f.Route) > 256 {
+		return f, fail(400, "素材路由筛选无效")
 	}
 	f.Visitor = strings.TrimSpace(f.Visitor)
 	if len(f.Visitor) > 200 {

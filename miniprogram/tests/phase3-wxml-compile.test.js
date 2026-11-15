@@ -137,8 +137,8 @@ test('editor more actions open beside the status bar before the long form', { sk
   const data = { __profileAccessMounted: true, loading: false, id: 'fixture-draft', status: 'draft', version: 0, moreExpanded: true, presentation: 'gallery', context: { owner_choices: [] }, imageBlocks: [], videoBlocks: [], media: [] };
   const expanded = JSON.stringify(render(data));
   assert.match(expanded, /editor-more/);
-  assert.ok(expanded.indexOf('more-menu') < expanded.indexOf('mode-tabs'), 'opened actions must be reachable above the long editor');
-  assert.ok(expanded.indexOf('删除草稿') < expanded.indexOf('mode-tabs'));
+  assert.ok(expanded.indexOf('more-menu') < expanded.indexOf('gallery-stage'), 'opened actions must be reachable above the long editor');
+  assert.ok(expanded.indexOf('删除草稿') < expanded.indexOf('gallery-stage'));
   assert.doesNotMatch(JSON.stringify(render({ ...data, moreExpanded: false })), /删除草稿/);
   for (const patch of [{ preview: {} }, { deleted: true }, { documentReadOnly: true }, { legacyReadOnly: true }]) {
     const hidden = JSON.stringify(render({ ...data, ...patch }));

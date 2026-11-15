@@ -169,7 +169,7 @@ test('shared presentation template keeps swiper, native video controls, tracking
   assert.match(reader.split(/\r?\n/)[0], /^<block wx:if=/);
   assert.match(reader, /<block wx:if="{{__profileAccessMounted}}">/);
   assert.ok(reader.includes(template.trim()), 'reader ships the canonical template definition');
-  assert.match(reader, /<template is="content-presentation" data="\{\{view: presentationView, tracking: true, mediaErrors: mediaErrors, videoStarted: videoStarted\}\}"\/>/);
+  assert.match(reader, /<template is="content-presentation" data="\{\{view: presentationView, tracking: !managementPreview, mediaErrors: mediaErrors, videoStarted: videoStarted\}\}"\/>/);
 });
 
  test('video keeps legacy full captions without duplicating body copy', () => {

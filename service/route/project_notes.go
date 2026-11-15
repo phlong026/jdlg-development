@@ -233,6 +233,16 @@ func registerProjectNoteHandlers(root, manage *gin.RouterGroup, svc *tracking.Se
 		if !projectNoteBind(c, &input) {
 			return
 		}
+		if input.CustomerRef != nil && strings.TrimSpace(*input.CustomerRef) != "" {
+			if deps.verifyCustomerLink == nil {
+				trackingResponse(c, nil, &tracking.Error{Status: http.StatusForbidden, Message: "客户关联验证暂不可用"})
+				return
+			}
+			if err := deps.verifyCustomerLink(c.Request.Context(), projectNoteScope(c), strings.TrimSpace(*input.CustomerRef)); err != nil {
+				trackingResponse(c, nil, err)
+				return
+			}
+		}
 		out, err := svc.ProjectNoteUpdateProject(c.Request.Context(), projectNoteScope(c), c.Param("id"), input)
 		if err == nil {
 			presented, presentationErr := presentProjectNoteProjects(c.Request.Context(), []tracking.ProjectNoteProject{out}, deps.profiles)

@@ -55,7 +55,7 @@ func (c *legacyTxConn) ExecContext(_ context.Context, q string, args []driver.Na
 	if c.pending == nil {
 		return nil, errors.New("write outside transaction")
 	}
-	if strings.HasPrefix(q, "INSERT IGNORE INTO tracking_tenant_lock") {
+	if strings.HasPrefix(q, "INSERT INTO tracking_tenant_lock") && strings.Contains(q, "ON DUPLICATE KEY UPDATE") {
 		return driver.RowsAffected(1), nil
 	}
 	if !strings.HasPrefix(q, "INSERT INTO tracking_records") || len(args) != 10 {

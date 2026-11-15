@@ -36,12 +36,13 @@ function harness(options = {}) {
   let definition;
   const pendingReads = [];
   let reads = 0;
+  const trackingCalls = { resolve: 0, refresh: 0, preheat: 0 };
   const tracking = {
     captureEntryValidity: () => () => true,
-    resolvePageOptions() {},
-    refreshConfig: async () => ({ enabled: false }),
+    resolvePageOptions() { trackingCalls.resolve += 1; },
+    refreshConfig: async () => { trackingCalls.refresh += 1; return { enabled: false }; },
     consented: () => false,
-    preheatTimelineShare() {},
+    preheatTimelineShare() { trackingCalls.preheat += 1; },
   };
   const api = {
     resolveReaderOptions: async options => options,
@@ -67,6 +68,7 @@ function harness(options = {}) {
       : name.includes('protected-media') ? { resolveProtectedMediaURL: async value => { if (options.mediaError) throw options.mediaError; if (options.failMedia || options.failVideoMedia && /video/.test(value)) throw new Error('cdn unavailable'); return value; } }
       : name.includes('content-presentation') ? require(path.join(root, 'utils/content-presentation'))
       : name.includes('article-document') ? { renderArticleDocument: () => [] }
+      : name.includes('phase3-api') ? { WORKBENCH: '/api/v1/miniprogram/workbench', request: async path => { assert.equal(path, '/api/v1/miniprogram/workbench/contents/content-0001/versions/1'); return options.managedContent; } }
       : { createVideoTracker: () => ({}) },
   });
   const page = Object.assign({}, definition, {
@@ -80,8 +82,20 @@ function harness(options = {}) {
     finish: (value, index = 0) => pendingReads[index].resolve(value),
     fail: (error, index = 0) => pendingReads[index].reject(error),
     plays: () => plays,
+    trackingCalls,
   };
 }
+
+test('authorized management preview reads exact version without initializing tracking or share preheat', async () => {
+  const { page, trackingCalls } = harness({ managedContent: { title: '历史固定版', body: '不可变正文', media: [] } });
+  page.managementPreview = true;
+  page.options = { management_preview: '1', content_id: 'content-0001', content_version: '1' };
+  await page.loadContent();
+  assert.equal(page.data.content.title, '历史固定版');
+  assert.equal(page.data.contentReady, true);
+  assert.deepEqual(trackingCalls, { resolve: 0, refresh: 0, preheat: 0 });
+  assert.equal(Object.keys(page.onShareAppMessage()).length, 0);
+});
 
 test('reader keeps note copy and an inline retry when protected media is temporarily unavailable', async () => {
   const { page } = harness({

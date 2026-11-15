@@ -1,9 +1,10 @@
 {
-  "navigationBarTitleText": "客户",
+  "navigationBarTitleText": "客户跟踪",
   "navigationStyle": "custom",
   "enablePullDownRefresh": true,
   "usingComponents": {
     "login-guard": "/components/login-guard/login-guard",
-    "navigation-bar": "/components/navigation-bar/navigation-bar"
+    "navigation-bar": "/components/navigation-bar/navigation-bar",
+    "mini-icon": "/components/mini-icon/mini-icon"
   }
 }

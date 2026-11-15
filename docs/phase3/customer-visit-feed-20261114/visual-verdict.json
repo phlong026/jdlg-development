@@ -1,0 +1,23 @@
+{
+  "date": "2026-11-14",
+  "method": "manual comparison of approved reference and native DevTools screenshot",
+  "skill": "visual-verdict not installed; used equivalent native screenshot comparison",
+  "reference": "客户跟踪-客户查看效果图-v1-20261113.png plus user's final single-row-filter annotation",
+  "fixture_only": true,
+  "verdict": "pass",
+  "checks": {
+    "warm_ivory_and_bronze_palette": "pass",
+    "three_business_tabs": "pass",
+    "time_pills": "pass",
+    "search_intent_and_source_on_one_row": "pass",
+    "standard_search_and_chevron_icons": "pass",
+    "filter_control_height_and_vertical_alignment": "pass",
+    "customer_mode_switch_in_tab_dropdown": "pass",
+    "three_layer_visit_cards": "pass",
+    "compact_card_spacing": "pass",
+    "four_complete_sample_cards_visible": "pass",
+    "media_crop_without_black_bands": "pass",
+    "unknown_identity_and_source_fallback": "pass"
+  },
+  "not_verified": ["real customer data", "real WeChat device", "large accessibility fonts", "weak network"]
+}

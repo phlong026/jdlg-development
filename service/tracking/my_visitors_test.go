@@ -2,8 +2,10 @@ package tracking
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -317,5 +319,125 @@ func TestMyVisitorsExactCustomerFilterPrecedesPagination(t *testing.T) {
 	}
 	if len(myVisitorItems(t, missing)) != 0 {
 		t.Fatal("unknown target fell back to another customer")
+	}
+}
+
+func TestMyVisitorsMaterialFilterAppliesBeforeAggregationAndPagination(t *testing.T) {
+	s, _, scope, now := myVisitorsFixture(t)
+	filter := Filter{AsOf: now, Route: publishedReaderRoute, Content: "c-1", ContentVersion: 1, Limit: 1}
+	list, err := s.MyVisitors(context.Background(), scope, 11, filter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := myVisitorItems(t, list)
+	if len(items) != 1 || items[0].Key != "u:77" || items[0].Views != 2 || items[0].ContentCount != 1 {
+		t.Fatalf("material visitors = %+v, want only c-1 visitor with both views", items)
+	}
+	if list.Cursor != "" {
+		t.Fatalf("filtered list must paginate after filtering, cursor=%q", list.Cursor)
+	}
+	detail, err := s.MyVisitorEntries(context.Background(), scope, 11, Filter{AsOf: list.AsOf, Visitor: "u:77", Route: publishedReaderRoute, Content: "c-1", ContentVersion: 1, Limit: 20})
+	if err != nil || len(detail.Items) != 2 || detail.Views != 2 {
+		t.Fatalf("material detail = %+v err=%v", detail, err)
+	}
+	if _, err = s.MyVisitorEntries(context.Background(), scope, 11, Filter{AsOf: list.AsOf, Visitor: "u:88", Route: publishedReaderRoute, Content: "c-1", ContentVersion: 1, Limit: 20}); err == nil {
+		t.Fatal("visitor without a matching material view must not be exposed")
+	}
+}
+
+func TestMyVisitorsMaterialCursorCannotCrossFilter(t *testing.T) {
+	s, rows, scope, now := myVisitorsFixture(t)
+	visitPV(rows, "view-1c", "company", "u:66", "session-66", "c-1", "share-1", now.Add(-45*time.Minute), 1000)
+	first, err := s.MyVisitors(context.Background(), scope, 11, Filter{AsOf: now, Route: publishedReaderRoute, Content: "c-1", ContentVersion: 1, Limit: 1})
+	if err != nil || first.Cursor == "" {
+		t.Fatalf("expected filtered cursor: %+v err=%v", first, err)
+	}
+	_, err = s.MyVisitors(context.Background(), scope, 11, Filter{AsOf: now, Route: publishedReaderRoute, Content: "c-2", ContentVersion: 1, Limit: 1, Cursor: first.Cursor})
+	if err == nil {
+		t.Fatal("material cursor reused across content filter")
+	}
+}
+
+func TestMyVisitorsOlderShareWindowKeepsMaterialScopeAndGlobalIntentWindow(t *testing.T) {
+	s, rows, scope, now := myVisitorsFixture(t)
+	for i := 0; i < 401; i++ {
+		seedMyShare(rows, fmt.Sprintf("new-material-%04d", i), "company", "u:11", now.Add(-time.Duration(i+1)*time.Second))
+	}
+	first, err := s.MyVisitors(context.Background(), scope, 11, Filter{AsOf: now, Route: publishedReaderRoute, Content: "c-1", ContentVersion: 1, Limit: 20})
+	if err != nil || first.ShareWindow == nil || first.ShareWindow.NextCursor == "" {
+		t.Fatalf("first material share window = %+v err=%v", first, err)
+	}
+	second, err := s.MyVisitors(context.Background(), scope, 11, Filter{AsOf: now, Route: publishedReaderRoute, Content: "c-1", ContentVersion: 1, ShareCursor: first.ShareWindow.NextCursor, Limit: 20})
+	if err != nil {
+		t.Fatalf("material cursor could not resume older shares: %v", err)
+	}
+	items := myVisitorItems(t, second)
+	if len(items) != 1 || items[0].Key != "u:77" || items[0].Intent.Level == "" {
+		t.Fatalf("older scoped visitors = %+v", items)
+	}
+	if _, err = s.MyVisitors(context.Background(), scope, 11, Filter{AsOf: now, Route: publishedReaderRoute, Content: "c-2", ContentVersion: 1, ShareCursor: first.ShareWindow.NextCursor, Limit: 20}); err == nil {
+		t.Fatal("share-window cursor reused across material scope")
+	}
+}
+
+func TestMyVisitorsRebindsAuthorizedParentWindowToMaterial(t *testing.T) {
+	s, rows, scope, now := myVisitorsFixture(t)
+	for i := 0; i < 401; i++ {
+		seedMyShare(rows, fmt.Sprintf("parent-window-%04d", i), "company", "u:11", now.Add(-time.Duration(i+1)*time.Second))
+	}
+	parent, err := s.MyContentStats(context.Background(), scope, 11, Filter{AsOf: now, Limit: 20})
+	if err != nil || parent.ShareWindow == nil || parent.ShareWindow.NextCursor == "" {
+		t.Fatalf("parent window = %+v err=%v", parent, err)
+	}
+	material, err := s.MyVisitors(context.Background(), scope, 11, Filter{AsOf: parent.AsOf, Route: publishedReaderRoute, Content: "c-1", ContentVersion: 1, ShareCursor: parent.ShareWindow.NextCursor, Limit: 20})
+	if err != nil || material.ShareWindow == nil || material.ShareWindow.CurrentCursor == "" {
+		t.Fatalf("parent cursor was not rebound: %+v err=%v", material, err)
+	}
+	detail, err := s.MyVisitorEntries(context.Background(), scope, 11, Filter{AsOf: material.AsOf, Visitor: "u:77", Route: publishedReaderRoute, Content: "c-1", ContentVersion: 1, ShareCursor: material.ShareWindow.CurrentCursor, Limit: 20})
+	if err != nil || len(detail.Items) != 2 {
+		t.Fatalf("rebound material detail = %+v err=%v", detail, err)
+	}
+	if _, err = s.MyVisitors(context.Background(), scope, 11, Filter{AsOf: material.AsOf, Route: publishedReaderRoute, Content: "c-2", ContentVersion: 1, ShareCursor: material.ShareWindow.CurrentCursor, Limit: 20}); err == nil {
+		t.Fatal("material-bound cursor crossed to another material")
+	}
+	other := scope
+	other.Actor = 22
+	if _, err = s.MyVisitors(context.Background(), other, 22, Filter{AsOf: material.AsOf, Route: publishedReaderRoute, Content: "c-1", ContentVersion: 1, ShareCursor: material.ShareWindow.CurrentCursor, Limit: 20}); err == nil {
+		t.Fatal("material-bound cursor crossed actor scope")
+	}
+	differentScope := scope
+	differentScope.Manage = !scope.Manage
+	if _, err = s.MyVisitors(context.Background(), differentScope, 11, Filter{AsOf: material.AsOf, Route: publishedReaderRoute, Content: "c-1", ContentVersion: 1, ShareCursor: material.ShareWindow.CurrentCursor, Limit: 20}); err == nil {
+		t.Fatal("material-bound cursor crossed permission scope")
+	}
+	if _, err = s.MyVisitors(context.Background(), scope, 11, Filter{AsOf: material.AsOf.Add(-time.Second), Route: publishedReaderRoute, Content: "c-1", ContentVersion: 1, ShareCursor: material.ShareWindow.CurrentCursor, Limit: 20}); err == nil {
+		t.Fatal("material-bound cursor crossed snapshot")
+	}
+	if _, err = s.MyVisitors(context.Background(), scope, 11, Filter{AsOf: material.AsOf, Owner: "different-owner", Route: publishedReaderRoute, Content: "c-1", ContentVersion: 1, ShareCursor: material.ShareWindow.CurrentCursor, Limit: 20}); err == nil {
+		t.Fatal("material-bound cursor crossed owner filter")
+	}
+}
+
+func TestMyShareWindowCursorBindsCreatedWindow(t *testing.T) {
+	s, _, scope, now := myVisitorsFixture(t)
+	base := Filter{AsOf: now, Start: now.Add(-7 * 24 * time.Hour), End: now, CreatedWindow: true}
+	cursor := base64.RawURLEncoding.EncodeToString(marshal(myShareWindowCursor{At: now.Add(-time.Hour), ID: "share-window", Signature: myShareWindowSignature(scope, 11, base)}))
+	accepted := base
+	accepted.ShareCursor = cursor
+	if _, err := s.MyVisitors(context.Background(), scope, 11, accepted); err != nil {
+		t.Fatalf("same share creation window cursor rejected: %v", err)
+	}
+	changed := base
+	changed.Start = now.Add(-30 * 24 * time.Hour)
+	changed.ShareCursor = cursor
+	if _, err := s.MyVisitors(context.Background(), scope, 11, changed); err == nil {
+		t.Fatal("share-window cursor crossed share creation window")
+	}
+}
+
+func TestEmptyRouteKeepsLegacyFilterSerialization(t *testing.T) {
+	raw := string(marshal(Filter{Content: "c-1", ContentVersion: 1, Limit: 20}))
+	if strings.Contains(raw, "Route") || strings.Contains(raw, "route") {
+		t.Fatalf("empty route changed legacy cursor payload: %s", raw)
 	}
 }
