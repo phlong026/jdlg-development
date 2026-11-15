@@ -27,10 +27,28 @@
 
 ## 本轮执行回执
 
-[PR #51](https://github.com/phlong026/jdlg-development/pull/51)已创建，代码head为eedfcb9c2ca79936e0de0f2a52689962161e1297。GitHub账号付款/消费额度限制使5个CI任务未启动；待用户解除限制后重跑CI，通过后才合并并部署。当前未合并、未部署、未上传小程序。
+2026-11-15（Asia/Shanghai）。[PR #51](https://github.com/phlong026/jdlg-development/pull/51)在5项CI全部成功后于19:07:40合并，应用发布源码为`55f836d7a913ccaada4e522f0c5f8db45c5c5a13`。完整机器回执见[release-receipt.json](release-receipt.json)。
 
-候选准备已完成：受保护构建器的真实客户端签名契约及ELF密钥验证通过；Linux候选二进制SHA256为135764731e11ce90b91f160e92a7cad18d160d32182e6b92ea03a168e3f970b3。管理后台从同一eedfcb9构建，99文件发布包哈希均通过。候选包不是生产回执；合并后按最终SHA重新构建并核验。包中包含打包器要求的既有历史SQL，未执行任何迁移。
+| 项目 | 已核验结果 |
+| --- | --- |
+| CI | Admin quality run 43705627806、Share tracking quality run 43705627760，5项全部成功，含Linux race |
+| 后端 | PID460749；SHA256 `135764731e11ce90b91f160e92a7cad18d160d32182e6b92ea03a168e3f970b3`；运行环境及配置保留，健康检查通过 |
+| 后端备份 | `/root/jdlg-pr51-backup-20261115-55f836d`；目录0700、环境快照0600 |
+| 后台前端 | 同一合并源码构建，发布94文件；公网index与构建哈希一致，5个入口引用资源均200，旧哈希资源保留 |
+| 后台备份 | `/root/jdlg-pr51-web-backup-20261115-55f836d/admin/original` |
+| 生产包 | `/root/jdlg-pr51-release-20261115-55f836d/package-clean`；102个文件校验通过，无AppleDouble元数据 |
+| 公网接口 | tracking/config=200；未登录workbench/context与imports/capabilities均401 |
+| 已登录只读 | 工作台4项内容、my-visits和素材空态读取成功；本人固定版本管理预览成功，跟踪写请求0、媒体错误0 |
+| 小程序 | AppID `wx94fdc48861913ede`；8.0.9；从干净合并源码上传，官方CLI exit0与`✔ upload`终态 |
 
-SSH只读复核生产仍为PID1051555、原二进制SHA256 e10d26552b4b75a7cd4d22ae98fbdb3e1508e2530471f50b8a3c4068decb1b66。真正prepare前必须重新读取并显式传入当时PID及SHA，不能沿用旧常量。原运行环境、配置和服务未改。
+原生产二进制SHA256为`e10d26552b4b75a7cd4d22ae98fbdb3e1508e2530471f50b8a3c4068decb1b66`、PID1051555。本次未执行数据库迁移，未改环境变量或功能开关。
 
-本地Linux/arm64五包race已通过，GitHub CI仍未执行；不能以本地替代平台结果跨越合并门禁。生产部署、后台切换与微信上传均保持未执行。
+首轮管理台发布因压缩包含macOS自动生成的`._*`文件，被完整清单校验在任何覆盖前拦截。重新使用`COPYFILE_DISABLE=1 tar --no-xattrs --no-acls --no-fflags`打包，核对档案无`._*`且服务器文件集与清单一致后成功发布。没有修改应用源码、打包器或发布器。
+
+## 实际回退入口
+
+后端：使用本轮私有目录中的`binary_release.py rollback --backup /root/jdlg-pr51-backup-20261115-55f836d`，恢复原二进制和原运行环境，再核验公网与认证路径。
+
+后台：将`/root/jdlg-pr51-web-backup-20261115-55f836d/admin/original/`的原文件恢复到`/www/wwwroot/jiadilingguang/admin/`（入口最后恢复），检查旧HTML引用资源。新增哈希文件可保留为无引用资源，不需删除生产文件。
+
+小程序此次仅完成代码上传；体验版指向未独立核验，未在本任务提审或正式发布。系统键盘、手机相册、微信原生选收件人及完整真机客户旅程仍待验；不能将生产只读冒烟或CLI上传称为正式小程序发布。

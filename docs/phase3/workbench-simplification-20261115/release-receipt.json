@@ -1,0 +1,91 @@
+{
+  "recorded_at": "2026-11-15T19:18:32+08:00",
+  "timezone": "Asia/Shanghai",
+  "pr_url": "https://github.com/phlong026/jdlg-development/pull/51",
+  "pr_head": "31bd5234b691af81eed13db97c8d8f3eff3f91a7",
+  "merge_commit": "55f836d7a913ccaada4e522f0c5f8db45c5c5a13",
+  "merged_at": "2026-11-15T19:07:40+08:00",
+  "ci": {
+    "all_passed": true,
+    "job_count": 5,
+    "runs": [
+      43705627806,
+      43705627760
+    ],
+    "jobs": [
+      "Admin checks and build",
+      "Template update contract",
+      "CRM identity routing regressions",
+      "Tracking backend tests and race checks",
+      "Tracking mini-program and route policy checks"
+    ]
+  },
+  "backend": {
+    "deployed": true,
+    "pid": 460749,
+    "sha256": "135764731e11ce90b91f160e92a7cad18d160d32182e6b92ea03a168e3f970b3",
+    "previous_pid": 1051555,
+    "previous_sha256": "e10d26552b4b75a7cd4d22ae98fbdb3e1508e2530471f50b8a3c4068decb1b66",
+    "backup": "/root/jdlg-pr51-backup-20261115-55f836d",
+    "runtime_environment_preserved": true,
+    "config_preserved": true,
+    "database_migrations_executed": false,
+    "feature_flags_changed": false
+  },
+  "admin": {
+    "deployed": true,
+    "url": "https://api.jiadilingguang.com/admin/",
+    "files": 94,
+    "backup": "/root/jdlg-pr51-web-backup-20261115-55f836d/admin/original",
+    "public_index_matches_build": true,
+    "referenced_assets_http_200": 5,
+    "previous_hashed_assets_retained": true
+  },
+  "package": {
+    "source_commit": "55f836d7a913ccaada4e522f0c5f8db45c5c5a13",
+    "verified_files": 102,
+    "server_path": "/root/jdlg-pr51-release-20261115-55f836d/package-clean",
+    "appledouble_members": 0,
+    "packaging_recovery": "First archive contained macOS AppleDouble ._* metadata; complete manifest validation blocked admin writes. Repacked with COPYFILE_DISABLE=1 and disabled xattrs/acls/fflags, then verified exact file set. No application source or release script changed."
+  },
+  "public_smoke": {
+    "/api/v1/miniprogram/tracking/config": 200,
+    "/api/v1/miniprogram/workbench/context": 401,
+    "/api/v1/miniprogram/workbench/imports/capabilities": 401,
+    "/admin/": 200,
+    "admin_asset_requests_passed": 5
+  },
+  "production_authenticated_smoke": {
+    "production": true,
+    "source_tree_matches_merged_commit": true,
+    "authenticated_workbench": true,
+    "my_visits": true,
+    "materials": true,
+    "managed_exact_version_preview": true,
+    "managed_preview_tracking_requests": 0,
+    "media_errors": 0,
+    "workbench_items": 4,
+    "visits_loaded": 0,
+    "materials_loaded": 0,
+    "no_content_created_published_or_deleted": true
+  },
+  "miniprogram": {
+    "appid": "wx94fdc48861913ede",
+    "version": "8.0.9",
+    "source_commit": "55f836d7a913ccaada4e522f0c5f8db45c5c5a13",
+    "uploaded": true,
+    "official_cli_exit_code": 0,
+    "official_cli_marker": "✔ upload",
+    "project": "clean detached merged-source worktree",
+    "experience_version_status": "not independently verified",
+    "submitted_for_review": false,
+    "formally_released_by_this_task": false
+  },
+  "remaining_acceptance": [
+    "phone system keyboard",
+    "phone album and media permissions",
+    "WeChat native recipient selection",
+    "complete physical-device customer journey",
+    "4 nonblocking visual P2 items"
+  ]
+}
