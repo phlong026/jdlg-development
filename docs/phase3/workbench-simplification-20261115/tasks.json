@@ -416,7 +416,7 @@
         "F12"
       ],
       "depends": "各功能增量",
-      "status": "1701/1701 JS零失败零跳过（/tmp/jdlg-mini-final-20261115.log）；CGO_ENABLED=0 Go全量/vet通过；MySQL旧24并发1213红、新20轮绿；188类型基线无新增；Linux race待PR CI"
+      "status": "1701 JS、Go全量/vet、Linux arm64五包race、本地编译与候选构建通过；全工程TypeScript原有188诊断无新增；GitHub CI因计费/额度限制未启动"
     },
     {
       "id": "V02",
@@ -461,7 +461,7 @@
         "F9"
       ],
       "depends": "V01",
-      "status": "原3个功能及追加7a8479c/086535f/c6561eb已提交；追加3提交隔离revert精确恢复febfe4c树053a70974cb422457200fa1566b7366a69d6ece0；本轮验收文档未提交"
+      "status": "修改清单、接口、验收及回退证据已提交推送；PR #51已创建"
     },
     {
       "id": "D02",
@@ -474,7 +474,7 @@
         "F13"
       ],
       "depends": "V01,V02,V03,D01及相应发布授权",
-      "status": "用户要求的DevTools门禁已通过，可进入PR阶段；PR/合并/部署/上传尚未执行；真机待验单列"
+      "status": "PR #51已创建；GitHub计费/额度限制使5项CI任务未启动，待恢复后重跑，通过才合并部署；候选构建和包校验已完成"
     }
   ],
   "groups": {
@@ -697,7 +697,7 @@
       "手机相册",
       "原生微信选择收件人",
       "Linux race CI",
-      "PR/合并/部署/上传"
+      "PR #51已创建；待CI计费限制解除后合并/部署/上传"
     ],
     "media_test_boundary": "局部TLS自签媒体仅测试副本下载真实字节至sandbox适配；源代码安全逻辑未改，不能证明正式媒体TLS或真机路径可用",
     "lifecycle_test_boundary": "DevTools多窗口触发hide后，自动化调用真实page.onShow恢复生命周期；不伪造响应",

@@ -46,13 +46,37 @@
     "go_test_all": true,
     "go_vet_all": true,
     "CGO_ENABLED": "0",
-    "race": "pending Linux CI",
+    "race": "passed locally on Linux arm64; GitHub CI blocked before execution",
     "mysql_tenant_lock": {
       "implementation": "single ON DUPLICATE KEY UPDATE",
       "old_concurrency": 24,
       "old_error": "MySQL 1213 deadlock",
       "new_rounds_passed": 20,
       "real_mysql": true
+    },
+    "linux_race": {
+      "passed": true,
+      "go": "1.26.2",
+      "os": "linux",
+      "arch": "arm64",
+      "source_commit": "eedfcb9c2ca79936e0de0f2a52689962161e1297",
+      "packages": [
+        "aivideostudio",
+        "contentimport",
+        "tracking",
+        "route",
+        "model"
+      ],
+      "command": "go test -p 2 -race -count=1 ./aivideostudio ./contentimport ./tracking ./route ./model",
+      "race_reports": 0,
+      "first_attempt": "environment failure: 512MiB tmpfs exhausted",
+      "successful_retry": "dedicated host bind-mounted GOTMPDIR; process exit 0",
+      "evidence": "/tmp/jdlg-linux-go-race-20261115.retry.log",
+      "github_ci_passed": false,
+      "node": "24.21.0",
+      "GOMAXPROCS": 2,
+      "normal_tests_passed": true,
+      "vet_passed": true
     }
   },
   "admin": {
@@ -230,13 +254,31 @@
     "lifecycle_test_boundary": "DevTools多窗口导致hide时，自动化调用真实page.onShow恢复生命周期；不伪造响应"
   },
   "delivery": {
-    "pushed": false,
-    "pr_created": false,
+    "pushed": true,
+    "pr_created": true,
     "merged": false,
     "backend_deployed": false,
     "admin_deployed": false,
     "miniprogram_uploaded": false,
-    "devtools_gate_passed": true
+    "devtools_gate_passed": true,
+    "pr_url": "https://github.com/phlong026/jdlg-development/pull/51",
+    "code_head": "eedfcb9c2ca79936e0de0f2a52689962161e1297",
+    "ci_status": "not started: account payment failure or spending limit restriction",
+    "ci_runs": [
+      43704533452,
+      43704533465
+    ],
+    "ci_job_count": 5
   },
-  "evidence_source": "根代理本轮实际测试/原生/回退记录；1701最终JS日志已核对；文档同步未重跑业务测试"
+  "evidence_source": "根代理本轮实际测试/原生/回退记录；1701最终JS日志已核对；文档同步未重跑业务测试",
+  "release_readiness": {
+    "ops_tests": 63,
+    "ops_passed": 63,
+    "protected_candidate_build": true,
+    "candidate_commit": "eedfcb9c2ca79936e0de0f2a52689962161e1297",
+    "binary_sha256": "135764731e11ce90b91f160e92a7cad18d160d32182e6b92ea03a168e3f970b3",
+    "admin_candidate_build": true,
+    "package_files_verified": 99,
+    "production_untouched": true
+  }
 }

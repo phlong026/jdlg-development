@@ -16,12 +16,12 @@
 | 运行产物及路由 | 签名器、TS/JS一致性通过；78路由策略一致（23公开/55排除） |
 | 原生语法编译 | 215 WXML + 33 WXS通过；172 WXSS在临时副本解析根导入后通过 |
 | 改动语法/格式 | 19个JS语法通过；所有改动Go符合gofmt；diff-check通过 |
-| 发布工具 | 受保护构建器1/1、发布工具28/28通过 |
+| 发布工具 | 受保护构建器1/1、发布工具63/63通过（本轮完整discover复核） |
 | 凭证检查 | 改动模式扫描无发现；crypto.go保护保持，无其他隐藏跟踪文件 |
 | 独立审查 | 原三个功能提交后端/前端APPROVE；追加13文件视觉收敛P0/P1=0；追加ODKU审查P0/P1/P2=0、正式结论COMMENT（无LSP，compiler/vet及真实SQL替代），不得记为APPROVE；as_of两分支最终审查APPROVE、P0/P1/P2=0 |
 | 回退验证 | 原三个功能提交反向补丁及隔离revert通过，恢复f33030a基线树；新增三提交在/tmp/jdlg-revert-native-20261115隔离revert成功，write-tree精确恢复febfe4c树053a70974cb422457200fa1566b7366a69d6ece0 |
 
-表内1701 JS、Go全量/vet和真实MySQL为本轮最新已报告结果；其余编译、扫描和工具结果保留原已执行记录。原生编译和编译树断言不等于18态视觉、键盘或真实手机验收。本机CGO启用时存在m1cpu初始化环境崩溃，因此本地Go检查使用CGO_ENABLED=0；race待后续PR的Linux CI验证，未虚报本机race通过。
+表内1701 JS、Go全量/vet和真实MySQL为本轮最新已报告结果；其余编译、扫描和工具结果保留原已执行记录。原生编译和编译树断言不等于18态视觉、键盘或真实手机验收。本机CGO启用时存在m1cpu初始化环境崩溃，因此本地Go检查使用CGO_ENABLED=0；race已额外在本地Linux/arm64官方Go1.26.2容器通过5包检查；GitHub Linux/amd64 CI仍因账号限制未执行，二者分别记录。
 
 ## 开发者工具与真实角色门禁
 
@@ -57,8 +57,18 @@
 
 仓库为phlong026/jdlg-development，开发分支feat/workbench-simplification-20261115。原工作区未跟踪docs/phase3/deployment-20261112/完整保留，未暂存。原分支的分享主体展示和紧凑客户访问两个提交是当前页面依赖，继续保留。
 
-**未推送、未创建PR、未合并主分支、未部署后端或管理后台、未上传小程序。** DevTools门禁已通过，下一步创建PR；不把本地提交及本地真实角色验收称为上线完成。
+**已推送并创建PR #51；未合并主分支、未部署后端或管理后台、未上传小程序。** DevTools门禁已通过；GitHub账号计费/额度限制阻止CI启动，待恢复并通过CI后继续。不把本地提交及本地真实角色验收称为上线完成。
 
 生产只读基线：主进程1051555，工作目录/www/wwwroot/jiadilingguang/api，8080端口，运行二进制SHA256 e10d26552b4b75a7cd4d22ae98fbdb3e1508e2530471f50b8a3c4068decb1b66。线上ELF与本地受保护源HMAC/SM4均匹配；未输出密钥。真正切换前重新核对PID、哈希和运行环境，保留备份与原运行参数。
 
 机器可读结果见[checks.json](checks.json)，修改位置见[CHANGES.md](CHANGES.md)，部署与回退见[DEPLOYMENT.md](DEPLOYMENT.md)。
+
+## PR与CI启动阻塞
+
+代码及原生验收记录已推送，[PR #51](https://github.com/phlong026/jdlg-development/pull/51)已创建。2026-11-15的Admin quality run 43704533452及Share tracking quality run 43704533465共5项任务均未启动：GitHub官方注释为“recent account payments have failed or your spending limit needs to be increased”。此为平台执行前限制，不能称CI测试通过，也不据此判断代码失败。账号计费/额度需用户处理，之后重跑全部任务。尚未合并、部署或上传。
+
+额外完成63项发布工具测试、受保护Linux候选构建、后台候选构建及99文件包哈希检查；候选源码eedfcb9，未切换生产。Linux race本地隔离补验已通过，不能替代GitHubCI终态。
+
+本地Linux race补验：干净eedfcb9源码、官方Go1.26.2 linux/arm64镜像，`go test -p 2 -race -count=1 ./aivideostudio ./contentimport ./tracking ./route ./model`五包全部ok、进程exit 0、无race报告。首轮512MiB tmpfs空间不足导致route/model编译中断；改用专用host目录挂载GOTMPDIR后完整重跑通过，不清理其他项目资源。Linux Go测试使用Git中占位认证源，不注入生产密钥；真实签名/ELF验证由受保护候选构建单独完成。
+
+同一Linux容器（Node24.21.0、GOMAXPROCS=2）随后运行相同五包普通`go test -p 2 -count=1`与`go vet`，全部通过、组合进程exit 0；隔离源码工作树未修改。日志`/tmp/jdlg-linux-go-test-vet-20261115.log`。

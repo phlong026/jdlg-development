@@ -104,4 +104,4 @@
 - [service/tracking/store_mysql_test.go](../../../service/tracking/store_mysql_test.go)：新增真实MySQL并发回归；旧24并发1213红、新20轮绿。同步[read_transaction_test.go](../../../service/tracking/read_transaction_test.go)、[scoped_sql_test.go](../../../service/tracking/scoped_sql_test.go)及[share_tracking_legacy_transaction_test.go](../../../service/route/share_tracking_legacy_transaction_test.go)的锁行为断言。
 - 素材→访客首次onShow重置as_of已在customers/shares两分支修复，真实素材as_of保持一致、红绿回归通过；最终独立审查APPROVE、P0/P1/P2=0。修改涉及sharevisits TS/JS与对应回归测试，见c6561eb。
 
-最新1701/1701 JS（最终日志/tmp/jdlg-mini-final-20261115.log）与Go全量/vet通过；真实角色、管理预览0请求、无权限拒绝、客户绑定/解除及隔离媒体适配边界见[VERIFICATION.md](VERIFICATION.md)。系统键盘、手机相册、真机及原生微信选收件人未执行；追加三提交已在隔离worktree反向revert，精确恢复febfe4c树053a70974cb422457200fa1566b7366a69d6ece0。DevTools门禁已过，PR/合并/部署/上传仍待执行。
+最新1701/1701 JS（最终日志/tmp/jdlg-mini-final-20261115.log）与Go全量/vet通过；真实角色、管理预览0请求、无权限拒绝、客户绑定/解除及隔离媒体适配边界见[VERIFICATION.md](VERIFICATION.md)。系统键盘、手机相册、真机及原生微信选收件人未执行；追加三提交已在隔离worktree反向revert，精确恢复febfe4c树053a70974cb422457200fa1566b7366a69d6ece0。DevTools门禁已过，PR #51已创建并推送；计费/额度限制使GitHub CI未启动，合并/部署/上传待CI恢复通过。
