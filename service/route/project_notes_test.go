@@ -108,6 +108,12 @@ func newProjectNoteHandlerFixtureWithProfiles(t *testing.T, profiles projectNote
 	registerProjectNoteHandlers(root, manage, svc, projectNoteHandlerDeps{
 		actor:    func(*gin.Context) int64 { return actor },
 		profiles: profiles,
+		verifyCustomerLink: func(_ context.Context, _ tracking.Scope, ref string) error {
+			if ref == "u:202" || ref == "u:303" {
+				return nil
+			}
+			return &tracking.Error{Status: http.StatusForbidden, Message: "客户不属于当前设计师"}
+		},
 		verifyMember: func(_ context.Context, account int64) error {
 			if account == 101 || account == 102 {
 				return nil
@@ -117,6 +123,37 @@ func newProjectNoteHandlerFixtureWithProfiles(t *testing.T, profiles projectNote
 	})
 	router.GET("/test/generic-media/:id", func(c *gin.Context) { serveTrackingMedia(c, svc, scope) })
 	return router, svc, scope, &actor
+}
+
+func TestProjectNoteProjectPatchVerifiesCustomerRefAndSupportsUnbind(t *testing.T) {
+	router, _, _, _ := newProjectNoteHandlerFixture(t)
+	created := projectNoteRequest(t, router, http.MethodPost, "/api/v1/miniprogram/project-notes/projects", map[string]any{"name": "张宅", "owner_id": "owner-a", "customer_ref": "u:202"})
+	if created.Code != http.StatusOK {
+		t.Fatal(created.Code, created.Body.String())
+	}
+	project := projectNoteData[tracking.ProjectNoteProject](t, created)
+
+	rejected := projectNoteRequest(t, router, http.MethodPatch, "/api/v1/miniprogram/project-notes/projects/"+project.ID, map[string]any{"expected_revision": project.Revision, "customer_ref": "u:other"})
+	if rejected.Code != http.StatusForbidden {
+		t.Fatalf("untrusted customer patch=%d %s", rejected.Code, rejected.Body.String())
+	}
+
+	rebound := projectNoteRequest(t, router, http.MethodPatch, "/api/v1/miniprogram/project-notes/projects/"+project.ID, map[string]any{"expected_revision": project.Revision, "customer_ref": "u:303"})
+	if rebound.Code != http.StatusOK {
+		t.Fatal(rebound.Code, rebound.Body.String())
+	}
+	updated := projectNoteData[tracking.ProjectNoteProject](t, rebound)
+	if updated.CustomerRef != "u:303" {
+		t.Fatalf("customer_ref=%q", updated.CustomerRef)
+	}
+
+	unbound := projectNoteRequest(t, router, http.MethodPatch, "/api/v1/miniprogram/project-notes/projects/"+project.ID, map[string]any{"expected_revision": updated.Revision, "customer_ref": ""})
+	if unbound.Code != http.StatusOK {
+		t.Fatal(unbound.Code, unbound.Body.String())
+	}
+	if got := projectNoteData[tracking.ProjectNoteProject](t, unbound).CustomerRef; got != "" {
+		t.Fatalf("customer_ref=%q after unbind", got)
+	}
 }
 
 func projectNoteRequest(t *testing.T, router http.Handler, method, path string, body any) *httptest.ResponseRecorder {

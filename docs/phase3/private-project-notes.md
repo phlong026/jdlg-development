@@ -66,8 +66,9 @@ JSON 请求体最大 128 KiB，拒绝未知字段和尾随内容。除媒体上�
 | 方法 | 路径 | 核心请求 | 结果与约束 |
 | --- | --- | --- | --- |
 | `GET` | `/projects` | 查询：`limit`、`cursor` | 当前设计师项目分页；默认 30，最大 100，返回 `items`、`next_cursor` |
-| `POST` | `/projects` | `name`、`owner_id`、可选 `crm_id` | 创建项目；名称最多 100 UTF-8 字节。当前 `crm_id` 非空直接返回 403，见“未完成项” |
+| `POST` | `/projects` | `name`、`owner_id`、可选 `crm_id`、`customer_ref` | 创建项目；名称最多 100 UTF-8 字节。非空 `customer_ref` 必须是当前设计师可关联的本人客户；当前 `crm_id` 非空直接返回 403，见“未完成项” |
 | `GET` | `/projects/:id` | 无 | 返回项目及成员、草稿、版本摘要、分享、反馈、处理和确认；每类最多最近 50 条，并返回各类 `truncated` 标识 |
+| `PATCH` | `/projects/:id` | `expected_revision` 及可选项目字段、`customer_ref` | 乐观锁更新项目；未提供 `customer_ref` 保持原关联，空串解除，非空值经本人客户权限校验后绑定或更换；不接受 `crm_id` 代替客户引用 |
 | `GET` | `/projects/:id/versions/:version` | 无 | 精确读取同项目的固定版本；仅当前项目设计师可读，不受详情最近50条窗口影响 |
 | `GET`、`HEAD` | `/projects/:id/versions/:version/export.docx` | 无 | 按精确冻结版本生成Word；成功响应前再次验证当前设计师授权 |
 | `POST` | `/projects/:id/members/:account` | 空对象 | 邀请现有且有效的小程序账号；`:account` 是数字用户 ID |
@@ -85,7 +86,7 @@ JSON 请求体最大 128 KiB，拒绝未知字段和尾随内容。除媒体上�
 
 `body_format` 沿用内容系统的 `plain`、安全清理后的 `rich_text` 和结构化 `article_v2`。当前小程序对 `rich_text`、`article_v2` 正文采用只读方式，修改标题时会原样带回正文、封面和媒体，避免将结构化内容降级为纯文本。
 
-创建分享时，raw `share_token` 只在首次成功响应返回，数据库只存散列。相同幂等请求重放会返回同一分享并标记 `replayed`，但不会再次返回 raw token；前端若丢失首次响应，会要求撤回后重新创建，不能盲目生成第二条分享。
+创建分享时，raw `share_token` 只在首次成功响应返回，数据库只存散列。相同幂等请求重放会返回同一分享并标记 `replayed`，但不会再次返回 raw token；前端会保留首次返回的本机凭证。若响应结果不明确或本机凭证丢失，页面明确要求从版本管理恢复，不会盲目重试冻结，也不会私自撤回现有分享。
 
 ## 4. 受邀账号接口
 

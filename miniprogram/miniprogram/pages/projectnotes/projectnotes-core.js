@@ -25,6 +25,16 @@ const blankProtected = () => ({
 });
 const value = event => String(event.detail && event.detail.value || '').trim();
 const mediaID = item => String(item && (item.media_id || item.id || item.asset && item.asset.media_id) || '');
+const noteContentSignature = draft => {
+  const copy = Object.assign({}, draft);
+  delete copy.expected_revision;
+  return JSON.stringify(copy);
+};
+const projectSnapshotSignature = project => JSON.stringify({
+  name: String(project && project.name || ''), location: String(project && project.location || ''),
+  building_area: Number(project && project.building_area || 0), floors: Number(project && project.floors || 0),
+  style: String(project && project.style || ''),
+});
 // 分享入口凭证只在本机保存（服务端只存 token 哈希），用于同一设备重进页面后继续预览/复制。
 const SHARE_TOKEN_CACHE_KEY = 'project_note_share_tokens_v1';
 const shareTokenCache = () => {
@@ -178,7 +188,7 @@ Page({
     const token = String(wx.getStorageSync('token') || '');
     if (token !== this._token) {
       this._token = token; this._epoch = (this._epoch || 0) + 1;
-      this._loaded = false; this._writingLaunch = null; this._selectedNoteID = ''; this._newNote = false; this._resolutionAttempt = null; this._issuedShare = null; this._shareAttempt = null; this._invitationAttempt = null; this._approvalAttempts = new Map(); this._selectedProjectID = ''; this._selectedVersionID = ''; this.clearProtected();
+      this._loaded = false; this._writingLaunch = null; this._selectedNoteID = ''; this._newNote = false; this._resolutionAttempt = null; this._issuedShare = null; this._shareAttempt = null; this._sendAttempt = null; this._invitationAttempt = null; this._approvalAttempts = new Map(); this._selectedProjectID = ''; this._selectedVersionID = ''; this.clearProtected();
     }
     this._visible = true;
     if (!token) { this.setData({ loading: false, loginRequired: true, error: '' }); return; }
@@ -239,7 +249,7 @@ Page({
   clearProtected() {
     // 保护性清空递增失效代际：在途上传/回调据此判断自己是否已作废，不得重建已清空的受保护状态。
     this._protectedGeneration = (this._protectedGeneration || 0) + 1;
-    this._noteFormBaseline = null; this._projectFormBaseline = null; this._loadedFormState = null; this.resetDraftInstance(); this._noteMediaFailures = null; this._noteMediaPending = null; this._noteMediaUpload = null; this._pendingPickerFeedback = null; this._hydrateResumePending = false; this._aiPanelRequest = (this._aiPanelRequest || 0) + 1; this._aiPanelLaunch = null; this.abortNoteAI();
+    this._noteFormBaseline = null; this._projectFormBaseline = null; this._loadedFormState = null; this.resetDraftInstance(); this._noteMediaFailures = null; this._noteMediaPending = null; this._noteMediaUpload = null; this._pendingPickerFeedback = null; this._hydrateResumePending = false; this._sendAttempt = null; this._aiPanelRequest = (this._aiPanelRequest || 0) + 1; this._aiPanelLaunch = null; this.abortNoteAI();
     this.setData(Object.assign(blankProtected(), { loading: false, loginRequired: false, accessRecheckRequired: false, error: '', notice: '', busy: false }));
   },
 
@@ -676,7 +686,11 @@ Page({
     return this.loadProjectCustomers();
   },
   closeProjectCustomers() { this._customerRequest = (this._customerRequest || 0) + 1; this.setData({ customerPickerOpen: false, customerLoading: false, customerError: '' }); },
-  clearProjectCustomer() { this.closeProjectCustomers(); this.setData({ customerRef: '', customerName: '' }); },
+  clearProjectCustomer() {
+    this.closeProjectCustomers();
+    if (this.data.pageView === 'detail' && this.data.selectedProject) return this.updateProjectCustomer('', '');
+    this.setData({ customerRef: '', customerName: '' });
+  },
   setCustomerKeyword(event) { this.setData({ customerKeyword: String(event.detail.value || '') }); },
   searchProjectCustomers() { this.setData({ customerCursor: '', customerAsOf: '', customerShareCursor: '', projectCustomers: [] }); return this.loadProjectCustomers(); },
   loadMoreProjectCustomers() { if (this.data.customerCursor && !this.data.customerLoading) return this.loadProjectCustomers(true); },
@@ -699,7 +713,26 @@ Page({
   selectProjectCustomer(event) {
     const item = this.data.projectCustomers.find(item => item.customer_ref === String(event.currentTarget.dataset.ref || ''));
     if (!item || this.data.customerLoading) return;
-    this.closeProjectCustomers(); this.setData({ customerRef: item.customer_ref, customerName: item.nickname || '已识别客户' });
+    this.closeProjectCustomers();
+    if (this.data.pageView === 'detail' && this.data.selectedProject) return this.updateProjectCustomer(item.customer_ref, item.nickname || '已识别客户');
+    this.setData({ customerRef: item.customer_ref, customerName: item.nickname || '已识别客户' });
+  },
+  async updateProjectCustomer(customerRef, customerName) {
+    const project = this.data.selectedProject;
+    if (!project || this.data.busy) return;
+    const launch = { epoch: this._epoch, token: this._token, projectID: project.project_id };
+    this.setData({ busy: true, error: '', notice: '' });
+    try {
+      const saved = await api.updateProjectNoteProject(project.project_id, { customer_ref: customerRef, expected_revision: project.revision });
+      if (!this.current(launch.epoch) || this._token !== launch.token || !this.data.selectedProject || this.data.selectedProject.project_id !== launch.projectID) return;
+      this.setData({
+        selectedProject: saved, customerRef: saved.customer_ref || '', customerName: saved.customer_ref ? customerName : '',
+        projects: this.data.projects.map(item => item.project_id === saved.project_id ? saved : item), busy: false,
+        notice: saved.customer_ref ? '客户已关联到项目。' : '已解除客户关联。',
+      });
+    } catch (error) {
+      if (this.current(launch.epoch) && this._token === launch.token) this.setData({ busy: false, error: error.message || '客户关联保存失败，请重试。' });
+    }
   },
   async createProjectNoteProject() {
     if (this.data.customerLoading) return;
@@ -926,7 +959,7 @@ Page({
   },
   async startNewNote() {
     if (this.data.busy || !await this.confirmDiscardChanges()) return;
-    this._newNote = true; this._selectedNoteID = ''; this._selectedVersionID = ''; this._targetVersionID = ''; this._shareAttempt = null;
+    this._newNote = true; this._selectedNoteID = ''; this._selectedVersionID = ''; this._targetVersionID = ''; this._shareAttempt = null; this._sendAttempt = null;
     this.editNote(); this._editorScrollTop = 0;
     this.setData({ pageView: 'editor', navigationTitle: '新建笔记', projectSettingsOpen: false, note: null, noteTitle: '', noteBody: '', noteMedia: [], bodyReadOnly: false, historyMode: false, versionView: null, versionMedia: [], versionBlocks: [], historyNotice: '', feedbacks: [], confirmations: [], selectedFeedback: null, feedbackID: '', feedbackReply: '' }, () => { this.ensureDraftInstance(true); this.publishMediaFailures(); this._noteFormBaseline = this.noteFormSignature(); this.scrollPage('editor'); });
   },
@@ -1420,13 +1453,35 @@ Page({
     if (!project || !draft.title || (!this.data.bodyReadOnly && !draft.body.trim()) || update && !note || this.data.busy) return;
     // 创建接口采用严格字段校验，修订号仅用于编辑已有笔记的并发校验。
     if (!update) delete draft.expected_revision;
-    const epoch = this._epoch; this.setData({ busy: true, error: '', notice: '' });
+    const launch = {
+      epoch: this._epoch, token: this._token, generation: this._protectedGeneration || 0,
+      account: draftAccount(), projectID: project.project_id, noteID: note && note.note_id || '',
+      instanceID: this.currentDraftInstanceID(), signature: this.noteFormSignature(), draftSignature: noteContentSignature(draft),
+    };
+    const sameIdentity = () => this.current(launch.epoch) && this._token === launch.token
+      && (this._protectedGeneration || 0) === launch.generation && draftAccount() === launch.account
+      && !!this.data.selectedProject && this.data.selectedProject.project_id === launch.projectID
+      && this.currentDraftInstanceID() === launch.instanceID;
+    this.setData({ busy: true, error: '', notice: '' });
     try {
       const saved = update ? await api.saveProjectNote(note.note_id, draft) : await api.createProjectNote(project.project_id, draft);
-      if (!this.current(epoch)) return;
-      this._shareAttempt = null; this._selectedNoteID = saved.note_id; this._newNote = false; this._selectedVersionID = ''; this.adoptMediaFailureQueue(saved.note_id); this.setData({ notes: [saved, ...this.data.notes.filter(item => item.note_id !== saved.note_id)], noteIndex: 0, note: saved, frozenVersion: null, activeShare: null, busy: false });
-      await this.refreshProject(update ? '草稿已保存。下一步：生成方案版本，再创建分享。' : '笔记草稿已创建。下一步：生成方案版本，再创建分享。');
-    } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '笔记保存失败' }); }
+      if (!sameIdentity()) return null;
+      const formUnchanged = launch.draftSignature === noteContentSignature(this.noteDraft());
+      this._shareAttempt = null; this._selectedNoteID = saved.note_id; this._newNote = false; this._selectedVersionID = ''; this.adoptMediaFailureQueue(saved.note_id);
+      this.setData({
+        notes: [saved, ...this.data.notes.filter(item => item.note_id !== saved.note_id)], noteIndex: 0, note: saved,
+        frozenVersion: null, activeShare: null, busy: false,
+        notice: formUnchanged ? '笔记已保存。' : '请求发起时的内容已保存，当前新修改尚未保存。',
+      });
+      // 微信 setData 的 this.data 会同步更新，但渲染完成回调异步。发送编排必须立即看到新基线，
+      // 否则首次点击“发给客户”只会保存，必须再点一次。
+      if (formUnchanged) {
+        this._noteFormBaseline = this.noteFormSignature();
+        this._loadedFormState = { projectEdit: Object.assign({}, this.data.projectEdit), noteTitle: this.data.noteTitle, noteBody: this.data.noteBody, noteMedia: (this.data.noteMedia || []).map(item => Object.assign({}, item)) };
+        this.setData({ noteDirty: false });
+      }
+      return saved;
+    } catch (error) { if (sameIdentity()) this.setData({ busy: false, error: error.message || '笔记保存失败' }); return null; }
   },
   // 失败队列按「账号+项目+草稿」分开保存：切换笔记不丢、连续新建不串、刷新竞态不覆盖。
   mediaFailureOwnerKey() {
@@ -1667,6 +1722,130 @@ Page({
       this._noteNewCoverID = firstImage ? mediaID(firstImage) : '';
     }
     this.setData({ noteMedia: remaining });
+  },
+  sendOperationIdentity() {
+    const project = this.data.selectedProject, note = this.data.note;
+    return {
+      epoch: this._epoch, token: this._token, generation: this._protectedGeneration || 0, account: draftAccount(),
+      projectID: project && project.project_id || '', noteID: note && note.note_id || '', noteRevision: Number(note && note.revision || 0),
+      instanceID: this.currentDraftInstanceID(), signature: this.noteFormSignature(), projectSignature: projectSnapshotSignature(project),
+    };
+  },
+  sendOperationOwnerCurrent(launch) {
+    const project = this.data.selectedProject, note = this.data.note;
+    return this.current(launch.epoch) && this._token === launch.token && (this._protectedGeneration || 0) === launch.generation
+      && draftAccount() === launch.account && !!project && project.project_id === launch.projectID
+      && this.currentDraftInstanceID() === launch.instanceID && (!launch.noteID || !!note && note.note_id === launch.noteID);
+  },
+  sendOperationCurrent(launch, requireSignature) {
+    const project = this.data.selectedProject, note = this.data.note;
+    return this.sendOperationOwnerCurrent(launch) && (!launch.noteID || Number(note.revision) === launch.noteRevision)
+      && projectSnapshotSignature(project) === launch.projectSignature
+      && (!requireSignature || this.noteFormSignature() === launch.signature);
+  },
+  stopStaleSend(launch) {
+    if (this.sendOperationOwnerCurrent(launch)) this.setData({ busy: false, notice: '发送准备已停止，当前修改尚未发送。' });
+  },
+  versionMatchesDraft(version, note, draft) {
+    if (!version || !note || version.note_id !== note.note_id || Number(version.revision) !== Number(note.revision)) return false;
+    if (version.title !== draft.title || version.body !== draft.body || version.body_format !== draft.body_format) return false;
+    const project = this.data.selectedProject, snapshot = version.project_snapshot;
+    if (!project || !snapshot) return false;
+    if (String(snapshot.name || '') !== String(project.name || '')
+      || String(snapshot.location || '') !== String(project.location || '')
+      || Number(snapshot.building_area || 0) !== Number(project.building_area || 0)
+      || Number(snapshot.floors || 0) !== Number(project.floors || 0)
+      || String(snapshot.style || '') !== String(project.style || '')) return false;
+    const media = (version.media || []).map(mediaID).filter(Boolean);
+    const cover = mediaID(version.cover);
+    return cover === (draft.cover_media_id || '') && JSON.stringify(media) === JSON.stringify(draft.media_ids || []);
+  },
+  async findMatchingFrozenVersion(projectID, note, draft, detail) {
+    const candidates = [];
+    if (this.data.frozenVersion) candidates.push(this.data.frozenVersion);
+    for (const item of (detail && detail.versions || this.data.versionChoices || [])) {
+      if (!candidates.some(candidate => candidate.version_id === item.version_id)) candidates.push(item);
+    }
+    for (const candidate of candidates) {
+      if (!candidate || candidate.note_id !== note.note_id || Number(candidate.revision) !== Number(note.revision)) continue;
+      let fixed = candidate;
+      if (fixed.body == null && typeof api.getProjectNoteVersion === 'function') fixed = await api.getProjectNoteVersion(projectID, candidate.version_id);
+      if (this.versionMatchesDraft(fixed, note, draft)) return fixed;
+    }
+    return null;
+  },
+  async recoverFrozenVersion(launch, draft) {
+    if (typeof api.getProjectNoteProject !== 'function') return null;
+    const detail = await api.getProjectNoteProject(launch.projectID);
+    if (!this.sendOperationCurrent(launch, true)) return null;
+    return this.findMatchingFrozenVersion(launch.projectID, this.data.note, draft, detail);
+  },
+  async prepareProjectNoteSend() {
+    const project = this.data.selectedProject, draft = this.noteDraft();
+    if (!project || this.data.busy || !draft.title || (!this.data.bodyReadOnly && !draft.body.trim())) return;
+    this.setData({ error: '', notice: '' });
+    let note = this.data.note;
+    if (!note || this._noteFormBaseline !== this.noteFormSignature()) {
+      note = await this.persistNote(!!note);
+      // 保存期间任何字段（含素材、封面）被继续修改，都只保存发起时版本并停止发送。
+      if (!note || this._noteFormBaseline !== this.noteFormSignature()) return;
+    }
+    const savedDraft = this.noteDraft();
+    const launch = this.sendOperationIdentity();
+    const checkpointSignature = [launch.account, launch.projectID, note.note_id, note.revision, launch.instanceID, launch.projectSignature, launch.signature].join('|');
+    if (!this._sendAttempt || this._sendAttempt.signature !== checkpointSignature) this._sendAttempt = { signature: checkpointSignature, shareKey: api.mutationKey('project-note-share'), expiresAt: new Date(Date.now() + 7 * 86400000).toISOString(), version: null, share: null, freezeUncertain: false };
+    const attempt = this._sendAttempt;
+    this.setData({ busy: true, error: '', notice: '正在准备客户预览…' });
+    try {
+      let version = attempt.version;
+      if (version && !this.versionMatchesDraft(version, note, savedDraft)) {
+        version = null; attempt.version = null; attempt.share = null; attempt.freezeUncertain = false;
+      }
+      if (!version && attempt.freezeUncertain) {
+        version = await this.recoverFrozenVersion(launch, savedDraft);
+        if (!version) throw new Error('版本生成结果暂不明确，请稍后在项目记录中核对后重试发送。');
+        attempt.freezeUncertain = false;
+      }
+      if (!version) version = await this.findMatchingFrozenVersion(project.project_id, note, savedDraft);
+      if (!this.sendOperationCurrent(launch, true)) { this.stopStaleSend(launch); return; }
+      if (!version) {
+        try {
+          version = await api.freezeProjectNoteVersion(note.note_id, note.revision);
+          if (!this.sendOperationCurrent(launch, true)) { this.stopStaleSend(launch); return; }
+          if (!this.versionMatchesDraft(version, note, savedDraft)) throw new Error('生成的固定版本与当前笔记不一致，请刷新项目后重试。');
+        } catch (error) {
+          // 冻结不是幂等操作。网络结果不明确时先读回精确快照，绝不盲目再次冻结。
+          if (!(error && error.networkError)) throw error;
+          attempt.freezeUncertain = true;
+          version = await this.recoverFrozenVersion(launch, savedDraft);
+          if (!version) throw new Error('版本生成结果暂不明确，请稍后在项目记录中核对后重试发送。');
+          attempt.freezeUncertain = false;
+        }
+        if (!this.sendOperationCurrent(launch, true)) { this.stopStaleSend(launch); return; }
+        attempt.version = version;
+      }
+      let share = attempt.share;
+      const active = this.data.activeShare;
+      const shareActive = item => !!item && item.version_id === version.version_id && !item.revoked
+        && (!item.expires_at || new Date(item.expires_at).getTime() > Date.now());
+      const shareUsable = item => shareActive(item) && !!item.share_token;
+      if (shareActive(share) && !share.share_token) throw new Error('分享已创建，但本机入口凭证已丢失。请到版本管理中明确恢复，系统不会自动新建或撤回分享。');
+      if (share && !shareUsable(share)) share = null;
+      if (!share && shareActive(active) && !active.share_token) throw new Error('已有有效分享，但本机入口凭证已丢失。请到版本管理中明确恢复，系统不会自动新建或撤回分享。');
+      if (!share && shareUsable(active)) share = active;
+      if (!share) share = await api.createProjectNoteShare(version.version_id, attempt.expiresAt, attempt.shareKey);
+      if (!this.sendOperationCurrent(launch, true)) { this.stopStaleSend(launch); return; }
+      attempt.share = share;
+      if (!share || !share.share_token) throw new Error('分享已创建，但本机没有入口凭证。请从版本管理中确认后再恢复发送。');
+      rememberShareToken(share); this._issuedShare = share; this._shareAttempt = null; this._sendAttempt = null;
+      this.setData({ busy: false, frozenVersion: version, activeShare: share, notice: '客户预览已准备，请选择微信联系人发送。' });
+      wx.navigateTo({ url: '/pages/projectnoteview/projectnoteview?pns=' + encodeURIComponent(share.share_token), fail: () => this.setData({ error: '预览打开失败，内容和分享已保留，可再次点击“发给客户”。' }) });
+      return share;
+    } catch (error) {
+      if (this.sendOperationCurrent(launch, false)) this.setData({ busy: false, error: error.message || '发送准备失败，可从当前步骤继续。' });
+      else this.stopStaleSend(launch);
+      return null;
+    }
   },
   async freezeProjectNoteVersion() {
     const note = this.data.note; if (!note || this.data.busy) return;

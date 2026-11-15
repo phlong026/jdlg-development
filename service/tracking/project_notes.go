@@ -48,6 +48,7 @@ type ProjectNoteProjectInput struct {
 type ProjectNoteProjectUpdate struct {
 	ExpectedRevision int      `json:"expected_revision"`
 	Name             *string  `json:"name,omitempty"`
+	CustomerRef      *string  `json:"customer_ref,omitempty"`
 	Location         *string  `json:"location,omitempty"`
 	BuildingArea     *float64 `json:"building_area,omitempty"`
 	Floors           *int     `json:"floors,omitempty"`
@@ -505,6 +506,9 @@ func (s *Service) ProjectNoteUpdateProject(ctx context.Context, scope Scope, pro
 		}
 		if input.Name != nil {
 			project.Name = strings.TrimSpace(*input.Name)
+		}
+		if input.CustomerRef != nil {
+			project.CustomerRef = strings.TrimSpace(*input.CustomerRef)
 		}
 		if input.Location != nil {
 			project.Location = strings.TrimSpace(*input.Location)

@@ -113,6 +113,42 @@ func TestProjectNoteSatisfactionAndOwnerConfirmationDriveStatus(t *testing.T) {
 	}
 }
 
+func TestProjectNoteUpdateProjectSupportsCustomerRefTriState(t *testing.T) {
+	ctx := context.Background()
+	s, designer, _ := projectNoteFixture(t)
+	project, err := s.ProjectNoteCreateProject(ctx, designer, ProjectNoteProjectInput{Name: "张宅", Owner: "owner-a", CustomerRef: "u:old"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	name := "张宅二期"
+	kept, err := s.ProjectNoteUpdateProject(ctx, designer, project.ID, ProjectNoteProjectUpdate{ExpectedRevision: project.Revision, Name: &name})
+	if err != nil || kept.CustomerRef != "u:old" {
+		t.Fatalf("omitted customer_ref must be preserved: value=%q err=%v", kept.CustomerRef, err)
+	}
+
+	reboundRef := "  u:new  "
+	rebound, err := s.ProjectNoteUpdateProject(ctx, designer, project.ID, ProjectNoteProjectUpdate{ExpectedRevision: kept.Revision, CustomerRef: &reboundRef})
+	if err != nil || rebound.CustomerRef != "u:new" {
+		t.Fatalf("rebound customer_ref=%q err=%v", rebound.CustomerRef, err)
+	}
+
+	empty := ""
+	unbound, err := s.ProjectNoteUpdateProject(ctx, designer, project.ID, ProjectNoteProjectUpdate{ExpectedRevision: rebound.Revision, CustomerRef: &empty})
+	if err != nil || unbound.CustomerRef != "" {
+		t.Fatalf("unbound customer_ref=%q err=%v", unbound.CustomerRef, err)
+	}
+
+	staleRef := "u:stale"
+	if _, err = s.ProjectNoteUpdateProject(ctx, designer, project.ID, ProjectNoteProjectUpdate{ExpectedRevision: rebound.Revision, CustomerRef: &staleRef}); err == nil {
+		t.Fatal("stale revision changed customer_ref")
+	}
+	current, err := s.ProjectNoteGetProject(ctx, designer, project.ID)
+	if err != nil || current.CustomerRef != "" {
+		t.Fatalf("stale update persisted: value=%q err=%v", current.CustomerRef, err)
+	}
+}
+
 func TestProjectNoteFeedbackNoticeIsAtomicDeduplicatedAndDesignerBound(t *testing.T) {
 	ctx := context.Background()
 	s, designer, _ := projectNoteFixture(t)
