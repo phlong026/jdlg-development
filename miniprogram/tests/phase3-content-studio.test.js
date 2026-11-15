@@ -224,21 +224,28 @@ test('studio offers real destinations for existing assets and visits', async () 
   assert.deepEqual(navigations, ['/pages/nativereferences/nativereferences', '/pages/sharevisits/sharevisits?tab=shares']);
 });
 
-test('studio has one create action and routes each supported type into the existing editor', () => {
+test('studio puts image and video first, keeps import secondary, and moves article and file into more', () => {
   const harness = runtime();
   harness.page.openCreateMenu();
-  assert.deepEqual(Array.from(harness.actionSheet().itemList), ['图集笔记', '视频笔记', '写文章', '上传文件', '导入链接', '项目笔记']);
-  for (const tapIndex of [0, 1, 2, 3, 4, 5]) {
-    harness.page.openCreateMenu(); harness.actionSheet().success({ tapIndex });
-  }
+  assert.equal(harness.page.data.createMenuOpen, true);
+  assert.equal(harness.page.data.createMoreOpen, false);
+  harness.page.chooseCreate({ currentTarget: { dataset: { route: '/pages/contentedit/contentedit?kind=gallery' } } });
+  harness.page.openCreateMenu(); harness.page.chooseCreate({ currentTarget: { dataset: { route: '/pages/contentedit/contentedit?kind=video' } } });
+  harness.page.openCreateMenu(); harness.page.chooseCreate({ currentTarget: { dataset: { route: '/pages/contentworkbench/contentworkbench?view=import' } } });
+  harness.page.openCreateMenu(); harness.page.openMoreCreateMenu();
+  assert.equal(harness.page.data.createMoreOpen, true);
+  harness.page.chooseCreate({ currentTarget: { dataset: { route: '/pages/contentedit/contentedit?kind=article' } } });
+  harness.page.openCreateMenu(); harness.page.openMoreCreateMenu(); harness.page.chooseCreate({ currentTarget: { dataset: { route: '/pages/contentedit/contentedit?action=document' } } });
   assert.deepEqual(harness.navigations, [
     '/pages/contentedit/contentedit?kind=gallery',
     '/pages/contentedit/contentedit?kind=video',
+    '/pages/contentworkbench/contentworkbench?view=import',
     '/pages/contentedit/contentedit?kind=article',
     '/pages/contentedit/contentedit?action=document',
-    '/pages/contentworkbench/contentworkbench?view=import',
-    '/pages/projectnotes/projectnotes',
   ]);
+  const template = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/contentworkbench/contentworkbench.wxml'), 'utf8');
+  assert.match(template, /class="create-primary"[\s\S]*图文笔记[\s\S]*视频笔记/);
+  assert.match(template, /class="create-row"[^>]*view=import/);
 });
 
 test('studio trusts presentation and never turns a mixed article into a video row', async () => {
@@ -274,12 +281,17 @@ test('published rows open their immutable reader while drafts continue in the ed
   ]);
 });
 
-test('published content keeps an explicit path back to editing', () => {
+test('published content keeps editing in its more menu while the row remains the share entry', () => {
   const harness = runtime();
-  harness.page.editContent({ currentTarget: { dataset: { id: 'published-a', status: 'published', version: 3 } } });
+  harness.page._visible = true; harness.page._token = 'account-a'; harness.page._epoch = 1;
+  harness.page.setData({ items: [{ content_id: 'published-a', status: 'published', revision: 4 }] });
+  harness.page.openContentMore({ currentTarget: { dataset: { id: 'published-a' } } });
+  assert.deepEqual(Array.from(harness.actionSheet().itemList), ['编辑内容', '删除内容']);
+  harness.actionSheet().success({ tapIndex: 0 });
   assert.deepEqual(harness.navigations, ['/pages/contentedit/contentedit?id=published-a']);
   const template = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/contentworkbench/contentworkbench.wxml'), 'utf8');
-  assert.match(template, /catchtap="editContent"/);
+  assert.match(template, /catchtap="openContentMore"/);
+  assert.doesNotMatch(template, />编辑<\/button>/);
 });
 
 test('legacy snapshots keep their existing read-only editor instead of calling native published-content APIs', () => {
@@ -304,7 +316,8 @@ test('content pages use one clear title and hide unavailable writing actions', (
   const workbench = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/contentworkbench/contentworkbench.wxml'), 'utf8');
   const editor = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/contentedit/contentedit.wxml'), 'utf8');
   const workbenchConfig = JSON.parse(fs.readFileSync(path.join(__dirname, '../miniprogram/pages/contentworkbench/contentworkbench.json'), 'utf8'));
-  assert.match(writing, /<navigation-bar title="\{\{videoBundle \? '视频文案' : 'AI文案'\}\}"/);
+  assert.match(writing, /<navigation-bar title="AI辅助"/);
+  assert.doesNotMatch(writing, />[^<]*(?:文案辅助|AI文案)[^<]*</);
   assert.doesNotMatch(writing, /AI内容策划|title="甲第灵光"/);
   assert.match(writing, /wx:if="{{result}}" class="writing-panel refine-panel"/);
   assert.match(writing, /<block wx:elif="{{result}}">[\s\S]*?<button class="primary" bindtap="saveToDraft"/);

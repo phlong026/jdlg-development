@@ -1,11 +1,11 @@
 <block wx:if="{{__profileAccessMounted}}">
 <view class="writing-page">
-  <view class="writing-navigation"><navigation-bar title="{{videoBundle ? '视频文案' : 'AI文案'}}" back="{{true}}" background="#fbfaf7" /></view>
+  <view class="writing-navigation"><navigation-bar title="AI辅助" back="{{true}}" background="#fbfaf7" /></view>
   <view class="writing-body">
     <view wx:if="{{!videoBundle}}" class="writing-tabs" role="tablist">
       <button wx:for="{{writingTypes}}" wx:key="key" class="writing-tab {{type === item.key ? 'active' : ''}}" data-type="{{item.key}}" bindtap="selectType" aria-role="tab" aria-selected="{{type === item.key}}">{{item.label}}</button>
     </view>
-    <view wx:if="{{loginRequired}}" class="login-state"><text>登录后使用AI文案</text><button class="secondary" bindtap="goLogin">去登录</button></view>
+    <view wx:if="{{loginRequired}}" class="login-state"><text>登录后使用AI辅助</text><button class="secondary" bindtap="goLogin">去登录</button></view>
     <block wx:else>
       <view class="writing-panel facts-panel">
         <text class="section-title">创作素材</text>
