@@ -55,6 +55,176 @@ function pageHarness(name, api, wxOverrides = {}) {
   return page;
 }
 
+function authorizedSharedReader(api, wxOverrides = {}) {
+  const page = pageHarness('projectnoteview', api, wxOverrides);
+  page._visible = true; page._accountToken = 'session-token'; page._epoch = 1;
+  page._shareToken = 'valid-share-token'; page._accessVerified = true;
+  page.setData({ loading: false, shareReady: true, feedbackText: '保留未提交意见',
+    view: { share: { share_id: 'share-one' }, project: { project_id: 'project-one' }, version: { version_id: 'version-one', revision: 1, body_format: 'plain', body: '私密方案正文' } },
+    media: [{ media_id: 'image-one', kind: 'image', local_path: '/tmp/private-image' }],
+    activityItems: [{ text: '私密历史' }], activityLoaded: true,
+  });
+  return page;
+}
+
+test('expired shared history clears protected data after checking the share again', async () => {
+  let reads = 0, hidden = 0;
+  const expired = Object.assign(new Error('分享不存在或已失效'), { statusCode: 404 });
+  const page = authorizedSharedReader({
+    getSharedProjectNoteHistory: async () => { throw expired; },
+    getSharedProjectNote: async () => { reads++; throw expired; },
+  }, { hideShareMenu() { hidden++; } });
+  await page.loadActivityHistory();
+  assert.equal(reads, 1);
+  assert.equal(page.data.view, null);
+  assert.equal(page.data.media.length, 0);
+  assert.equal(page.data.activityItems.length, 0);
+  assert.equal(page.data.shareReady, false);
+  assert.equal(page.data.loading, false);
+  assert.match(page.data.error, /失效/);
+  assert.ok(hidden > 0);
+});
+
+test('session failure invalidates a concurrent private history response', async () => {
+  let finish, hidden = 0;
+  const page = authorizedSharedReader({ getSharedProjectNoteHistory: () => new Promise(resolve => { finish = resolve; }) }, { hideShareMenu() { hidden++; } });
+  const pending = page.loadActivityHistory();
+  await page.readerFailure(Object.assign(new Error('请先登录'), { statusCode: 401 }), '操作失败');
+  finish({ items: [{ text: '迟到的私密意见' }] }); await pending;
+  assert.equal(page.data.view, null);
+  assert.equal(page.data.activityItems.length, 0);
+  assert.equal(page.data.loginRequired, true);
+  assert.ok(page._epoch > 1);
+  assert.ok(hidden > 0);
+});
+
+test('a missing original image keeps a still-readable fixed version and unsent feedback', async () => {
+  let reads = 0, saves = 0;
+  const page = authorizedSharedReader({
+    downloadSharedProjectNoteMedia: async () => { throw Object.assign(new Error('图片暂不可用'), { statusCode: 404 }); },
+    getSharedProjectNote: async () => { reads++; return page.data.view; },
+  }, { saveImageToPhotosAlbum() { saves++; } });
+  await page.saveOriginalImage({ currentTarget: { dataset: { id: 'image-one' } } });
+  assert.equal(reads, 1);
+  assert.equal(page.data.view.version.body, '私密方案正文');
+  assert.equal(page.data.feedbackText, '保留未提交意见');
+  assert.equal(page._accessVerified, true);
+  assert.equal(page.data.loading, false);
+  assert.match(page.data.notice, /图片暂不可用/);
+  assert.equal(saves, 0);
+});
+
+test('confirmation-only denial rechecks access without discarding a readable scheme', async () => {
+  const page = authorizedSharedReader({
+    mutationKey: () => 'confirm-key',
+    confirmSharedProjectNote: async () => { throw Object.assign(new Error('仅指定业主可以确认'), { statusCode: 403 }); },
+    getSharedProjectNote: async () => Object.assign({}, page.data.view, { can_confirm: false }),
+  });
+  page.setData({ canConfirm: true });
+  await page.confirmVersion();
+  assert.equal(page._epoch, 2);
+  assert.equal(page.data.view.version.version_id, 'version-one');
+  assert.equal(page.data.feedbackText, '保留未提交意见');
+  assert.equal(page.data.canConfirm, false);
+  assert.match(page.data.notice, /仅指定业主/);
+});
+
+test('a failed access recheck hides cached content and keeps a retryable input', async () => {
+  const page = authorizedSharedReader({ getSharedProjectNote: async () => { throw Object.assign(new Error('网关暂不可用'), { statusCode: 503 }); } });
+  await page.readerFailure(Object.assign(new Error('图片不存在'), { statusCode: 404 }), '下载失败');
+  assert.equal(page._accessVerified, false);
+  assert.equal(page.data.shareReady, false);
+  assert.ok(page.data.error);
+  assert.equal(page.data.feedbackText, '保留未提交意见');
+});
+
+test('a stale access recheck never restores an old operation message over a new view', async () => {
+  let finish;
+  const page = authorizedSharedReader({ getSharedProjectNote: () => new Promise(resolve => { finish = resolve; }) });
+  const oldView = page.data.view;
+  const pending = page.readerFailure(Object.assign(new Error('旧操作错误'), { statusCode: 403 }), '失败');
+  assert.equal(page.data.loading, true);
+  page._epoch++; page.setData({ view: { version: { version_id: 'new-version' } }, loading: false, notice: '新页面提示' });
+  finish(oldView); await pending;
+  assert.equal(page.data.notice, '新页面提示');
+  assert.equal(page.data.view.version.version_id, 'new-version');
+});
+
+test('temporary operation failures preserve input without extra access requests', async () => {
+  let reads = 0;
+  const page = authorizedSharedReader({ getSharedProjectNote: async () => { reads++; return page.data.view; } });
+  await page.readerFailure(Object.assign(new Error('暂时无法导出'), { statusCode: 503 }), '导出失败');
+  assert.equal(reads, 0);
+  assert.equal(page._accessVerified, true);
+  assert.equal(page.data.feedbackText, '保留未提交意见');
+  assert.match(page.data.notice, /暂时无法导出/);
+});
+
+test('an unauthorized read receipt clears content and does not retry invalid credentials', async () => {
+  let calls = 0;
+  const page = authorizedSharedReader({ openSharedProjectNote: async () => { calls++; throw Object.assign(new Error('请先登录'), { statusCode: 401 }); } });
+  page._openEventID = 'receipt-one';
+  await page.acknowledgeRead();
+  assert.equal(calls, 1);
+  assert.equal(page.data.loginRequired, true);
+  assert.equal(page.data.view, null);
+  assert.equal(page.data.acknowledgingRead, false);
+});
+
+test('media retry session failure blocks a previously started Word download', async () => {
+  let finishWord, opened = 0;
+  const page = authorizedSharedReader({
+    downloadSharedProjectNoteWord: () => new Promise(resolve => { finishWord = resolve; }),
+    downloadSharedProjectNoteMedia: async () => { throw Object.assign(new Error('请先登录'), { statusCode: 401 }); },
+  }, { openDocument(options) { opened++; options.success(); } });
+  const pending = page.exportSharedProjectNoteWord();
+  page.setData({ media: [{ media_id: 'failed-image', kind: 'image', preview_error: '重试' }] });
+  await page.retryMediaDownloads();
+  finishWord('/tmp/old-private-word.docx'); await pending;
+  assert.equal(page.data.view, null);
+  assert.equal(page.data.loginRequired, true);
+  assert.equal(opened, 0);
+});
+
+test('one unauthorized media retry invalidates downloads before another slow media request finishes', async () => {
+  let finishWord, finishImage, opened = 0;
+  const page = authorizedSharedReader({
+    downloadSharedProjectNoteWord: () => new Promise(resolve => { finishWord = resolve; }),
+    downloadSharedProjectNoteMedia: async (_share, id) => {
+      if (id === 'unauthorized') throw Object.assign(new Error('请先登录'), { statusCode: 401 });
+      return new Promise(resolve => { finishImage = resolve; });
+    },
+  }, { openDocument(options) { opened++; options.success(); } });
+  const pendingWord = page.exportSharedProjectNoteWord();
+  page.setData({ media: [{ media_id: 'unauthorized', kind: 'image' }, { media_id: 'slow', kind: 'image' }] });
+  const pendingMedia = page.retryMediaDownloads();
+  await new Promise(resolve => setImmediate(resolve));
+  finishWord('/tmp/late-word.docx'); await pendingWord;
+  const loginRequiredBeforeSlowMedia = page.data.loginRequired;
+  finishImage('/tmp/late-image'); await pendingMedia;
+  assert.equal(loginRequiredBeforeSlowMedia, true);
+  assert.equal(opened, 0);
+  assert.equal(page.data.media.length, 0);
+});
+
+test('private local previews and media retries stay blocked until access is verified again', async () => {
+  let opened = 0, downloads = 0;
+  const page = authorizedSharedReader({ downloadSharedProjectNoteMedia: async () => { downloads++; return '/tmp/file'; } }, {
+    previewImage() { opened++; }, openDocument() { opened++; },
+  });
+  page._accessVerified = false;
+  page.setData({ media: [
+    { media_id: 'image-one', kind: 'image', local_path: '/tmp/image' },
+    { media_id: 'document-one', kind: 'document', local_path: '/tmp/document' },
+    { media_id: 'missing-one', kind: 'image', preview_error: '需重试' },
+  ] });
+  page.openImage({ currentTarget: { dataset: { id: 'image-one' } } });
+  page.openAttachment({ currentTarget: { dataset: { id: 'document-one' } } });
+  await page.retryMediaDownloads();
+  assert.equal(opened, 0);
+  assert.equal(downloads, 0);
+});
+
 test('draft preview reads unsaved text and project media without saving, freezing or sharing', async () => {
   const downloads = [];
   const page = pageHarness('projectnotes', {

@@ -106,10 +106,21 @@ Page({
   },
   onUnload() { this._visible = false; this._epoch = (this._epoch || 0) + 1; this.clearProtected(); },
   current(epoch) { return this._visible !== false && epoch === this._epoch && this._accountToken === String(wx.getStorageSync('token') || ''); },
-  // 操作阶段失败：401 统一进入登录恢复；其它保留可重试提示。
-  readerFailure(error, fallback) {
+  // 操作权限与阅读权限不同；素材缺失或无权确认时，先重验方案再决定是否清空。
+  async readerFailure(error, fallback) {
     const status = Number(error && error.statusCode);
-    if (status === 401) { this.clearProtected(); this.setData({ loginRequired: true, error: '', busy: false, activityLoading: false, acknowledgingRead: false }); return; }
+    if (status === 401) {
+      this._epoch = (this._epoch || 0) + 1;
+      wx.hideShareMenu(); this.clearProtected();
+      this.setData({ loading: false, loginRequired: true, error: '' });
+      return;
+    }
+    if (status === 403 || status === 404) {
+      const pending = this.revalidateShared(), epoch = this._epoch;
+      await pending;
+      if (this.current(epoch) && this._accessVerified === true && this.data.view && !this.data.error) this.setData({ notice: (error && error.message) || fallback });
+      return;
+    }
     this.setData({ busy: false, activityLoading: false, notice: (error && error.message) || fallback });
   },
   clearProtected() {
@@ -303,7 +314,7 @@ Page({
         displayTime: item.resolved_at || item.confirmed_at || item.created_at || '',
       }));
       this.setData({ activityItems: items, activityPage: page, activityCursors: cursors, activityNextCursor: result.next_cursor || '', activityLoaded: true, activityLoading: false });
-    } catch (error) { if (this.current(epoch) && request === this._activityRequest) { const status = Number(error && error.statusCode); if (status === 401) this.readerFailure(error, '历史记录加载失败'); else this.setData({ activityLoading: false, notice: error.message || '历史记录加载失败，可重试' }); } }
+    } catch (error) { if (this.current(epoch) && request === this._activityRequest) await this.readerFailure(error, '历史记录加载失败，可重试'); }
   },
   async acknowledgeRead() {
     if (!this.data.view || this.data.acknowledgingRead || this._openSent || this._accessVerified === false) return;
@@ -323,7 +334,10 @@ Page({
           await api.openSharedProjectNote(this._shareToken, openEventID);
           if (this.current(epoch) && this._accountToken === accountToken && this._openEventID === openEventID) this._openSent = true;
           return;
-        } catch (_) { if (!this.current(epoch)) return; }
+        } catch (error) {
+          if (!this.current(epoch)) return;
+          if ([401, 403, 404].includes(Number(error && error.statusCode))) { await this.readerFailure(error, '回执发送失败，可重试'); return; }
+        }
       }
     })();
     this._openPending = attempt;
@@ -356,7 +370,7 @@ Page({
       const sameAttempt = this._feedbackAttempt === attempt;
       if (sameAttempt) this._feedbackAttempt = null;
       this.setData(Object.assign({ view, feedbackRows: feedbackRows(view), busy: false, notice: '反馈已提交给设计师。' }, sameAttempt ? { feedbackText: '', satisfaction: '' } : {}));
-    } catch (error) { if (this.current(epoch)) this.readerFailure(error, '反馈提交失败'); }
+    } catch (error) { if (this.current(epoch)) await this.readerFailure(error, '反馈提交失败'); }
   },
   async confirmVersion() {
     if (!this.data.canConfirm || this.data.confirmed || this.data.busy || !this.data.view || this._accessVerified === false) return;
@@ -365,7 +379,7 @@ Page({
       const confirmation = await api.confirmSharedProjectNote(this._shareToken, api.mutationKey('project-note-confirm'));
       if (!this.current(epoch)) return;
       this.setData({ view: Object.assign({}, this.data.view, { confirmation }), confirmed: true, busy: false, notice: '已确认当前固定版本。设计师后续新版本需另行确认。' });
-    } catch (error) { if (this.current(epoch)) this.readerFailure(error, '版本确认失败'); }
+    } catch (error) { if (this.current(epoch)) await this.readerFailure(error, '版本确认失败'); }
   },
   async exportSharedProjectNoteWord() {
     if (!this.data.view || this.data.busy || this._accessVerified === false) return;
@@ -375,7 +389,7 @@ Page({
       if (!this.current(epoch)) return;
       await new Promise((resolve, reject) => wx.openDocument({ filePath, fileType: 'docx', showMenu: true, success: resolve, fail: () => reject(new Error('Word 文件打开失败，请重试')) }));
       if (this.current(epoch)) this.setData({ busy: false, notice: '已打开当前固定版本的 Word 文件。' });
-    } catch (error) { if (this.current(epoch)) this.readerFailure(error, 'Word 导出失败'); }
+    } catch (error) { if (this.current(epoch)) await this.readerFailure(error, 'Word 导出失败'); }
   },
   async saveOriginalImage(event) {
     if (!this.data.view || this.data.busy || this._accessVerified === false) return;
@@ -389,14 +403,16 @@ Page({
       if (!this.current(epoch)) return;
       await new Promise((resolve, reject) => wx.saveImageToPhotosAlbum({ filePath, success: resolve, fail: () => reject(new Error('原图未保存，请检查相册权限后重试')) }));
       if (this.current(epoch)) this.setData({ busy: false, notice: '原图已保存到相册。' });
-    } catch (error) { if (this.current(epoch)) this.readerFailure(error, '原图保存失败，请确认分享仍有效'); }
+    } catch (error) { if (this.current(epoch)) await this.readerFailure(error, '原图保存失败，请确认分享仍有效'); }
   },
   openImage(event) {
+    if (!this.current(this._epoch) || !this.data.view || this._accessVerified === false) return;
     const mediaID = String(event.currentTarget.dataset.id || '');
     const asset = this.data.media.find(item => item.media_id === mediaID && item.kind === 'image');
     if (asset && asset.local_path) wx.previewImage({ current: asset.local_path, urls: [asset.local_path], showmenu: false });
   },
   openAttachment(event) {
+    if (!this.current(this._epoch) || !this.data.view || this._accessVerified === false) return;
     const mediaID = String(event.currentTarget.dataset.id || '');
     const asset = this.data.media.find(item => item.media_id === mediaID);
     if (asset && asset.local_path && asset.kind !== 'image' && asset.kind !== 'video') wx.openDocument({ filePath: asset.local_path, showMenu: false, fail: () => wx.showToast({ title: '附件暂无法打开', icon: 'none' }) });
@@ -407,6 +423,7 @@ Page({
   retry() { return this._memberProjectID && !this._memberVersionID ? this.loadMemberDirectory() : this.data.view ? this.revalidateShared() : this.loadShared(); },
   // D16：分享有效时定向重试失败素材，只重下失败项（并发上限 4）。
   async retryMediaDownloads() {
+    if (!this.current(this._epoch) || !this.data.view || this._accessVerified === false) return;
     const failures = (this.data.media || []).filter(item => item && (item.preview_error || !item.local_path));
     if (!failures.length || this._mediaRetrying) return;
     const epoch = this._epoch;
@@ -415,14 +432,24 @@ Page({
     const updated = new Map();
     let cursor = 0, accessError, validity;
     const worker = async () => {
-      while (cursor < failures.length) {
+      while (this.current(epoch) && cursor < failures.length && !accessError) {
         const item = failures[cursor++];
         try { updated.set(item.media_id, await this.loadSharedAsset(item)); }
         catch (error) {
-          if ([401, 403].includes(Number(error.statusCode))) accessError = error;
+          if (!this.current(epoch)) return;
+          if ([401, 403].includes(Number(error.statusCode))) {
+            accessError = error;
+            await this.readerFailure(error, '素材暂不可访问');
+            return;
+          }
           if (Number(error.statusCode) === 404) {
             validity = validity || this.readSharedView();
-            try { await validity; } catch (failure) { accessError = failure; }
+            try { await validity; }
+            catch (failure) {
+              if (!this.current(epoch)) return;
+              accessError = failure;
+              if ([401, 403, 404].includes(Number(failure.statusCode))) await this.readerFailure(failure, '素材暂不可访问');
+            }
           }
         }
       }
@@ -430,7 +457,12 @@ Page({
     await Promise.all([worker(), worker(), worker(), worker()]);
     this._mediaRetrying = false;
     if (!this.current(epoch)) return;
-    if (accessError) { const failure = shareErrorOf(accessError); this.clearProtected(); this.setData({ loading: false, loginRequired: failure.loginRequired, error: failure.text }); return; }
+    if (accessError) {
+      this._epoch = (this._epoch || 0) + 1;
+      wx.hideShareMenu(); this.clearProtected();
+      this.setData({ loading: false, error: shareErrorOf(accessError).text });
+      return;
+    }
     const media = (this.data.media || []).map(item => updated.get(item.media_id) || item);
     const windowInfo = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
     const failuresLeft = mediaFailureCount(media);
