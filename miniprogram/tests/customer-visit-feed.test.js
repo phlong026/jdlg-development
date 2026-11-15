@@ -5,17 +5,18 @@ const source=()=>fs.readFileSync(path.join(root,'sharevisits.ts'),'utf8').replac
 
 function runtime(feed,stubs={}){
  let definition;const navigation=[],clipboard=[],queries=[],warnings=[],actionSheets=[];
+ let storageToken=stubs.storageToken||'login-token';
  const apiStub=Object.assign({
   ORIGIN:'https://api.jiadilingguang.com',
   listMyVisits:async query=>{queries.push(query);return{items:feed,as_of:'2026-11-13T08:00:00Z',next_cursor:'next-feed',share_window:{next_cursor:'older'}}},
   listMyVisitors:async()=>({items:[]}),listMyContentStats:async()=>({items:[]}),listMyShares:async()=>({items:[]}),
   downloadWorkbenchMedia:async id=>'temp://'+id,
  },stubs);
- const wx={getStorageSync:()=> 'login-token',hideShareMenu(){},stopPullDownRefresh(){},navigateTo:o=>navigation.push(o.url),setClipboardData:o=>{clipboard.push(o.data);o.success&&o.success()},showToast(){},showActionSheet(options){actionSheets.push(options.itemList);if(stubs.actionSheetTap!==undefined)options.success({tapIndex:stubs.actionSheetTap})}};
+ const wx={getStorageSync:()=>storageToken,hideShareMenu(){},stopPullDownRefresh(){},navigateTo:o=>navigation.push(o.url),setClipboardData:o=>{clipboard.push(o.data);o.success&&o.success()},showToast(){},showActionSheet(options){actionSheets.push(options.itemList);if(stubs.actionSheetTap!==undefined)options.success({tapIndex:stubs.actionSheetTap})}};
  const protectedMedia=stubs.protectedMedia||{resolveProtectedMediaURL:async url=>'resolved:'+url};
  vm.runInNewContext(source(),{Page:o=>definition=o,wx,require:id=>id.includes('phase3-api')?apiStub:protectedMedia,Promise,Date,Number,String,Math,Set,encodeURIComponent,decodeURIComponent,setTimeout,clearTimeout,console:{log(){},warn(...args){warnings.push(args)},error(){}}});
  const page={...definition,data:structuredClone(definition.data),setData(value){Object.assign(this.data,value)}};
- return{page,navigation,clipboard,queries,warnings,actionSheets};
+ return{page,navigation,clipboard,queries,warnings,actionSheets,setToken(value){storageToken=value}};
 }
 
 const feed=[
@@ -137,6 +138,40 @@ test('素材访客查询和客户详情持续携带route、content与version，�
  await page.loadCustomers(true,1);assert.equal(visitorQueries[0].route_key,'pages/contentreader/contentreader');assert.equal(visitorQueries[0].content_id,'content-0001');assert.equal(visitorQueries[0].content_version,2);
  page.openCustomer({currentTarget:{dataset:{index:0}}});assert.match(navigation[0],/content_id=content-0001/);assert.match(navigation[0],/route_key=pages%2Fcontentreader%2Fcontentreader/);
  page.setData({customerVisits:[{...page.data.customerVisits[0],route_key:'pages/contentreader/contentreader',content_id:'content-0001',content_version:2,can_manage_preview:true}]});page.openVisitContent({currentTarget:{dataset:{index:0}}});assert.match(navigation[1],/management_preview=1/);assert.match(navigation[1],/content_version=2/);
+});
+
+test('首次挂载保留素材路由的as_of，实际切换账号才清理窗口与旧数据',async()=>{
+ const visitorQueries=[];let calls=0;
+ const routeAsOf='2026-11-15T02:15:47Z';
+ const harness=runtime([],{listMyVisitors:async query=>{visitorQueries.push(query);calls+=1;return{items:[{visitor_key:calls===1?'u:7':'u:8',nickname:calls===1?'张先生':'李先生'}],as_of:query.as_of||'2026-11-15T02:15:52Z'}}});
+ harness.page.onLoad({tab:'customers',view_mode:'people',content_id:'content-0001',content_version:'2',as_of:routeAsOf,share_cursor:'material-window'});
+ harness.page.onShow();await new Promise(resolve=>setTimeout(resolve,0));
+ assert.equal(visitorQueries[0].as_of,routeAsOf);
+ assert.equal(harness.page.data.shareWindowCursor,'material-window');
+ assert.equal(harness.page.data.customers.length,1);
+
+ harness.setToken('account-two');
+ harness.page.onShow();
+ assert.equal(harness.page.data.customers.length,0,'切账号时先清除旧账号列表');
+ await new Promise(resolve=>setTimeout(resolve,0));
+ assert.equal(visitorQueries[1].as_of,undefined);
+ assert.equal(harness.page.data.shareWindowCursor,'');
+ assert.equal(harness.page._windowAsOf,'2026-11-15T02:15:52Z');
+ assert.deepEqual(Array.from(harness.page.data.customers.map(item=>item.visitor_key)),['u:8'],'切账号后只能显示新请求结果');
+});
+
+test('分享Tab首次保留路由as_of，切账号后不得复用旧时间快照',async()=>{
+ const shareQueries=[];
+ const routeAsOf='2026-11-15T02:15:47Z';
+ const harness=runtime([],{listMyShares:async query=>{shareQueries.push(query);return{items:[],as_of:query.as_of||'2026-11-15T02:15:52Z'}}});
+ harness.page.onLoad({tab:'shares',as_of:routeAsOf});
+ harness.page.onShow();await new Promise(resolve=>setTimeout(resolve,0));
+ assert.equal(shareQueries[0].as_of,routeAsOf);
+
+ harness.setToken('account-two');
+ harness.page.onShow();await new Promise(resolve=>setTimeout(resolve,0));
+ assert.equal(shareQueries[1].as_of,undefined);
+ assert.equal(harness.page._drillAsOf,'');
 });
 
 test('合集和缺少固定版本的内容不绑定管理预览，内容区域回退客户卡入口',()=>{

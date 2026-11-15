@@ -101,6 +101,7 @@ Page({
     items: [], next_cursor: '', as_of: '', metric_version: '', sharesLoaded: false,
   },
   onLoad(options) {
+    this._tokenInitialized = false;
     const tab = ['customers', 'materials', 'shares'].includes(options && options.tab) ? options.tab : 'customers';
     const version = Number(options && options.content_version || 0);
     const validDate = value => value && !Number.isNaN(new Date(routeValue(value)).getTime()) ? routeValue(value) : '';
@@ -184,9 +185,11 @@ Page({
   onShow() {
     wx.hideShareMenu();
     const token = String(wx.getStorageSync('token') || '');
-    if (this._token !== token) this.clearShareWindow();
-    if (this._token !== token) this.setData({ customerVisits: [], customers: [], materials: [], items: [], customerVisitsCursor: '', customerVisitsAsOf: '', customers_cursor: '', customers_as_of: '', materials_cursor: '', materials_as_of: '', next_cursor: '', as_of: '', customerVisitError: '', customerError: '', materialError: '', error: '' });
+    const tokenChanged = this._tokenInitialized === true && this._token !== token;
+    if (tokenChanged) { this._drillAsOf = ''; this.clearShareWindow(); }
+    if (tokenChanged) this.setData({ customerVisits: [], customers: [], materials: [], items: [], customerVisitsCursor: '', customerVisitsAsOf: '', customers_cursor: '', customers_as_of: '', materials_cursor: '', materials_as_of: '', next_cursor: '', as_of: '', customerVisitError: '', customerError: '', materialError: '', error: '' });
     this._token = token;
+    this._tokenInitialized = true;
     ['customers', 'materials', 'shares'].forEach(which => this.bumpEpoch(which));
     this.setData({ loginRequired: !this._token });
     if (!this._token) return;
