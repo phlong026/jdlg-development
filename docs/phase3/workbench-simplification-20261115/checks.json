@@ -264,7 +264,7 @@
     "miniprogram_uploaded": true,
     "devtools_gate_passed": true,
     "pr_url": "https://github.com/phlong026/jdlg-development/pull/51",
-    "code_head": "eedfcb9c2ca79936e0de0f2a52689962161e1297",
+    "code_head": "31bd5234b691af81eed13db97c8d8f3eff3f91a7",
     "ci_status": "all 5 checks passed",
     "ci_runs": [
       43705627806,

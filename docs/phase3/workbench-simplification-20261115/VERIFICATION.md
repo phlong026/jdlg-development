@@ -21,7 +21,7 @@
 | 独立审查 | 原三个功能提交后端/前端APPROVE；追加13文件视觉收敛P0/P1=0；追加ODKU审查P0/P1/P2=0、正式结论COMMENT（无LSP，compiler/vet及真实SQL替代），不得记为APPROVE；as_of两分支最终审查APPROVE、P0/P1/P2=0 |
 | 回退验证 | 原三个功能提交反向补丁及隔离revert通过，恢复f33030a基线树；新增三提交在/tmp/jdlg-revert-native-20261115隔离revert成功，write-tree精确恢复febfe4c树053a70974cb422457200fa1566b7366a69d6ece0 |
 
-表内1701 JS、Go全量/vet和真实MySQL为本轮最新已报告结果；其余编译、扫描和工具结果保留原已执行记录。原生编译和编译树断言不等于18态视觉、键盘或真实手机验收。本机CGO启用时存在m1cpu初始化环境崩溃，因此本地Go检查使用CGO_ENABLED=0；race已额外在本地Linux/arm64官方Go1.26.2容器通过5包检查；GitHub Linux/amd64 CI仍因账号限制未执行，二者分别记录。
+表内1701 JS、Go全量/vet和真实MySQL为本轮最新已报告结果；其余编译、扫描和工具结果保留原已执行记录。原生编译和编译树断言不等于18态视觉、键盘或真实手机验收。本机CGO启用时存在m1cpu初始化环境崩溃，因此本地Go检查使用CGO_ENABLED=0；race已额外在本地Linux/arm64官方Go1.26.2容器通过5包检查；GitHub Linux/amd64后端测试与race也已在账号限制解除后通过，二者分别记录。
 
 ## 开发者工具与真实角色门禁
 
