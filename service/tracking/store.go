@@ -110,11 +110,10 @@ func (s *SQLStore) Transaction(ctx context.Context, tenant string, fn func(Repos
 	defer tx.Rollback()
 	// Per-tenant serialization makes fact acceptance + identity/deletion + projection atomic.
 	// Load/performance is an explicit release gate; replace with partitioned row locks after profiling.
-	if _, e = tx.ExecContext(ctx, "INSERT IGNORE INTO tracking_tenant_lock(tenant_id) VALUES (?)", tenant); e != nil {
-		return e
-	}
-	var locked string
-	if e = tx.QueryRowContext(ctx, "SELECT tenant_id FROM tracking_tenant_lock WHERE tenant_id=? FOR UPDATE", tenant).Scan(&locked); e != nil {
+	// Take the exclusive tenant lock in one statement. INSERT IGNORE followed by
+	// SELECT FOR UPDATE lets concurrent writers both hold shared duplicate-key
+	// locks and then deadlock while upgrading them.
+	if _, e = tx.ExecContext(ctx, "INSERT INTO tracking_tenant_lock(tenant_id) VALUES (?) ON DUPLICATE KEY UPDATE tenant_id=VALUES(tenant_id)", tenant); e != nil {
 		return e
 	}
 	repo := &sqlRepo{ctx: ctx, tx: tx, tenant: tenant}

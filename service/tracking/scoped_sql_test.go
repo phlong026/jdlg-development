@@ -42,7 +42,7 @@ func (c scopedSQLConn) BeginTx(context.Context, driver.TxOptions) (driver.Tx, er
 	return c.Begin()
 }
 func (c scopedSQLConn) ExecContext(_ context.Context, q string, _ []driver.NamedValue) (driver.Result, error) {
-	if !strings.HasPrefix(q, "INSERT IGNORE INTO tracking_tenant_lock") {
+	if !strings.HasPrefix(q, "INSERT INTO tracking_tenant_lock") || !strings.Contains(q, "ON DUPLICATE KEY UPDATE") {
 		c.s.t.Fatalf("unexpected write %s", q)
 	}
 	return driver.RowsAffected(1), nil
