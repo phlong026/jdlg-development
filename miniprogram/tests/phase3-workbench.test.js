@@ -564,7 +564,7 @@ test('video editor leads with a full-width preview and keeps secondary copy sett
   assert.match(wxml, /videoDisplayExpanded/);
   assert.match(wxml, /data-field="shareCopy" bindtap="copyVideoField"/);
   assert.match(wxml, /data-field="momentsCopy" bindtap="copyVideoField"/);
-  assert.ok(wxml.indexOf('class="video-media-card"') < wxml.indexOf('class="panel video-title-card"'));
+  assert.ok(wxml.indexOf('class="video-media-card"') < wxml.indexOf('class="editor-copy-group video-copy-group"'));
 });
 
 test('video preview builder receives the resolved private cover path on initial load and retry', async () => {

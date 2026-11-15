@@ -28,7 +28,7 @@ function contentRow(item, previous) {
     kind, kind_label: { note: '项目笔记', document: '文件', gallery: '图集笔记', video: '视频笔记', article: '文章' }[kind],
     source_label: source ? platformText(source) : '',
     status_label: { published: '已发布', revoked: '已撤回', draft: '草稿' }[item.status] || '草稿',
-    action_label: item.status === 'published' && Number(item.version) > 0 ? '查看并分享' : item.status === 'draft' ? '继续编辑' : '查看内容',
+    action_label: item.status === 'published' && Number(item.version) > 0 ? '分享' : item.status === 'draft' ? '继续编辑' : '查看内容',
     date_label: date && !Number.isNaN(date.getTime()) ? (date.getMonth() + 1) + '月' + date.getDate() + '日' : '',
     cover_path: previous && previous.cover_path && previous.version === item.version && previous.cover?.media_id === item.cover?.media_id ? previous.cover_path : '', cover_error: false,
     view_count: Number(item.page_views || 0),

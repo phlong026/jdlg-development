@@ -3228,6 +3228,32 @@ test('project note template keeps project creation minimal and editor actions to
   assert.doesNotMatch(editorView, /生成方案版本|历史版本|下一步/);
 });
 
+test('project detail keeps one safe-area new-note action and folds management tools by default', () => {
+  const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
+  const detailView = template.slice(template.indexOf("<block wx:elif=\"{{pageView === 'detail'"), template.indexOf("<block wx:elif=\"{{pageView === 'editor'"));
+  assert.equal((detailView.match(/bindtap="startNewNote"/g) || []).length, 1);
+  assert.match(detailView, /class="detail-dock"/);
+  assert.match(detailView, />新建笔记</);
+  assert.match(detailView, /bindtap="toggleProjectManagement"/);
+  assert.match(detailView, /wx:if="{{projectManagementOpen}}"/);
+  assert.match(detailView, /方案版本/);
+  assert.match(detailView, /分享资料/);
+  assert.match(detailView, /项目成员/);
+  assert.match(detailView, /项目记录/);
+
+  const page = pageHarness('projectnotes', {});
+  assert.equal(page.data.projectManagementOpen, false);
+  page.toggleProjectManagement(); assert.equal(page.data.projectManagementOpen, true);
+  page.toggleProjectManagement(); assert.equal(page.data.projectManagementOpen, false);
+});
+
+test('minimal project creation promises the existing automatic note step', () => {
+  const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
+  const createView = template.slice(template.indexOf("<block wx:elif=\"{{pageView === 'create'}}\">"), template.indexOf("<block wx:elif=\"{{pageView === 'detail'"));
+  assert.match(createView, />创建并写笔记</);
+  assert.doesNotMatch(createView, />创建项目</);
+});
+
 test('saving a project note completes the internal task and preserves edits typed during the request', async () => {
   let resolveSave;
   const page = pageHarness('projectnotes', {

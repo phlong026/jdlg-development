@@ -550,11 +550,11 @@ test('native media chooser ignores success after account or content ownership ch
   assert.equal(uploads, 1, '同账号返回时应使用回调当下 epoch，不被 onShow 误丢弃');
 });
 
-test('video owner stays visible at the top and validation scrolls directly to actionable fields', () => {
+test('video owner stays available in content settings and validation opens the actionable fields', () => {
   const wxml = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
-  assert.match(wxml, /video-workspace-head[^>]*>\s*<picker wx:if="\{\{context\.owner_choices\.length > 1\}\}"[^>]*bindchange="setOwner"/);
+  assert.doesNotMatch(wxml, /video-workspace-head/);
   assert.match(wxml, /wx:if="\{\{fieldErrors\.owner_id\}\}" class="field-error"/);
-  assert.match(wxml, /wx:if="\{\{presentation !== 'video' && context\.owner_choices\.length > 1\}\}"/);
+  assert.match(wxml, /wx:if="\{\{context\.owner_choices\.length > 1\}\}"[^>]*class="field"[\s\S]*bindchange="setOwner"/);
 
   const { page, scrolls } = loadEditor();
   page.setData({ presentation: 'video', context: { media_upload_configured: true, video_resumable_upload: true, owner_choices: [{ owner_id: 'one' }, { owner_id: 'two' }] }, owner_id: '' });
@@ -567,6 +567,17 @@ test('video owner stays visible at the top and validation scrolls directly to ac
   assert.equal(page.draftInput(), null);
   assert.equal(page.data.fieldErrors.video, '请添加主视频');
   assert.equal(scrolls.at(-1).scrollTop, 0);
+});
+
+test('empty gallery exposes AI assistance and both social editors use one compact copy group', () => {
+  const wxml = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
+  const style = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxss'), 'utf8');
+  assert.match(wxml, /presentation === 'gallery'[\s\S]*class="editor-copy-group gallery-copy-group"[\s\S]*bindtap="openAIWriting"[^>]*>AI辅助</);
+  assert.match(wxml, /class="editor-copy-group video-copy-group"/);
+  assert.match(wxml, /class="compact-intro"/);
+  assert.match(style, /\.compact-intro\s*\{[^}]*min-height:\s*72rpx[^}]*height:\s*72rpx/);
+  assert.doesNotMatch(wxml, /class="panel video-title-card"/);
+  assert.doesNotMatch(wxml, /class="copy-card video-copy-card"[^>]*>\s*<text class="field-label">视频介绍/);
 });
 
 test('video copy actions copy only the requested generated field and explain empty copy', () => {

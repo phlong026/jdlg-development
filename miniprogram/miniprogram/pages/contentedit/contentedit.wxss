@@ -635,14 +635,18 @@ button.settings-toggle { width: 100%; }
 
 .copy-card { padding: 24rpx; }
 .copy-card textarea { min-height: 240rpx; margin-top: 12rpx; padding: 8rpx 0; border: 0; background: transparent; line-height: 1.75; }
+.editor-copy-group { margin: 14rpx 0; padding: 18rpx 24rpx; border: 1rpx solid #e8e0d7; border-radius: 18rpx; background: #fff; }
+.editor-title-row, .editor-field-head { display: flex; align-items: center; gap: 16rpx; }
+.editor-title-row .title-input { flex: 1; min-width: 0; padding: 8rpx 0; border: 0; background: transparent; }
+.editor-copy-group .ai-action { flex: none; min-height: 56rpx; margin: 0; padding: 0 16rpx; border: 1rpx solid #d6b58e; border-radius: 999rpx; font-size: 23rpx; }
+.editor-copy-group > .title-input { margin-top: 8rpx; padding: 8rpx 0; border: 0; background: transparent; font-size: 29rpx; }
+.intro-field { margin-top: 14rpx; padding-top: 14rpx; border-top: 1rpx solid #f0ebe5; }
+textarea.compact-intro { box-sizing: border-box; width: 100%; min-height: 72rpx; height: 72rpx; margin-top: 4rpx; padding: 8rpx 0; border: 0; background: transparent; line-height: 1.55; }
 .video-caption { margin: 18rpx 0; background: #fff; }
 .video-cover-row { display: flex; align-items: center; justify-content: space-between; padding: 18rpx 22rpx; color: #6d6258; font-size: 24rpx; }
 .video-cover-row image { width: 104rpx; height: 78rpx; border-radius: 10rpx; }
-.video-workspace-head { display: flex; align-items: center; justify-content: space-between; margin: 12rpx 2rpx; color: #40382f; font-size: 24rpx; }
-.video-title-card { padding: 18rpx 24rpx; }
 .video-field-head { display: flex; align-items: center; justify-content: space-between; gap: 16rpx; }
 .video-field-head .ai-action { flex: none; min-height: 56rpx; margin: 0; padding: 0 16rpx; border: 1rpx solid #d6b58e; border-radius: 999rpx; font-size: 23rpx; }
-.video-title-card .title-input { margin-top: 8rpx; padding: 8rpx 0; border: 0; background: transparent; font-size: 29rpx; }
 .field-error { display: block; margin: 8rpx 4rpx 0; color: #a13f38; font-size: 22rpx; }
 .video-media-card { overflow: hidden; margin: 16rpx 0 12rpx; padding: 20rpx; border: 1rpx solid #e8e0d7; border-radius: 20rpx; background: #fff; }
 .video-media-summary { display: flex; flex-direction: column; align-items: stretch; gap: 20rpx; }

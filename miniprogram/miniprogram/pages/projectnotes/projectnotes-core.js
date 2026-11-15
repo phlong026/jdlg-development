@@ -8,7 +8,7 @@ const { startAIStream } = require('../../utils/ai-stream');
 const { ANTI_FABRICATION_CLAUSE, noteWritingPrompt } = require('../../utils/writing-policy');
 
 const blankProtected = () => ({
-  pageView: 'list', navigationTitle: '我的项目', projectSettingsOpen: false, projectLoadFailed: false,
+  pageView: 'list', navigationTitle: '我的项目', projectSettingsOpen: false, projectManagementOpen: false, projectLoadFailed: false,
   customerRef: '', customerName: '', customerPickerOpen: false, projectCustomers: [], customerKeyword: '', customerCursor: '', customerAsOf: '', customerShareCursor: '', customerWindowNext: '', customerLoading: false, customerError: '',
   historyType: 'versions', historyIndex: 0, historyItems: [], historyPage: 0, historyCursors: [''], historyNextCursor: '', historyLoaded: false, historyLoading: false,
   projectEdit: {}, projectStatusLabel: '', notes: [], noteIndex: 0, versionChoices: [], selectedFeedback: null,
@@ -307,6 +307,7 @@ Page({
   },
 
   openProjectSettings() { this.setData({ projectSettingsOpen: true }); },
+  toggleProjectManagement() { this.setData({ projectManagementOpen: !this.data.projectManagementOpen }); },
   openProjectCreation() {
     if (this.data.busy || this.data.loading || this.data.projectLoadFailed) return;
     if (!this.data.owners.length) { this.setData({ projectLoadFailed: true, error: '暂无可用的项目归属，请重新加载或联系管理员。' }); return; }
@@ -875,7 +876,7 @@ Page({
     this._targetVersionID = ''; this._selectedProjectID = project.project_id;
     this._loaded = true;
     this.setData({
-      pageView, navigationTitle: navigationTitles[pageView] || project.name || '项目详情', projectSettingsOpen: false,
+      pageView, navigationTitle: navigationTitles[pageView] || project.name || '项目详情', projectSettingsOpen: false, projectManagementOpen: false,
       selectedProject: project, projectEdit: projectForm(project), projectStatusLabel: statusLabels[project.status] || '初步方案', notes, noteIndex: Math.max(0, notes.findIndex(item => item.note_id === noteID)), versionChoices, members, activeMembers: available, confirmerChoices,
       confirmerIndex: foundIndex < 0 ? 0 : foundIndex + 1, confirmerAccount: foundIndex < 0 ? '' : available[foundIndex].actor_id,
       note, noteTitle: note && note.title || '', noteBody: note && note.body || '', bodyReadOnly,

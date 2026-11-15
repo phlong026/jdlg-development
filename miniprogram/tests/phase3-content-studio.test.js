@@ -244,8 +244,12 @@ test('studio puts image and video first, keeps import secondary, and moves artic
     '/pages/contentedit/contentedit?action=document',
   ]);
   const template = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/contentworkbench/contentworkbench.wxml'), 'utf8');
+  const style = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/contentworkbench/contentworkbench.wxss'), 'utf8');
   assert.match(template, /class="create-primary"[\s\S]*图文笔记[\s\S]*视频笔记/);
   assert.match(template, /class="create-row"[^>]*view=import/);
+  assert.match(template, /t-icon name="image"[^>]*color="#6f4b27"/);
+  assert.match(template, /t-icon name="video"[^>]*color="#6f4b27"/);
+  assert.match(style, /\.create-primary\s*>\s*button\.create-choice\s*\{[^}]*width:\s*100%[^}]*min-width:\s*0[^}]*box-sizing:\s*border-box/);
 });
 
 test('studio trusts presentation and never turns a mixed article into a video row', async () => {
@@ -253,11 +257,12 @@ test('studio trusts presentation and never turns a mixed article into a video ro
   const { page } = runtime({
     listContents: async query => { seen.push(query); return { items: [
       { content_id: 'mixed-article', title: '图文混排', type: 'article', presentation: 'article', media: [{ kind: 'video' }] },
-      { content_id: 'gallery-note', title: '图集', type: 'article', presentation: 'gallery', media: [] },
+      { content_id: 'gallery-note', title: '图集', type: 'article', presentation: 'gallery', status: 'published', version: 1, media: [] },
     ] }; },
   });
   page.onShow(); await tick(); await tick();
   assert.deepEqual(page.data.items.map(item => item.kind), ['article', 'gallery']);
+  assert.equal(page.data.items[1].action_label, '分享');
   assert.deepEqual(page.data.categories.map(item => item.key), ['all', 'gallery', 'video', 'article', 'note', 'document']);
   await page.selectCategory({ currentTarget: { dataset: { key: 'gallery' } } });
   assert.equal(seen.at(-1).type, 'gallery');
