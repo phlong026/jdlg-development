@@ -1,5 +1,5 @@
 {
-  "recorded_at": "2026-11-16T18:06:00.898906+08:00",
+  "recorded_at": "2026-11-16T18:31:20.190472+08:00",
   "pr": {
     "number": 54,
     "url": "https://github.com/phlong026/jdlg-development/pull/54",
@@ -35,12 +35,19 @@
     "upload_requested": true,
     "uploaded": true,
     "upload_status": "success",
-    "experience_version_status": "not independently verified; user version-manager check requested",
+    "experience_version_status": "confirmed_by_user",
     "submitted_for_review": false,
     "formally_released": false,
     "upload_detail": "execution_success",
     "package_total_bytes": 3481975,
-    "upload_completed_at_ms": 1794822190700
+    "upload_completed_at_ms": 1794822190700,
+    "experience_version": "8.0.11",
+    "experience_confirmation": {
+      "source": "user_version_management_check",
+      "statement": "已显示为 8.0.11 体验版",
+      "recorded_at": "2026-11-16T18:31:20.190472+08:00",
+      "independently_verified_by_agent": false
+    }
   },
   "server": {
     "backend_source_unchanged": true,
