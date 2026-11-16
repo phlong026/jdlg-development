@@ -1,0 +1,156 @@
+{
+  "kind": "video",
+  "nativeAppHide": true,
+  "nativeAppShow": true,
+  "originalRetained": true,
+  "lateContentIgnored": true,
+  "retryFailureRetainsRevision": true,
+  "retrySuccessAndRestoreRetainRevision": true,
+  "standardTokenAndProfileUnchanged": true,
+  "manualLifecycleCalls": false,
+  "inputMethod": "official element input event",
+  "sseFixture": true,
+  "realProvider": false,
+  "life": [
+    {
+      "scope": "page",
+      "name": "onHide",
+      "stage": "before",
+      "at": 1794848149017,
+      "route": "pages/contentedit/contentedit",
+      "mounted": true,
+      "active": true,
+      "visible": true
+    },
+    {
+      "scope": "page",
+      "name": "onHide",
+      "stage": "after",
+      "at": 1794848149025,
+      "route": "pages/contentedit/contentedit",
+      "mounted": true,
+      "active": false,
+      "visible": false
+    },
+    {
+      "scope": "app",
+      "name": "onHide",
+      "stage": "before",
+      "at": 1794848149025,
+      "route": "pages/contentedit/contentedit",
+      "mounted": true,
+      "active": false,
+      "visible": false
+    },
+    {
+      "scope": "page",
+      "name": "onProfileAccessAppHide",
+      "stage": "before",
+      "at": 1794848149025,
+      "route": "pages/index/index",
+      "mounted": true,
+      "active": false,
+      "visible": false
+    },
+    {
+      "scope": "page",
+      "name": "onProfileAccessAppHide",
+      "stage": "after",
+      "at": 1794848149025,
+      "route": "pages/index/index",
+      "mounted": true,
+      "active": false,
+      "visible": false
+    },
+    {
+      "scope": "page",
+      "name": "onProfileAccessAppHide",
+      "stage": "before",
+      "at": 1794848149025,
+      "route": "pages/contentedit/contentedit",
+      "mounted": true,
+      "active": false,
+      "visible": false
+    },
+    {
+      "scope": "page",
+      "name": "onProfileAccessAppHide",
+      "stage": "after",
+      "at": 1794848149028,
+      "route": "pages/contentedit/contentedit",
+      "mounted": false,
+      "active": false,
+      "visible": false
+    },
+    {
+      "scope": "app",
+      "name": "onHide",
+      "stage": "after",
+      "at": 1794848149030,
+      "route": "pages/contentedit/contentedit",
+      "mounted": false,
+      "active": false,
+      "visible": false
+    },
+    {
+      "scope": "app",
+      "name": "onShow",
+      "stage": "before",
+      "at": 1794848190642,
+      "route": "pages/contentedit/contentedit",
+      "mounted": false,
+      "active": false,
+      "visible": false
+    },
+    {
+      "scope": "app",
+      "name": "onShow",
+      "stage": "after",
+      "at": 1794848190644,
+      "route": "pages/contentedit/contentedit",
+      "mounted": false,
+      "active": false,
+      "visible": false
+    },
+    {
+      "scope": "page",
+      "name": "onShow",
+      "stage": "before",
+      "at": 1794848190644,
+      "route": "pages/contentedit/contentedit",
+      "mounted": false,
+      "active": false,
+      "visible": false
+    },
+    {
+      "scope": "page",
+      "name": "onShow",
+      "stage": "after",
+      "at": 1794848190647,
+      "route": "pages/contentedit/contentedit",
+      "mounted": false,
+      "active": false,
+      "visible": true
+    },
+    {
+      "scope": "page",
+      "name": "onProfileAccessGranted",
+      "stage": "before",
+      "at": 1794848190662,
+      "route": "pages/contentedit/contentedit",
+      "mounted": false,
+      "active": false,
+      "visible": true
+    },
+    {
+      "scope": "page",
+      "name": "onProfileAccessGranted",
+      "stage": "after",
+      "at": 1794848190668,
+      "route": "pages/contentedit/contentedit",
+      "mounted": true,
+      "active": true,
+      "visible": true
+    }
+  ]
+}

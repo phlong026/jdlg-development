@@ -1,0 +1,77 @@
+{
+  "completed": true,
+  "results": [
+    {
+      "kind": "gallery",
+      "originalPageFill": true,
+      "restore": true,
+      "sameResultCompletionFeedback": true,
+      "inputMethod": "official input event",
+      "sseFixture": true
+    },
+    {
+      "kind": "video",
+      "originalPageFill": true,
+      "restore": true,
+      "sameResultCompletionFeedback": true,
+      "inputMethod": "official input event",
+      "sseFixture": true
+    }
+  ],
+  "audit": {
+    "requests": [
+      {
+        "path": "/api/v1/miniprogram/tracking/config",
+        "method": "GET"
+      },
+      {
+        "path": "/api/v1/miniprogram/profile",
+        "method": "GET"
+      },
+      {
+        "path": "/api/v1/miniprogram/workbench/context",
+        "method": "GET"
+      },
+      {
+        "path": "/api/v1/miniprogram/workbench/media",
+        "method": "GET"
+      },
+      {
+        "path": "/api/v1/miniprogram/profile",
+        "method": "GET"
+      },
+      {
+        "path": "/api/v1/miniprogram/profile",
+        "method": "GET"
+      },
+      {
+        "path": "/api/v1/miniprogram/workbench/context",
+        "method": "GET"
+      },
+      {
+        "path": "/api/v1/miniprogram/workbench/media",
+        "method": "GET"
+      }
+    ],
+    "blockedExternal": 0,
+    "blockedWrites": 0,
+    "fixtureRequests": 4,
+    "profiles": [
+      {
+        "status": 200,
+        "code": 0,
+        "idValid": true
+      },
+      {
+        "status": 200,
+        "code": 0,
+        "idValid": true
+      },
+      {
+        "status": 200,
+        "code": 0,
+        "idValid": true
+      }
+    ]
+  }
+}

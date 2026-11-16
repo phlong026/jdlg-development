@@ -22,15 +22,33 @@
     "fixed_p2": "unchanged generated text retains completion feedback"
   },
   "native_page_cases_passed": 6,
-  "native_app_background_completed": false,
+  "native_app_background_completed": true,
   "source_files": {
     "miniprogram/miniprogram/pages/contentedit/contentedit.wxml": "c16941278a4845a0038ccc92ceb5311d5ac678f3e7783ada10fb1caf50c49889",
     "miniprogram/tests/phase3-content-editor-ui.test.js": "155eab51529da2cb4002b928d81b2d93426efa53e2a92f19889cad2974e8fcd4"
   },
   "native_app_background": {
     "gallery": "passed_in_devtools_with_sse_fixture",
-    "video": "pending",
+    "video": "passed_in_devtools_with_sse_fixture",
     "physical_phone": "not_run"
   },
-  "final_native_visual": "pending"
+  "final_native_visual": "passed_4_raw_screenshots",
+  "final_native_cases": [
+    {
+      "kind": "gallery",
+      "originalPageFill": true,
+      "restore": true,
+      "sameResultCompletionFeedback": true,
+      "inputMethod": "official input event",
+      "sseFixture": true
+    },
+    {
+      "kind": "video",
+      "originalPageFill": true,
+      "restore": true,
+      "sameResultCompletionFeedback": true,
+      "inputMethod": "official input event",
+      "sseFixture": true
+    }
+  ]
 }
