@@ -5,8 +5,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { spawnSync } = require('node:child_process');
 
 const root = path.join(__dirname, '../miniprogram/pages');
+const wxmlCompiler = process.env.WXML_COMPILER || '/Applications/wechatwebdevtools.app/Contents/Resources/app.asar.unpacked/node_modules/wcc-exec/wcc';
 
 function loadEditor(apiOverrides = {}) {
   let definition;
@@ -733,6 +735,49 @@ test('a late video source choice cannot start work for another account, draft or
 
     assert.equal(phoneSelections, 0);
     assert.equal(librarySelections, 0);
+  }
+});
+
+test('native article drafts expose a secondary preview without changing the save and publish footer', { skip: !fs.existsSync(wxmlCompiler) }, () => {
+  const file = './pages/contentedit/contentedit.wxml';
+  const compiled = spawnSync(wxmlCompiler, [file, './components/content-presentation/content-presentation.wxml'], {
+    cwd: path.dirname(root), encoding: 'utf8', timeout: 10000, maxBuffer: 4 * 1024 * 1024,
+  });
+  assert.equal(compiled.status, 0, compiled.stderr || compiled.stdout);
+  const context = { window: {}, console };
+  vm.createContext(context);
+  vm.runInContext(compiled.stdout, context);
+  const { page } = loadEditor();
+  const initial = { ...page.data, __profileAccessMounted: true, loading: false, presentation: 'article', status: 'draft' };
+  const render = overrides => context.$gwx(file)({ ...initial, ...overrides });
+  const allNodes = node => node && typeof node === 'object'
+    ? [node, ...(node.children || []).flatMap(allNodes)] : [];
+  const hasClass = (node, name) => String(node.attr && node.attr.class || '').split(/\s+/).includes(name);
+  const previewButtons = node => allNodes(node).filter(item => item.tag === 'wx-button' && item.attr.bindtap === 'saveAndPreview');
+
+  for (const id of ['', 'article-one']) {
+    const tree = render({ id });
+    const hero = allNodes(tree).find(node => hasClass(node, 'editor-hero'));
+    const buttons = previewButtons(hero);
+    assert.equal(buttons.length, 1, `${id || 'new article'} needs an actual rendered preview action`);
+    assert.equal(hasClass(buttons[0], 'primary'), false, '预览保持次要操作');
+    const busyHero = allNodes(render({ id, busy: true })).find(node => hasClass(node, 'editor-hero'));
+    assert.equal(previewButtons(busyHero)[0].attr.disabled, true);
+  }
+  for (const presentation of ['article', 'gallery', 'video']) {
+    for (const id of ['', 'saved-content']) {
+      const footer = allNodes(render({ presentation, id })).find(node => hasClass(node, 'editor-actions'));
+      assert.deepEqual(Array.from(allNodes(footer).filter(node => node.tag === 'wx-button'), node => node.attr.bindtap), ['saveDraft', 'publish']);
+    }
+  }
+  for (const blocked of [
+    { deleted: true }, { documentReadOnly: true }, { legacyReadOnly: true },
+    { __profileAccessMounted: false }, { loading: true }, { loginRequired: true },
+    { denied: true }, { disabled: true }, { preview: { preview_token: 'current-preview' } },
+  ]) {
+    for (const id of ['', 'article-one']) {
+      assert.equal(previewButtons(render({ id, ...blocked })).length, 0, `blocked article exposed preview: ${JSON.stringify(blocked)}`);
+    }
   }
 });
 
