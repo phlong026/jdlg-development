@@ -1,0 +1,106 @@
+{
+  "kind": "gallery",
+  "appHideObserved": true,
+  "appShowObserved": true,
+  "originalRetained": true,
+  "manualRetainedAfterReturnFailureAndRestore": true,
+  "lateResultIgnored": true,
+  "standardStorageUnchanged": true,
+  "nativeMechanism": "open-type openSetting and native system return",
+  "sseFixture": true,
+  "lifecycle": [
+    {
+      "scope": "page",
+      "name": "onHide",
+      "stage": "before",
+      "at": 1794841106941
+    },
+    {
+      "scope": "page",
+      "name": "onHide",
+      "stage": "after",
+      "at": 1794841106943
+    },
+    {
+      "scope": "app",
+      "name": "onHide",
+      "stage": "before",
+      "at": 1794841106943
+    },
+    {
+      "scope": "page",
+      "name": "onProfileAccessAppHide",
+      "stage": "before",
+      "at": 1794841106943
+    },
+    {
+      "scope": "page",
+      "name": "onProfileAccessAppHide",
+      "stage": "after",
+      "at": 1794841106943
+    },
+    {
+      "scope": "page",
+      "name": "onProfileAccessAppHide",
+      "stage": "before",
+      "at": 1794841106943
+    },
+    {
+      "scope": "page",
+      "name": "onProfileAccessAppHide",
+      "stage": "after",
+      "at": 1794841106943
+    },
+    {
+      "scope": "app",
+      "name": "onHide",
+      "stage": "after",
+      "at": 1794841106944
+    },
+    {
+      "scope": "app",
+      "name": "onShow",
+      "stage": "before",
+      "at": 1794841206411
+    },
+    {
+      "scope": "app",
+      "name": "onShow",
+      "stage": "after",
+      "at": 1794841206412
+    },
+    {
+      "scope": "page",
+      "name": "onShow",
+      "stage": "before",
+      "at": 1794841206412
+    },
+    {
+      "scope": "page",
+      "name": "onShow",
+      "stage": "after",
+      "at": 1794841206415
+    },
+    {
+      "scope": "page",
+      "name": "onProfileAccessGranted",
+      "stage": "before",
+      "at": 1794841206427
+    },
+    {
+      "scope": "page",
+      "name": "onProfileAccessGranted",
+      "stage": "after",
+      "at": 1794841206432
+    }
+  ],
+  "input_method": "official SDK textarea.input",
+  "limitations": [
+    "single gallery round",
+    "controlled SSE without a real provider",
+    "intermediate retry and success states not asserted in this round",
+    "not physical phone UAT"
+  ],
+  "lifecycleHandlersInvokedManually": false,
+  "settingsChanged": false
+}
