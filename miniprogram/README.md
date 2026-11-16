@@ -25,6 +25,10 @@ npm run test:tracking
 
 两个 `project.config.json` 同步排除云图，保留原生 TabBar 配置要求的 5 张本地图标（123,513 字节）；这些图标也已备份到云端。不要忽略整个 `assets` 目录，也不要恢复强制包含整个 `assets/share` 的配置。
 
+## TDesign 图标组件
+
+页面的 `t-icon` 使用仓库内 `miniprogram/components/tdesign-miniprogram/icon/icon`。此副本使用原生 `async`/`await` 和组件注册调用，避免 TDesign 1.15.3 产物中未随包提供的 `tslib` 导致页面加载失败。升级或重新复制 TDesign 时应保留此修复，并运行 `node --test tests/tdesign-icon-runtime.test.js`，确认本地组件不依赖未打包的 npm 模块。单独执行“构建 npm”不会修复这个源码副本。原因、验证与回滚见[修复记录](../docs/fixes/tdesign-icon-20261116/CHANGELOG.md)。
+
 ## 首页与预算分享封面
 
 首页标题为“甲第灵光 · AI建房助手\n建别墅从这里开始”，点击后进入 `/pages/index/index?from=share`。
