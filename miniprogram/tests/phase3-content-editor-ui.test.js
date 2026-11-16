@@ -632,6 +632,19 @@ test('empty gallery exposes AI assistance and both social editors use one compac
   assert.doesNotMatch(wxml, /class="copy-card video-copy-card"[^>]*>\s*<text class="field-label">视频介绍/);
 });
 
+test('social editors omit repeated helper and AI success copy while keeping recovery and business guidance', () => {
+  const wxml = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
+  assert.doesNotMatch(wxml, />从手机或素材库选择</);
+  assert.doesNotMatch(wxml, /placeholder="需要时再补充"/);
+  assert.doesNotMatch(wxml, /\? '已设封面' : '设封面'/);
+  assert.match(wxml, /aiInlineNotice === '已生成' && aiInlineCanRestore/);
+  assert.match(wxml, />恢复原介绍</);
+  assert.match(wxml, />恢复原正文</);
+  assert.match(wxml, />此内容需在管理后台编辑</);
+  assert.match(wxml, />版权来源</);
+  assert.match(wxml, /class="inline-ai-error">\{\{aiInlineError\}\}/);
+});
+
 test('video copy actions copy only the requested generated field and explain empty copy', () => {
   const { page, clipboards, toasts } = loadEditor();
   page.setData({ shareCopy: '转发这条视频', momentsCopy: '' });
@@ -804,6 +817,20 @@ test('native article drafts expose a secondary preview without changing the save
     ? [node, ...(node.children || []).flatMap(allNodes)] : [];
   const hasClass = (node, name) => String(node.attr && node.attr.class || '').split(/\s+/).includes(name);
   const previewButtons = node => allNodes(node).filter(item => item.tag === 'wx-button' && item.attr.bindtap === 'saveAndPreview');
+  const noticeNodes = node => allNodes(node).filter(item => hasClass(item, 'notice'));
+  const completedSocialAI = (presentation, id, result) => {
+    const editor = loadEditor();
+    editor.page._loaded = true;
+    editor.page.setData({
+      id, revision: id ? 2 : 0, loading: false, context: { owners: ['owner-a'] }, owner_id: 'owner-a', presentation,
+      title: '庭院记录', postText: '原介绍', blocks: [{ kind: 'paragraph', text: '原介绍' }],
+    });
+    editor.page.openAIWriting();
+    editor.aiStream().onDone(result);
+    assert.equal(editor.page.data.aiInlineNotice, '已生成');
+    assert.equal(editor.page.data.aiInlineCanRestore, result !== '原介绍');
+    return editor.page.data;
+  };
 
   for (const id of ['', 'article-one']) {
     const tree = render({ id });
@@ -820,6 +847,24 @@ test('native article drafts expose a secondary preview without changing the save
       assert.deepEqual(Array.from(allNodes(footer).filter(node => node.tag === 'wx-button'), node => node.attr.bindtap), ['saveDraft', 'publish']);
     }
   }
+  for (const presentation of ['gallery', 'video']) {
+    assert.equal(noticeNodes(render({ presentation, notice: '有未保存修改' })).length, 0, `${presentation} dirty state must stay compact`);
+    assert.equal(noticeNodes(render({ presentation, notice: '分享链接已复制' })).length, 1, `${presentation} operation result must remain visible`);
+    for (const id of ['', `${presentation}-one`]) {
+      const unchanged = allNodes(render(completedSocialAI(presentation, id, '原介绍')))
+        .find(node => hasClass(node, 'inline-ai-feedback'));
+      assert.ok(unchanged, `${presentation}/${id || 'new'} unchanged AI result needs completion feedback`);
+      assert.equal(allNodes(unchanged).filter(node => node.tag === 'wx-text').length, 1);
+      assert.equal(allNodes(unchanged).filter(node => node.tag === 'wx-button' && node.attr.bindtap === 'restoreInlineAIOriginal').length, 0);
+
+      const changed = allNodes(render(completedSocialAI(presentation, id, '新介绍')))
+        .find(node => hasClass(node, 'inline-ai-feedback'));
+      assert.ok(changed, `${presentation}/${id || 'new'} changed AI result needs restore`);
+      assert.equal(allNodes(changed).filter(node => node.tag === 'wx-text').length, 0, '有恢复按钮时不重复显示完成文案');
+      assert.equal(allNodes(changed).filter(node => node.tag === 'wx-button' && node.attr.bindtap === 'restoreInlineAIOriginal').length, 1);
+    }
+  }
+  assert.equal(noticeNodes(render({ presentation: 'article', notice: '有未保存修改' })).length, 1, 'article dirty notice stays unchanged');
   for (const blocked of [
     { deleted: true }, { documentReadOnly: true }, { legacyReadOnly: true },
     { __profileAccessMounted: false }, { loading: true }, { loginRequired: true },

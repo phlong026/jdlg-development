@@ -1,0 +1,30 @@
+{
+  "baseline": "1f22a18ce9f22b8457b6c01c0ad5e71fdb4a1332",
+  "mini_tests": {
+    "passed": 1808,
+    "failed": 0,
+    "skipped": 0,
+    "native_wxml": true
+  },
+  "focused_ui_tests": 60,
+  "deterministic_build_checks": true,
+  "auth_signer": true,
+  "tracking_routes": {
+    "app": 78,
+    "public": 23,
+    "excluded": 55
+  },
+  "dependency_vulnerabilities": 0,
+  "review": {
+    "p0": 0,
+    "p1": 0,
+    "p2": 0,
+    "fixed_p2": "unchanged generated text retains completion feedback"
+  },
+  "native_page_cases_passed": 6,
+  "native_app_background_completed": false,
+  "source_files": {
+    "miniprogram/miniprogram/pages/contentedit/contentedit.wxml": "c16941278a4845a0038ccc92ceb5311d5ac678f3e7783ada10fb1caf50c49889",
+    "miniprogram/tests/phase3-content-editor-ui.test.js": "155eab51529da2cb4002b928d81b2d93426efa53e2a92f19889cad2974e8fcd4"
+  }
+}
