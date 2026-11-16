@@ -257,6 +257,20 @@ Page({
     const selectedImageBlock = this.data.imageBlocks.find(block => block.blockIndex === blockIndex) || null;
     if (selectedImageBlock) this.setData({ selectedImageBlock });
   },
+  sortSelectedGalleryImage() {
+    const selected = this.data.selectedImageBlock;
+    if (this.data.busy || !selected) return;
+    const launch = { token: this._token, id: this.data.id, signature: this.draftSignature(), mediaID: selected.media_id };
+    wx.showActionSheet({
+      itemList: ['前移', '后移'],
+      success: result => {
+        const current = this.data.selectedImageBlock;
+        if (!this.sameSaveAccount(launch.token) || launch.id !== this.data.id || launch.signature !== this.draftSignature()
+          || this.data.busy || !current || current.media_id !== launch.mediaID || (result.tapIndex !== 0 && result.tapIndex !== 1)) return;
+        this.moveBlock({ currentTarget: { dataset: { index: current.blockIndex, step: result.tapIndex === 0 ? -1 : 1 } } });
+      },
+    });
+  },
   openCoverPicker() {
     if (this.data.busy || this.data.documentReadOnly || this.data.legacyReadOnly) return;
     const launch = { token: this._token, id: this.data.id, signature: this.draftSignature(), handled: false, cover: true };
@@ -273,6 +287,19 @@ Page({
     wx.navigateTo({
       url: '/pages/nativereferences/nativereferences?picker=media&kind=' + kinds + (this.data.owner_id ? '&owner=' + encodeURIComponent(this.data.owner_id) : ''),
       events: { selectMaterial: payload => this.receivePickedMedia(payload, launch) },
+    });
+  },
+  chooseVideoSource() {
+    if (this.data.busy || this.data.presentation !== 'video' || this.data.videoBlocks.length) return;
+    const launch = { token: this._token, id: this.data.id, signature: this.draftSignature() };
+    wx.showActionSheet({
+      itemList: ['从手机选择', '从素材库选择'],
+      success: result => {
+        if (!this.sameSaveAccount(launch.token) || launch.id !== this.data.id || launch.signature !== this.draftSignature()
+          || this.data.busy || this.data.presentation !== 'video' || this.data.videoBlocks.length) return;
+        if (result.tapIndex === 0) this.chooseMedia();
+        if (result.tapIndex === 1) this.openMediaPicker();
+      },
     });
   },
   async receivePickedMedia(payload, launch) {
@@ -522,8 +549,10 @@ Page({
     if (!value) { wx.showToast({ title: '还没有可复制的文案', icon: 'none' }); return; }
     wx.setClipboardData({ data: value, success: () => this.setData({ notice: '文案已复制' }), fail: () => wx.showToast({ title: '复制失败，请重试', icon: 'none' }) });
   },
-  toggleVideoShare() { this.setData({ videoShareExpanded: !this.data.videoShareExpanded }); },
-  toggleVideoDisplay() { this.setData({ videoDisplayExpanded: !this.data.videoDisplayExpanded }); },
+  toggleVideoShare() { this.setData({ videoShareExpanded: !this.data.videoShareExpanded, videoDisplayExpanded: false }); },
+  toggleVideoDisplay() { this.setData({ videoDisplayExpanded: !this.data.videoDisplayExpanded, videoShareExpanded: false }); },
+  closeVideoOptions() { this.setData({ videoShareExpanded: false, videoDisplayExpanded: false }); },
+  openVideoSettings() { this.setData({ videoShareExpanded: false, videoDisplayExpanded: false, settingsExpanded: true }); },
   setTags(event) { this.setData({ tagsText: String(event.detail.value || ''), preview: null }); },
   togglePinned() { this.setData({ pinned: !this.data.pinned, preview: null }); },
   setRights(event) { this.setData({ rights: event.detail.value, preview: null }); },

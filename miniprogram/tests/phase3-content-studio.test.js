@@ -247,9 +247,28 @@ test('studio puts image and video first, keeps import secondary, and moves artic
   const style = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/contentworkbench/contentworkbench.wxss'), 'utf8');
   assert.match(template, /class="create-primary"[\s\S]*图文笔记[\s\S]*视频笔记/);
   assert.match(template, /class="create-row"[^>]*view=import/);
-  assert.match(template, /t-icon name="image"[^>]*color="#6f4b27"/);
-  assert.match(template, /t-icon name="video"[^>]*color="#6f4b27"/);
+  assert.match(template, /class="create-handle"/);
+  assert.match(template, /mini-icon name="image"/);
+  assert.match(template, /mini-icon name="video"/);
+  assert.match(template, /mini-icon name="link"[\s\S]*导入链接/);
+  assert.match(template, /更多类型[\s\S]*文章、文件/);
   assert.match(style, /\.create-primary\s*>\s*button\.create-choice\s*\{[^}]*width:\s*100%[^}]*min-width:\s*0[^}]*box-sizing:\s*border-box/);
+});
+
+test('studio fidelity keeps four primary filters and moves article and project notes to the secondary filter', async () => {
+  const harness = runtime();
+  const template = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/contentworkbench/contentworkbench.wxml'), 'utf8');
+  const style = fs.readFileSync(path.join(__dirname, '../miniprogram/pages/contentworkbench/contentworkbench.wxss'), 'utf8');
+  assert.match(template, /variant="workbench"/);
+  assert.match(template, />我的内容</);
+  assert.match(template, /class="category-tabs primary-categories"[\s\S]*data-key="all"[\s\S]*data-key="gallery"[\s\S]*data-key="video"[\s\S]*data-key="document"/);
+  assert.match(template, /wx:if="\{\{moreFiltersOpen\}\}" class="secondary-categories"[\s\S]*data-key="article"[\s\S]*data-key="note"/);
+  assert.doesNotMatch(template, /class="content-labels"|class="content-metrics"/);
+  assert.match(style, /\.content-cover\s*\{[^}]*width:\s*220rpx[^}]*height:\s*148rpx/);
+  harness.page.toggleMoreFilters();
+  assert.equal(harness.page.data.moreFiltersOpen, true);
+  await harness.page.selectCategory({ currentTarget: { dataset: { key: 'note' } } });
+  assert.equal(harness.page.data.moreFiltersOpen, false);
 });
 
 test('studio trusts presentation and never turns a mixed article into a video row', async () => {

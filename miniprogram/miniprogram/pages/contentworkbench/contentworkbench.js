@@ -44,7 +44,7 @@ Page({
     loading: true, loadingMore: false, error: '', denied: false, disabled: false, loginRequired: false, hasShareVisitAccess: false,
     context: null, items: [], next_cursor: '', snapshot: null,
     importServiceEnabled: false, importEnabled: false, importCapabilityLoading: true, importCapabilityReason: '', importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0,
-    importRights: '', importBusy: false, importError: '', imports: [], importPolling: false, createMenuOpen: false, createMoreOpen: false,
+    importRights: '', importBusy: false, importError: '', imports: [], importPolling: false, createMenuOpen: false, createMoreOpen: false, moreFiltersOpen: false,
   },
   onLoad(options) { this.setData({ view: options && options.view === 'import' ? 'import' : 'studio' }); },
   onShow() {
@@ -80,11 +80,11 @@ Page({
       keyword: '', searchTerm: '', ownerFilter: '', category: 'all',
       loginRequired: false, loading: false, loadingMore: false, importServiceEnabled: false, importEnabled: false, importCapabilityLoading: true, importCapabilityReason: '',
       importPlatforms: [], importURL: '', importOwner: '', importOwnerIndex: 0, importRights: '', importBusy: false,
-      importError: '', imports: [], importPolling: false, createMenuOpen: false, createMoreOpen: false,
+      importError: '', imports: [], importPolling: false, createMenuOpen: false, createMoreOpen: false, moreFiltersOpen: false,
       ...state,
     });
   },
-  onHide() { this._shareAccessRequestId = (this._shareAccessRequestId || 0) + 1; this._visible = false; this._epoch = (this._epoch || 0) + 1; this.setData({ createMenuOpen: false, createMoreOpen: false }); this.stopImportPoll(); },
+  onHide() { this._shareAccessRequestId = (this._shareAccessRequestId || 0) + 1; this._visible = false; this._epoch = (this._epoch || 0) + 1; this.setData({ createMenuOpen: false, createMoreOpen: false, moreFiltersOpen: false }); this.stopImportPoll(); },
   onUnload() { this._shareAccessRequestId = (this._shareAccessRequestId || 0) + 1; this._visible = false; this._epoch = (this._epoch || 0) + 1; this._importActionActive = null; this.setData({ hasShareVisitAccess: false, importBusy: false }); this.stopImportPoll(); },
   current(epoch) { return this._visible !== false && epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
   onPullDownRefresh() {
@@ -168,11 +168,12 @@ Page({
     const category = this.data.categories.find(item => item.key === event.currentTarget.dataset.key);
     if (!category) return;
     if (category.unavailable) { wx.showToast({ title: category.label + '资料尚未开通', icon: 'none' }); return; }
-    if (category.key === this.data.category) return;
+    if (category.key === this.data.category) { this.setData({ moreFiltersOpen: false }); return; }
     this.stopImportPoll();
-    this.setData({ category: category.key });
+    this.setData({ category: category.key, moreFiltersOpen: false });
     return this.load(true);
   },
+  toggleMoreFilters() { this.setData({ moreFiltersOpen: !this.data.moreFiltersOpen }); },
   // B13 公司/个人空间 Tab：复用服务端 ?owner= 过滤（带权限交集校验），切换即整表重载。
   selectOwnerTab(event) {
     const ownerID = String(event.currentTarget.dataset.owner || '');
