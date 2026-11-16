@@ -1,0 +1,186 @@
+{
+  "recorded_at": "2026-11-16T13:37:20.006475+08:00",
+  "timezone": "Asia/Shanghai",
+  "pr_url": "https://github.com/phlong026/jdlg-development/pull/53",
+  "pr_head": "44555fab6b6e2e4858a7e49cd0fba5175c4dcc23",
+  "merge_commit": "8467e1cf5b6cda1cf4fd5a560f70f7f9a8f0c8f1",
+  "ci": {
+    "head_sha": "44555fab6b6e2e4858a7e49cd0fba5175c4dcc23",
+    "run_ids": [
+      43806130822,
+      43806130829
+    ],
+    "jobs": [
+      {
+        "id": 133097213831,
+        "name": "Tracking backend tests and race checks",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 133097214166,
+        "name": "Tracking mini-program and route policy checks",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 133097213798,
+        "name": "Template update contract",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 133097213999,
+        "name": "CRM identity routing regressions",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": 133097214030,
+        "name": "Admin checks and build",
+        "status": "completed",
+        "conclusion": "success"
+      }
+    ],
+    "all_passed": true
+  },
+  "backend": {
+    "deployed": true,
+    "pid": 1628402,
+    "sha256": "b4b983a73993aa77300a9aed04161c24bbf08e116bed23891e0270d68941f66d",
+    "previous_pid": 460749,
+    "previous_sha256": "135764731e11ce90b91f160e92a7cad18d160d32182e6b92ea03a168e3f970b3",
+    "backup": "/root/jdlg-six-backup-20261116-8467e1c",
+    "runtime_environment_preserved": true,
+    "config_preserved": true,
+    "database_migrations_executed": false,
+    "feature_flags_changed": false,
+    "auth_binary_hmac_match": true,
+    "auth_binary_sm4_match": true
+  },
+  "admin": {
+    "deployed": true,
+    "source_commit": "8467e1cf5b6cda1cf4fd5a560f70f7f9a8f0c8f1",
+    "url": "https://api.jiadilingguang.com/admin/",
+    "files": 94,
+    "backup": "/root/jdlg-six-web-backup-20261116-8467e1c/admin/original",
+    "public_index_matches_build": true,
+    "referenced_assets_http_200_and_hash_match": 5,
+    "previous_hashed_assets_retained": true
+  },
+  "package": {
+    "source_commit": "8467e1cf5b6cda1cf4fd5a560f70f7f9a8f0c8f1",
+    "verified_files": 102,
+    "archive_sha256": "9d4a0af9abb87a5f8936b906c8fdccdf19d0112b733c4a7f323b19cf10cfcdcf",
+    "server_path": "/root/jdlg-six-release-20261116-8467e1c/package",
+    "appledouble_members": 0
+  },
+  "public_smoke": {
+    "tls_certificate_verified": true,
+    "statuses": {
+      "/api/v1/miniprogram/tracking/config": 200,
+      "/api/v1/miniprogram/workbench/context": 401,
+      "/api/v1/miniprogram/workbench/imports/capabilities": 401,
+      "/api/v1/miniprogram/tracking/contents/releaseprobe/versions/not-a-version": 401,
+      "/admin/": 200
+    },
+    "admin_assets": [
+      {
+        "path": "/admin/assets/index-BbUfs4VM.js",
+        "status": 200,
+        "matches_build": true
+      },
+      {
+        "path": "/admin/assets/vendor-CWG1rEj-.js",
+        "status": 200,
+        "matches_build": true
+      },
+      {
+        "path": "/admin/assets/react-vendor-5my-l6c8.js",
+        "status": 200,
+        "matches_build": true
+      },
+      {
+        "path": "/admin/assets/router-vendor-BmyojryK.js",
+        "status": 200,
+        "matches_build": true
+      },
+      {
+        "path": "/admin/assets/index-CJk3fwvU.css",
+        "status": 200,
+        "matches_build": true
+      }
+    ]
+  },
+  "production_authenticated_smoke": {
+    "production": true,
+    "source_commit": "8467e1cf5b6cda1cf4fd5a560f70f7f9a8f0c8f1",
+    "passed": true,
+    "authenticated_workbench": true,
+    "workbench_items": 4,
+    "project_list": true,
+    "projects_loaded": 4,
+    "preview_metadata_checked": 1,
+    "preview_metadata_no_urls": true,
+    "my_visits": true,
+    "visits_loaded": 0,
+    "materials": true,
+    "materials_loaded": 0,
+    "managed_exact_version_preview": true,
+    "author_native_dom": true,
+    "managed_preview_tracking_requests": 0,
+    "media_errors": 0,
+    "read_only_runtime_guard": true,
+    "read_requests": 17,
+    "blocked_write_attempts": 0,
+    "no_business_content_created_published_deleted": true,
+    "no_share_or_notification_action": true,
+    "no_login_sms_or_provider_call": true,
+    "standard_session_replaced": false,
+    "authorized_existing_snapshot_seeded": true,
+    "startup_analytics_before_guard": "not_audited",
+    "limitations": [
+      "Initial default-page analytics before the automation runtime guard is installed are not audited; no explicit business write action was performed",
+      "GET/HEAD application responses are real production HTTP; non-read SDK requests are blocked in runtime only",
+      "Existing production data only; no fixtures created",
+      "DevTools native runtime is not physical-device acceptance"
+    ],
+    "standard_storage_restored": true,
+    "tracked_tree_matches_merged_commit": true,
+    "post_auto_close_tracked_tree_matches": true,
+    "original_project_config_preserved": true
+  },
+  "miniprogram": {
+    "appid": "wx94fdc48861913ede",
+    "version": "8.0.10",
+    "source_commit": "8467e1cf5b6cda1cf4fd5a560f70f7f9a8f0c8f1",
+    "uploaded": true,
+    "official_cli_exit_code": 0,
+    "official_cli_marker": "✔ upload",
+    "completed_at": "2026-11-16T13:33:21.545604+08:00",
+    "log_sha256": "1db840d4c71140c1c8eaf500a808ed39c790921eac416ed56a6991405f261fa2",
+    "experience_version_status": "not independently verified",
+    "submitted_for_review": false,
+    "formally_released_by_this_task": false
+  },
+  "remaining_acceptance": [
+    "体验版指向未独立核验；本任务未提审或正式发布",
+    "手机系统键盘、相册权限、微信原生收件人选择和完整真机客户旅程",
+    "既有188条TypeScript诊断未清零，逐条归一对照本轮新增0条"
+  ],
+  "rollback": {
+    "source_revert": "隔离逆序回退八个业务提交和一个验收文档提交，精确恢复原主线树",
+    "creator_metadata": "旧程序重新写入内容行可能丢失creator_id，回退前须私有备份当前content/version作者元数据，不得用旧快照覆盖新业务内容"
+  },
+  "workspace": {
+    "integration_worktree": "/Users/honor.pei/Documents/订单项目/甲地灵光二期/开发版916/.worktrees/release-six-groups-20261116",
+    "clean_merged_release_worktree": "/tmp/jdlg-six-merged-8467e1c-20261116",
+    "six_groups_integrated_and_merged": true,
+    "unrelated_deployment_20261112_document_excluded": true,
+    "original_worktree_not_reset_or_overwritten": true,
+    "concurrent_original_worktree_changes_detected": true,
+    "scope_snapshot_head": "3bcf59341492613c0b6e398c9f345c2c10fdc655",
+    "concurrent_original_head": "c4df672e25f42e9263776d8570193a70485a3bef",
+    "concurrent_changes_excluded_from_this_release": "原工作区在本轮进行期间新增图标运行库修复及其他编辑；未覆盖、回退或混入约定六组的发布快照。"
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "source_commit": "8467e1cf5b6cda1cf4fd5a560f70f7f9a8f0c8f1",
+  "tls_certificate_verified": true,
+  "server": {
+    "pid": 1628402,
+    "binary_sha256": "b4b983a73993aa77300a9aed04161c24bbf08e116bed23891e0270d68941f66d",
+    "admin_manifest_files_verified": 94,
+    "backend_backup": "/root/jdlg-six-backup-20261116-8467e1c",
+    "admin_backup": "/root/jdlg-six-web-backup-20261116-8467e1c/admin/original",
+    "backup_private_permissions_verified": true,
+    "release_source_commit": "8467e1cf5b6cda1cf4fd5a560f70f7f9a8f0c8f1"
+  },
+  "public_statuses": {
+    "/api/v1/miniprogram/tracking/config": 200,
+    "/api/v1/miniprogram/workbench/context": 401,
+    "/api/v1/miniprogram/workbench/imports/capabilities": 401,
+    "/api/v1/miniprogram/tracking/contents/releaseprobe/versions/not-a-version": 401,
+    "/admin/": 200
+  },
+  "public_admin_index_matches_build": true,
+  "referenced_assets": [
+    {
+      "path": "/admin/assets/index-BbUfs4VM.js",
+      "status": 200,
+      "matches_build": true
+    },
+    {
+      "path": "/admin/assets/vendor-CWG1rEj-.js",
+      "status": 200,
+      "matches_build": true
+    },
+    {
+      "path": "/admin/assets/react-vendor-5my-l6c8.js",
+      "status": 200,
+      "matches_build": true
+    },
+    {
+      "path": "/admin/assets/router-vendor-BmyojryK.js",
+      "status": 200,
+      "matches_build": true
+    },
+    {
+      "path": "/admin/assets/index-CJk3fwvU.css",
+      "status": 200,
+      "matches_build": true
+    }
+  ],
+  "database_migrations_executed": false,
+  "feature_flags_changed": false
+}
