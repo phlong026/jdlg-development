@@ -67,3 +67,5 @@ npm run test:tracking
 ## AI 先浏览后登录
 
 AI 表单允许匿名浏览，实际生成、优化和服务端上传在用户操作时要求账号登录；AI 登录不强制头像昵称。八个表单、四个个人结果/历史页面和受保护分享的访问边界见 [AI 访问契约](../docs/api/ai-preview-access.md)。配置调整需要同步前后端，原生验证与发布状态见 [本次记录](../docs/phase3/ai-preview-login-20261111/CHANGELOG.md)。
+
+内容编辑页「AI辅助」原页生成、回填与恢复行为，以及 8.0.11 候选验证记录，见 [本轮说明](../docs/phase3/inline-ai-fill-20261116/README.md)。复用既有流式接口与计费，无新增配置。

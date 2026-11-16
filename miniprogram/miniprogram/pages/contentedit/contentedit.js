@@ -1,6 +1,8 @@
 'use strict';
 const api = require('../../utils/phase3-api');
 const { preserveLayoutBody, renderArticleDocument } = require('../../utils/article-document');
+const { startAIStream } = require('../../utils/ai-stream');
+const { noteWritingPrompt, socialIntroPrompt } = require('../../utils/writing-policy');
 let presentationTools;
 let videoUploadTools;
 function contentPresentation() { if (!presentationTools) presentationTools = require('../../utils/content-presentation'); return presentationTools; }
@@ -113,6 +115,39 @@ function sessionAccountKey(value) {
   for (let index = 0; index < text.length; index += 1) hash = Math.imul(hash ^ text.charCodeAt(index), 16777619);
   return `account-${(hash >>> 0).toString(16)}`;
 }
+function editorActor() {
+  try {
+    const profile = wx.getStorageSync('userInfo') || {};
+    const id = profile && typeof profile === 'object' ? String(profile.id || '') : '';
+    if (id) return id;
+  } catch (_) { /* 未缓存资料时回退到登录凭证 */ }
+  return String(wx.getStorageSync('token') || '');
+}
+function socialMediaSignature(blocks) {
+  return JSON.stringify((blocks || []).filter(block => block.kind === 'image' || block.kind === 'video').map(block => ({ kind: block.kind, media_id: block.media_id, caption: block.caption || '' })));
+}
+function cloneEditorBlocks(blocks) {
+  return (blocks || []).map(block => ({ ...block, ...(Array.isArray(block.items) ? { items: block.items.slice() } : {}) }));
+}
+function articleAIPlan(blocks) {
+  let targetIndex = -1;
+  (blocks || []).forEach((block, index) => {
+    if (block.kind === 'paragraph' && !String(block.text || '').trim()) targetIndex = index;
+  });
+  return { targetIndex: targetIndex < 0 ? (blocks || []).length : targetIndex, append: targetIndex < 0 };
+}
+function articleRestoreMatches(state, currentBlocks) {
+  const original = state && state.blocks || [], plan = state && state.articlePlan;
+  if (!plan) return false;
+  const current = currentBlocks || [];
+  if (plan.append) {
+    return current.length === original.length + 1 && plan.targetIndex === original.length
+      && current[plan.targetIndex] && current[plan.targetIndex].kind === 'paragraph'
+      && JSON.stringify(current.slice(0, plan.targetIndex)) === JSON.stringify(original);
+  }
+  if (current.length !== original.length || !current[plan.targetIndex] || current[plan.targetIndex].kind !== 'paragraph') return false;
+  return current.every((block, index) => index === plan.targetIndex || JSON.stringify(block) === JSON.stringify(original[index]));
+}
 function presentationErrors(view, media) {
   const errors = new Map((media || []).filter(asset => asset.preview_error).map(asset => [asset.media_id, asset.preview_error]));
   return (view.media || []).concat(view.blocks || []).reduce((result, item) => {
@@ -139,9 +174,14 @@ Page({
     layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [],
     documentReadOnly: false, documentAsset: null, documentCandidates: [], deleted: false, serverReadOnly: false,
     settingsExpanded: false, mediaExpanded: false, moreExpanded: false, tagsText: '', pinned: false,
+    aiInlineStreaming: false, aiInlineError: '', aiInlineNotice: '', aiInlineCanRestore: false, aiInlineConflict: false,
   },
   onLoad(options) {
     this._unloaded = false;
+    this._inlineAIGeneration = 0;
+    this._inlineAIActive = null;
+    this._inlineAIOriginal = null;
+    this._inlineAITask = null;
     this._contentSaveActive = null;
     this._contentPublishActive = null;
     this.setData({ id: String(options.id || '') });
@@ -153,9 +193,11 @@ Page({
   },
   onShow() {
     wx.hideShareMenu();
-    const token = String(wx.getStorageSync('token') || ''), changed = token !== this._token;
+    const token = String(wx.getStorageSync('token') || ''), actor = editorActor();
+    const changed = token !== this._token || this._actor !== undefined && actor !== this._actor;
     if (changed) {
-      this.setData({ context: null, title: '', owner_id: '', ownerDisplayName: '', ownerIndex: 0, rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2', presentation: 'article', postText: '', videoLayout: 'channels', shareCopy: '', momentsCopy: '', videoShareExpanded: false, videoDisplayExpanded: false, videoUploadProgress: 0, videoUploadMessage: '', fieldErrors: {}, activeBlockIndex: -1, presentationView: null, presentationMediaErrors: {}, videoStarted: {}, blocks: [textBlock('')], renderedBlocks: [], imageBlocks: [], selectedImageBlock: null, videoBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, legacyReadOnly: false, legacyBody: '', legacyMedia: [], layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [], documentReadOnly: false, documentAsset: null, documentCandidates: [], deleted: false, serverReadOnly: false, notice: '', error: '', denied: false, disabled: false, busy: false, mediaUploadMessage: '' });
+      this.invalidateInlineSocialAI({ write: false, clearOriginal: true });
+      this.setData({ context: null, title: '', owner_id: '', ownerDisplayName: '', ownerIndex: 0, rights: 'own', source_note: '', source_url: '', cover_media_id: '', revision: 0, version: 0, status: 'draft', body_format: 'article_v2', presentation: 'article', postText: '', videoLayout: 'channels', shareCopy: '', momentsCopy: '', videoShareExpanded: false, videoDisplayExpanded: false, videoUploadProgress: 0, videoUploadMessage: '', fieldErrors: {}, activeBlockIndex: -1, presentationView: null, presentationMediaErrors: {}, videoStarted: {}, blocks: [textBlock('')], renderedBlocks: [], imageBlocks: [], selectedImageBlock: null, videoBlocks: [], media: [], preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, legacyReadOnly: false, legacyBody: '', legacyMedia: [], layoutReadOnly: false, layoutBody: '', layoutMediaIDs: [], layoutBlocks: [], documentReadOnly: false, documentAsset: null, documentCandidates: [], deleted: false, serverReadOnly: false, notice: '', error: '', denied: false, disabled: false, busy: false, mediaUploadMessage: '', aiInlineStreaming: false, aiInlineError: '', aiInlineNotice: '', aiInlineCanRestore: false, aiInlineConflict: false });
       this._publishSignature = ''; this._publishKey = ''; this._revokeSignature = ''; this._revokeKey = '';
       this._loaded = false;
       this._savedSignature = '';
@@ -165,13 +207,13 @@ Page({
       this._directPublishCheckpoint = null;
       this.setData({ settingsExpanded: false, mediaExpanded: false, moreExpanded: false });
     }
-    this._token = token; this._epoch = (this._epoch || 0) + 1;
+    this._token = token; this._actor = actor; this._epoch = (this._epoch || 0) + 1;
     this.setData({ loginRequired: !token, loading: !!token && !this._loaded, busy: !!this._mediaUploadActive || !!this._contentSaveActive });
     if (token && !this._loaded) this.load(this._epoch);
     else if (token && this._loaded) void this.resumeMediaPreviews(this._epoch);
   },
-  onHide() { this.pauseLayoutVideos(); },
-  onUnload() { this._unloaded = true; this._contentPublishActive = null; this._epoch = (this._epoch || 0) + 1; this.pauseLayoutVideos(); },
+  onHide() { this.invalidateInlineSocialAI({ restore: true, clearOriginal: false, notice: '' }); this.pauseLayoutVideos(); },
+  onUnload() { this._unloaded = true; this.invalidateInlineSocialAI({ write: false, clearOriginal: true }); this._contentPublishActive = null; this._epoch = (this._epoch || 0) + 1; this.pauseLayoutVideos(); },
   current(epoch) { return epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
   retry() { this._loaded = false; const epoch = (this._epoch || 0) + 1; this._epoch = epoch; this.load(epoch); },
@@ -213,7 +255,7 @@ Page({
       const ownerID = content ? content.owner_id : (context.owners || [])[0] || '';
       const ownerChoices = context.owner_choices || [];
       const ownerIndex = Math.max(0, ownerChoices.findIndex(item => item.owner_id === ownerID));
-      this.setData({ context, presentation: layoutReadOnly ? 'article' : presentation, postText: postText(blocks), videoLayout: parsedDocument.video_layout === 'douyin' ? 'douyin' : 'channels', shareCopy: String(parsedDocument.share_copy || ''), momentsCopy: String(parsedDocument.moments_copy || ''), media, documentCandidates, title: content ? content.title : '', tagsText: content && content.tags ? content.tags.join(' ') : '', pinned: !!(content && content.pinned), owner_id: ownerID, ownerDisplayName: ownerChoices[ownerIndex] && ownerChoices[ownerIndex].display_name || '', ownerIndex, rights: content ? content.rights : 'own', source_note: content ? content.source_note || '' : '', source_url: content ? content.source_url || '' : '', cover_media_id: content && content.cover ? content.cover.media_id : '', revision: content ? content.revision : 0, version: content ? content.version : 0, status: content ? content.status : 'draft', body_format: bodyFormat, legacyReadOnly, legacyBody: legacyReadOnly ? content.body || '' : '', legacyMedia: legacyReadOnly ? loadedMedia.filter(asset => legacyIDs.has(asset.media_id)) : [], layoutReadOnly, layoutBody: layoutReadOnly ? content.body : '', layoutMediaIDs: layoutReadOnly ? (content.media || []).map(asset => asset.media_id) : [], layoutBlocks, documentReadOnly, documentAsset, serverReadOnly: !!(content && content.read_only), blocks, ...blockViews(blocks, media), loading: false });
+      this.setData({ context, presentation: layoutReadOnly ? 'article' : presentation, postText: postText(blocks), videoLayout: parsedDocument.video_layout === 'douyin' ? 'douyin' : 'channels', shareCopy: String(parsedDocument.share_copy || ''), momentsCopy: String(parsedDocument.moments_copy || ''), media, documentCandidates, title: content ? content.title : '', tagsText: content && content.tags ? content.tags.join(' ') : '', pinned: !!(content && content.pinned), owner_id: ownerID, ownerDisplayName: ownerChoices[ownerIndex] && ownerChoices[ownerIndex].display_name || '', ownerIndex, rights: content ? content.rights : 'own', source_note: content ? content.source_note || '' : '', source_url: content ? content.source_url || '' : '', cover_media_id: content && content.cover ? content.cover.media_id : '', revision: content ? content.revision : 0, version: content ? content.version : 0, status: content ? content.status : 'draft', body_format: bodyFormat, legacyReadOnly, legacyBody: legacyReadOnly ? content.body || '' : '', legacyMedia: legacyReadOnly ? loadedMedia.filter(asset => legacyIDs.has(asset.media_id)) : [], layoutReadOnly, layoutBody: layoutReadOnly ? content.body : '', layoutMediaIDs: layoutReadOnly ? (content.media || []).map(asset => asset.media_id) : [], layoutBlocks, documentReadOnly, documentAsset, serverReadOnly: !!(content && content.read_only), blocks, ...blockViews(blocks, media), loading: false, aiInlineConflict: false });
       this.applyPendingPrefill();
       this._savedSignature = content ? this.draftSignature() : '';
       this.performCreateAction();
@@ -236,6 +278,7 @@ Page({
     if (this.data.busy || this.data.layoutReadOnly || this.data.legacyReadOnly || this.data.documentReadOnly) return;
     const presentation = String(event.currentTarget.dataset.presentation || 'article');
     if (!['article', 'gallery', 'video'].includes(presentation) || presentation === this.data.presentation) return;
+    if (!this.prepareInlineEditorMutation()) return;
     const blocks = this.data.blocks || [];
     if (presentation !== 'article' && hasStructuredBlocks(blocks)) { wx.showToast({ title: '已有文章排版，请保持文章模式', icon: 'none' }); return; }
     if (presentation === 'gallery' && mediaBlocks(blocks, 'video').length) { wx.showToast({ title: '已有视频，请先移除再切换图集', icon: 'none' }); return; }
@@ -245,6 +288,7 @@ Page({
   },
   editPostText(event) {
     if (this.data.layoutReadOnly) return;
+    if (!this.prepareInlineEditorMutation({ preserveGenerated: true })) return;
     const text = String(event.detail.value || '');
     const media = this.data.blocks.filter(block => block.kind === 'image' || block.kind === 'video');
     const blocks = text.trim() ? media.concat(textBlock(text)) : media;
@@ -260,6 +304,7 @@ Page({
   sortSelectedGalleryImage() {
     const selected = this.data.selectedImageBlock;
     if (this.data.busy || !selected) return;
+    if (!this.prepareInlineEditorMutation()) return;
     const launch = { token: this._token, id: this.data.id, signature: this.draftSignature(), mediaID: selected.media_id };
     wx.showActionSheet({
       itemList: ['前移', '后移'],
@@ -273,6 +318,7 @@ Page({
   },
   openCoverPicker() {
     if (this.data.busy || this.data.documentReadOnly || this.data.legacyReadOnly) return;
+    if (!this.prepareInlineEditorMutation()) return;
     const launch = { token: this._token, id: this.data.id, signature: this.draftSignature(), handled: false, cover: true };
     wx.navigateTo({
       url: '/pages/nativereferences/nativereferences?picker=media&kind=image' + (this.data.owner_id ? '&owner=' + encodeURIComponent(this.data.owner_id) : ''),
@@ -282,6 +328,7 @@ Page({
   },
   openMediaPicker() {
     if (this.data.busy) return;
+    if (!this.prepareInlineEditorMutation()) return;
     const launch = { token: this._token, id: this.data.id, signature: this.draftSignature(), handled: false, replaceVideo: this.data.presentation === 'video' && mediaBlocks(this.data.blocks, 'video').length > 0 };
     const kinds = this.data.presentation === 'gallery' ? 'image' : this.data.presentation === 'video' ? 'video' : 'image%2Cvideo';
     wx.navigateTo({
@@ -291,6 +338,7 @@ Page({
   },
   chooseVideoSource() {
     if (this.data.busy || this.data.presentation !== 'video' || this.data.videoBlocks.length) return;
+    if (!this.prepareInlineEditorMutation()) return;
     const launch = { token: this._token, id: this.data.id, signature: this.draftSignature() };
     wx.showActionSheet({
       itemList: ['从手机选择', '从素材库选择'],
@@ -322,7 +370,7 @@ Page({
     const blocks = this.data.presentation === 'article' ? appended : socialBlocks(appended);
     this.setData({ media, blocks, cover_media_id: this.data.cover_media_id || (asset.kind === 'image' ? asset.media_id : ''), ...blockViews(blocks, media), preview: null, notice: '已加入正文' });
   },
-  toggleMore() { this.setData({ moreExpanded: !this.data.moreExpanded }); },
+  toggleMore() { if (!this.data.aiInlineStreaming && !this.blockInlineAIConflict()) this.setData({ moreExpanded: !this.data.moreExpanded }); },
   returnToEdit() {
     if (this.data.busy) return;
     this.pauseLayoutVideos();
@@ -481,19 +529,175 @@ Page({
     return 'applied';
   },
   openAIWriting() {
-    if (this.data.busy || this.data.legacyReadOnly || this.data.layoutReadOnly) return;
-    const launch = { token: String(wx.getStorageSync('token') || ''), contentID: String(this.data.id || ''), revision: Number(this.data.revision || 0), signature: this.draftSignature(), state: '', message: '', channel: null };
-    const context = { source: 'editor', content_id: launch.contentID, revision: launch.revision, title: String(this.data.title || '').trim(), facts: writingFacts(this.data.blocks || []) };
-    if (this.data.presentation === 'video') {
-      if (!context.title && !context.facts) { this.setData({ error: '先填写一句视频主题，AI 才能生成准确文案', 'fieldErrors.title': '请填写视频主题' }); return; }
-      Object.assign(context, { target: 'video_bundle', share_copy: String(this.data.shareCopy || ''), moments_copy: String(this.data.momentsCopy || ''), auto_generate: true });
+    const context = this.data.context;
+    if (this.data.busy || this.data.deleted || this.data.documentReadOnly || this.data.legacyReadOnly || this.data.layoutReadOnly || this.data.serverReadOnly
+      || context && (context.enabled === false || context.can_manage === false)) return;
+    this.startInlineSocialAI();
+  },
+  inlineSocialIdentity() {
+    return {
+      token: String(wx.getStorageSync('token') || ''), actor: editorActor(), contentID: String(this.data.id || ''),
+      revision: Number(this.data.revision || 0), ownerID: String(this.data.owner_id || ''), presentation: this.data.presentation,
+    };
+  },
+  inlineSocialIdentityMatches(value) {
+    const current = this.inlineSocialIdentity();
+    return !!value && !this._unloaded && value.token === current.token && (!this._token || value.token === this._token)
+      && value.actor === current.actor && value.contentID === current.contentID && value.revision === current.revision
+      && value.ownerID === current.ownerID && value.presentation === current.presentation;
+  },
+  applyInlineSocialText(text, launch) {
+    const value = String(text || '');
+    if (this.data.presentation === 'article') {
+      const plan = launch && launch.original && launch.original.articlePlan;
+      if (!plan) return false;
+      const blocks = cloneEditorBlocks(this.data.blocks);
+      if (plan.append) {
+        if (blocks.length === plan.targetIndex) blocks.push(textBlock(value));
+        else if (blocks.length === plan.targetIndex + 1 && blocks[plan.targetIndex] && blocks[plan.targetIndex].kind === 'paragraph') blocks[plan.targetIndex] = textBlock(value);
+        else return false;
+      } else {
+        if (!blocks[plan.targetIndex] || blocks[plan.targetIndex].kind !== 'paragraph') return false;
+        blocks[plan.targetIndex] = textBlock(value);
+      }
+      this.setData({ postText: postText(blocks), blocks, ...blockViews(blocks, this.data.media), preview: null });
+      return true;
     }
-    wx.navigateTo({
-      url: '/pages/contentwriting/contentwriting?source=editor',
-      events: { prefillContent: payload => this.receiveWritingReturn(payload, launch) },
-      success: result => { launch.channel = result.eventChannel; result.eventChannel.emit('writingContext', context); },
-      fail: () => this.setData({ notice: 'AI辅助页无法打开，草稿已保留，请重试' }),
-    });
+    const media = (this.data.blocks || []).filter(block => block.kind === 'image' || block.kind === 'video');
+    const blocks = value.trim() ? media.concat(textBlock(value)) : (media.length ? media : [textBlock('')]);
+    this.setData({ postText: value, blocks, ...blockViews(blocks, this.data.media), preview: null });
+    return true;
+  },
+  restoreInlineSocialOriginal(original) {
+    const state = original || this._inlineAIOriginal;
+    if (!state || !this.inlineSocialIdentityMatches(state)) return false;
+    if (state.presentation === 'article') {
+      if (!articleRestoreMatches(state, this.data.blocks)) return false;
+    } else if (state.mediaSignature !== socialMediaSignature(this.data.blocks)) return false;
+    const blocks = cloneEditorBlocks(state.blocks);
+    this.setData({ postText: state.postText, blocks, ...blockViews(blocks, this.data.media), preview: null });
+    return true;
+  },
+  restoreStaleInlineOriginal(launch) {
+    if (!launch || !launch.generatedBlocksSignature) return true;
+    if (launch.generatedBlocksSignature !== JSON.stringify(this.data.blocks)
+      || launch.generatedPostText !== String(this.data.postText || '')) return false;
+    const blocks = cloneEditorBlocks(launch.original.blocks);
+    this.setData({ postText: launch.original.postText, blocks, ...blockViews(blocks, this.data.media), preview: null });
+    return true;
+  },
+  blockInlineAIConflict() {
+    if (!this.data.aiInlineConflict) return false;
+    this.setData({ error: 'AI生成期间草稿身份已变化，请重新进入编辑页后再保存' });
+    return true;
+  },
+  invalidateInlineSocialAI(options = {}) {
+    const active = this._inlineAIActive;
+    if (this._inlineAITask && typeof this._inlineAITask.abort === 'function') { try { this._inlineAITask.abort(); } catch (_) { /* 请求已结束 */ } }
+    this._inlineAITask = null;
+    this._inlineAIActive = null;
+    this._inlineAIGeneration = (this._inlineAIGeneration || 0) + 1;
+    if (options.restore && active) this.restoreInlineSocialOriginal(active.original);
+    if (options.clearOriginal) this._inlineAIOriginal = null;
+    if (options.write !== false && !this._unloaded) this.setData({ aiInlineStreaming: false, aiInlineError: '', aiInlineNotice: options.notice || '', aiInlineCanRestore: options.clearOriginal ? false : this.data.aiInlineCanRestore });
+  },
+  prepareInlineEditorMutation(options = {}) {
+    if (this.data.aiInlineConflict) { this.blockInlineAIConflict(); return false; }
+    if (!this.data.aiInlineStreaming && !this.data.aiInlineCanRestore) return true;
+    const active = this._inlineAIActive;
+    const recovered = !this.data.aiInlineStreaming || options.preserveGenerated || !active || this.restoreStaleInlineOriginal(active);
+    this.invalidateInlineSocialAI({ clearOriginal: true, notice: '' });
+    if (!recovered) this.setData({ aiInlineConflict: true, aiInlineError: '草稿已变化，请重新进入编辑页后再保存' });
+    return recovered;
+  },
+  restoreInlineAIOriginal() {
+    if (!this._inlineAIOriginal) return;
+    this.invalidateInlineSocialAI({ clearOriginal: false, notice: '' });
+    if (!this.restoreInlineSocialOriginal(this._inlineAIOriginal)) {
+      this._inlineAIOriginal = null;
+      this.setData({ aiInlineCanRestore: false, aiInlineError: '素材或草稿已变化，无法恢复生成前内容' });
+      return;
+    }
+    this._inlineAIOriginal = null;
+    this.setData({ aiInlineCanRestore: false, aiInlineError: '', aiInlineNotice: this.data.presentation === 'article' ? '已恢复生成前的正文' : '已恢复生成前的介绍', notice: '有未保存修改' });
+  },
+  startInlineSocialAI() {
+    if (this.data.busy || this.data.aiInlineStreaming || this.blockInlineAIConflict() || !['article', 'gallery', 'video'].includes(this.data.presentation)) return;
+    const title = String(this.data.title || '').trim();
+    const description = String(this.data.postText || '').trim();
+    const media = (this.data.blocks || []).filter(block => block.kind === 'image' || block.kind === 'video');
+    const captions = media.map(block => String(block.caption || '').trim()).filter(Boolean).join('\n');
+    const facts = writingFacts(this.data.blocks || []);
+    if (!title && !(this.data.presentation === 'article' ? facts : description || captions)) {
+      this.setData({ aiInlineError: '请先填写标题或内容要点', aiInlineNotice: '' });
+      return;
+    }
+    const identity = this.inlineSocialIdentity();
+    const mediaSignature = socialMediaSignature(this.data.blocks);
+    let original = this._inlineAIOriginal;
+    if (!original || !this.inlineSocialIdentityMatches(original) || original.mediaSignature !== mediaSignature) {
+      original = { ...identity, postText: String(this.data.postText || ''), blocks: cloneEditorBlocks(this.data.blocks), mediaSignature,
+        articlePlan: this.data.presentation === 'article' ? articleAIPlan(this.data.blocks) : null };
+      this._inlineAIOriginal = original;
+    }
+    const launch = { ...identity, generation: (this._inlineAIGeneration || 0) + 1, expectedSignature: this.draftSignature(), original };
+    this._inlineAIGeneration = launch.generation;
+    this._inlineAIActive = launch;
+    const current = () => this._inlineAIActive === launch && launch.generation === this._inlineAIGeneration && this.inlineSocialIdentityMatches(launch);
+    const abandon = () => {
+      if (this._inlineAIActive !== launch) return;
+      if (this._inlineAITask && typeof this._inlineAITask.abort === 'function') this._inlineAITask.abort();
+      const recovered = this.restoreStaleInlineOriginal(launch);
+      this._inlineAITask = null; this._inlineAIActive = null; this._inlineAIOriginal = null; this._inlineAIGeneration += 1;
+      if (!this._unloaded) this.setData({ aiInlineStreaming: false, aiInlineCanRestore: false, aiInlineConflict: !recovered,
+        aiInlineError: recovered ? '' : '草稿已变化，请重新进入编辑页后再保存', aiInlineNotice: '' });
+    };
+    const restoreAfterFailure = message => {
+      if (!current()) { abandon(); return; }
+      this._inlineAIActive = null; this._inlineAITask = null; this._inlineAIGeneration += 1;
+      const restored = !launch.generatedBlocksSignature || this.restoreInlineSocialOriginal(original);
+      this._inlineAIOriginal = null;
+      this.setData({ aiInlineStreaming: false, aiInlineCanRestore: false, aiInlineConflict: !restored,
+        aiInlineError: restored ? message || '生成失败，请重试' : '草稿已变化，请重新进入编辑页后再保存', aiInlineNotice: '' });
+    };
+    const accept = text => {
+      if (!current()) { abandon(); return false; }
+      if (launch.expectedSignature !== this.draftSignature()) {
+        if (this._inlineAITask && typeof this._inlineAITask.abort === 'function') this._inlineAITask.abort();
+        this._inlineAITask = null; this._inlineAIActive = null; this._inlineAIGeneration += 1;
+        const restored = !launch.generatedBlocksSignature || this.restoreInlineSocialOriginal(original);
+        this._inlineAIOriginal = null;
+        this.setData({ aiInlineStreaming: false, aiInlineCanRestore: false, aiInlineConflict: !restored,
+          aiInlineError: restored ? '' : '草稿已变化，请重新进入编辑页后再保存', aiInlineNotice: restored ? '检测到编辑内容变化，已停止生成并保留你的修改' : '' });
+        return false;
+      }
+      if (!this.applyInlineSocialText(text, launch)) { restoreAfterFailure('正文结构已变化，请重试'); return false; }
+      launch.expectedSignature = this.draftSignature();
+      launch.generatedBlocksSignature = JSON.stringify(this.data.blocks);
+      launch.generatedPostText = String(this.data.postText || '');
+      return true;
+    };
+    const prompt = this.data.presentation === 'article'
+      ? noteWritingPrompt({ title, facts, extra: '只输出可直接放入正文的内容，不要输出标题、字段名、Markdown 或解释。' })
+      : socialIntroPrompt({ presentation: this.data.presentation, title, description, captions,
+        media_summary: this.data.presentation === 'video' ? `${media.length ? 1 : 0} 段视频` : `${media.length} 张图片` });
+    this.setData({ aiInlineStreaming: true, aiInlineError: '', aiInlineNotice: this.data.presentation === 'article' ? 'AI 正在生成正文…' : 'AI 正在生成介绍…', aiInlineCanRestore: false });
+    try {
+      const task = startAIStream({
+        messages: [{ role: 'user', content: prompt }],
+        onChunk: partial => { accept(String(partial || '')); },
+        onDone: full => {
+          const text = String(full || '').trim();
+          if (!text) { restoreAfterFailure(this.data.presentation === 'article' ? '生成内容为空，原内容已保留' : '生成内容为空，原介绍已保留'); return; }
+          if (!accept(text)) return;
+          this._inlineAIActive = null; this._inlineAITask = null; this._inlineAIGeneration += 1;
+          this.setData({ aiInlineStreaming: false, aiInlineError: '', aiInlineNotice: '已生成', aiInlineCanRestore: this.data.presentation === 'article' || text !== original.postText, notice: '有未保存修改' });
+        },
+        onError: message => restoreAfterFailure(message),
+      });
+      if (this._inlineAIActive === launch) this._inlineAITask = task;
+      else if (task && typeof task.abort === 'function') task.abort();
+    } catch (error) { restoreAfterFailure(error && error.message || '生成失败，请重试'); }
   },
   async loadPrivatePaths(items, previews) {
     return Promise.all(items.map(async asset => {
@@ -534,8 +738,8 @@ Page({
       this.setData({ media, ...blockViews(this.data.blocks, media), busy: false });
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '私有媒体预览加载失败' }); }
   },
-  setField(event) { const field = event.currentTarget.dataset.field; this.setData({ [field]: event.detail.value, [`fieldErrors.${field}`]: '', error: '', preview: null, notice: '有未保存修改' }); },
-  setVideoLayout(event) { this.setData({ videoLayout: event.currentTarget.dataset.layout === 'douyin' ? 'douyin' : 'channels', error: '', preview: null, notice: '有未保存修改' }); },
+  setField(event) { if (!this.prepareInlineEditorMutation()) return; const field = event.currentTarget.dataset.field; this.setData({ [field]: event.detail.value, [`fieldErrors.${field}`]: '', error: '', preview: null, notice: '有未保存修改' }); },
+  setVideoLayout(event) { if (!this.prepareInlineEditorMutation()) return; this.setData({ videoLayout: event.currentTarget.dataset.layout === 'douyin' ? 'douyin' : 'channels', error: '', preview: null, notice: '有未保存修改' }); },
   openEditorVideo(event) {
     const asset = this.data.media.find(item => item.media_id === event.currentTarget.dataset.mediaId && item.kind === 'video');
     if (!asset || !asset.local_path) { wx.showToast({ title: '视频未加载，请重试', icon: 'none' }); return; }
@@ -553,11 +757,12 @@ Page({
   toggleVideoDisplay() { this.setData({ videoDisplayExpanded: !this.data.videoDisplayExpanded, videoShareExpanded: false }); },
   closeVideoOptions() { this.setData({ videoShareExpanded: false, videoDisplayExpanded: false }); },
   openVideoSettings() { this.setData({ videoShareExpanded: false, videoDisplayExpanded: false, settingsExpanded: true }); },
-  setTags(event) { this.setData({ tagsText: String(event.detail.value || ''), preview: null }); },
-  togglePinned() { this.setData({ pinned: !this.data.pinned, preview: null }); },
-  setRights(event) { this.setData({ rights: event.detail.value, preview: null }); },
+  setTags(event) { if (!this.prepareInlineEditorMutation()) return; this.setData({ tagsText: String(event.detail.value || ''), preview: null }); },
+  togglePinned() { if (!this.data.aiInlineStreaming && !this.blockInlineAIConflict()) this.setData({ pinned: !this.data.pinned, preview: null }); },
+  setRights(event) { if (!this.prepareInlineEditorMutation()) return; this.setData({ rights: event.detail.value, preview: null }); },
   setOwner(event) {
     if (this.data.busy || this.data.id) return;
+    if (!this.prepareInlineEditorMutation()) return;
     const ownerIndex = Number(event.detail.value) || 0, choice = (this.data.context.owner_choices || [])[ownerIndex];
     if (!choice || choice.owner_id === this.data.owner_id) return;
     const token = this._token, previousOwner = this.data.owner_id;
@@ -579,7 +784,10 @@ Page({
   },
   editBlock(event) {
     if (this.data.layoutReadOnly) return;
-    const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
+    const index = Number(event.currentTarget.dataset.index);
+    const plan = this._inlineAIActive && this._inlineAIActive.original && this._inlineAIActive.original.articlePlan;
+    if (!this.prepareInlineEditorMutation({ preserveGenerated: !!(this.data.aiInlineStreaming && plan && plan.targetIndex === index) })) return;
+    const blocks = this.data.blocks.slice();
     blocks[index] = { ...blocks[index], text: event.detail.value };
     this.setData({ blocks, ...blockViews(blocks, this.data.media), preview: null, notice: '有未保存修改' });
   },
@@ -598,6 +806,7 @@ Page({
   },
   insertBlock(spec) {
     if (this.data.layoutReadOnly) return;
+    if (!this.prepareInlineEditorMutation()) return;
     let block;
     if (spec === 'heading') block = headingBlock(2);
     else if (spec === 'quote') block = quoteBlock();
@@ -609,6 +818,7 @@ Page({
   },
   setHeadingLevel(event) {
     if (this.data.layoutReadOnly) return;
+    if (!this.prepareInlineEditorMutation()) return;
     const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
     if (!blocks[index] || blocks[index].kind !== 'heading') return;
     blocks[index] = { ...blocks[index], level: Number(event.currentTarget.dataset.level) === 3 ? 3 : 2 };
@@ -616,6 +826,7 @@ Page({
   },
   convertBlock(event) {
     if (this.data.layoutReadOnly) return;
+    if (!this.prepareInlineEditorMutation()) return;
     const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
     const target = String(event.currentTarget.dataset.to || ''), current = blocks[index];
     if (!current || ['paragraph', 'heading', 'quote'].indexOf(target) < 0 || target === current.kind) return;
@@ -626,6 +837,7 @@ Page({
   },
   editCaption(event) {
     if (this.data.layoutReadOnly) return;
+    if (!this.prepareInlineEditorMutation()) return;
     const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
     if (!blocks[index] || (blocks[index].kind !== 'image' && blocks[index].kind !== 'video')) return;
     blocks[index] = { ...blocks[index], caption: event.detail.value };
@@ -633,6 +845,7 @@ Page({
   },
   editListItem(event) {
     if (this.data.layoutReadOnly) return;
+    if (!this.prepareInlineEditorMutation()) return;
     const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index), itemIndex = Number(event.currentTarget.dataset.itemIndex);
     if (!blocks[index] || blocks[index].kind !== 'list' || !Array.isArray(blocks[index].items)) return;
     const items = blocks[index].items.slice();
@@ -642,6 +855,7 @@ Page({
   },
   addListItem(event) {
     if (this.data.layoutReadOnly) return;
+    if (!this.prepareInlineEditorMutation()) return;
     const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
     if (!blocks[index] || blocks[index].kind !== 'list') return;
     const items = blocks[index].items || [];
@@ -651,6 +865,7 @@ Page({
   },
   removeListItem(event) {
     if (this.data.layoutReadOnly) return;
+    if (!this.prepareInlineEditorMutation()) return;
     const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index), itemIndex = Number(event.currentTarget.dataset.itemIndex);
     if (!blocks[index] || blocks[index].kind !== 'list') return;
     const items = blocks[index].items || [];
@@ -659,6 +874,7 @@ Page({
   },
   toggleListOrdered(event) {
     if (this.data.layoutReadOnly) return;
+    if (!this.prepareInlineEditorMutation()) return;
     const blocks = this.data.blocks.slice(), index = Number(event.currentTarget.dataset.index);
     if (!blocks[index] || blocks[index].kind !== 'list') return;
     blocks[index] = { ...blocks[index], ordered: !blocks[index].ordered };
@@ -666,6 +882,7 @@ Page({
   },
   addMediaBlock(event) {
     if (this.data.layoutReadOnly) return;
+    if (!this.prepareInlineEditorMutation()) return;
     const asset = this.data.media[Number(event.currentTarget.dataset.index)];
     if (!asset) return;
     if (this.data.presentation === 'gallery' && asset.kind !== 'image') { wx.showToast({ title: '图集仅添加图片', icon: 'none' }); return; }
@@ -675,11 +892,13 @@ Page({
     const blocks = this.data.presentation === 'article' ? appended : socialBlocks(appended);
     this.setData({ blocks, ...blockViews(blocks, this.data.media), preview: null });
   },
-  setCover(event) { const asset = this.data.media[Number(event.currentTarget.dataset.index)]; if (asset && asset.kind === 'image') this.setData({ cover_media_id: asset.media_id, preview: null }); },
-  setBlockCover(event) { const mediaID = String(event.currentTarget.dataset.mediaId || ''); if (mediaID) this.setData({ cover_media_id: mediaID, preview: null, notice: '已设为封面' }); },
+  setCover(event) { if (!this.prepareInlineEditorMutation()) return; const asset = this.data.media[Number(event.currentTarget.dataset.index)]; if (asset && asset.kind === 'image') this.setData({ cover_media_id: asset.media_id, preview: null }); },
+  setBlockCover(event) { if (!this.prepareInlineEditorMutation()) return; const mediaID = String(event.currentTarget.dataset.mediaId || ''); if (mediaID) this.setData({ cover_media_id: mediaID, preview: null, notice: '已设为封面' }); },
   moveBlock(event) {
     if (this.data.layoutReadOnly) return;
+    if (!this.prepareInlineEditorMutation()) return;
     const from = Number(event.currentTarget.dataset.index), step = Number(event.currentTarget.dataset.step), blocks = this.data.blocks.slice();
+    if (!blocks[from]) return;
     let to = from + step;
     if (this.data.presentation !== 'article' && blocks[from] && ['image', 'video'].includes(blocks[from].kind)) {
       const positions = blocks.map((block, index) => ['image', 'video'].includes(block.kind) ? index : -1).filter(index => index >= 0);
@@ -693,6 +912,7 @@ Page({
   },
   removeBlock(event) {
     if (this.data.layoutReadOnly) return;
+    if (!this.prepareInlineEditorMutation()) return;
     const blocks = this.data.blocks.filter((_, index) => index !== Number(event.currentTarget.dataset.index));
     const next = blocks.length ? blocks : [textBlock('')];
     const coverStillUsed = next.some(block => block.media_id === this.data.cover_media_id);
@@ -701,6 +921,7 @@ Page({
   },
   chooseMedia() {
     if (this.data.busy) return;
+    if (!this.prepareInlineEditorMutation()) return;
     if (!this.data.context || !this.data.context.media_upload_configured) { wx.showToast({ title: '媒体上传尚未配置', icon: 'none' }); return; }
     if (!this.data.owner_id) { this.setData({ error: '请先选择内容归属', 'fieldErrors.owner_id': '请选择内容归属', settingsExpanded: true }); if (wx.pageScrollTo) wx.pageScrollTo({ scrollTop: 0 }); return; }
     if (this.data.presentation === 'video' && !this.data.context.video_resumable_upload) { this.setData({ error: '当前版本暂不支持本地上传，请从素材库选择视频' }); return; }
@@ -929,7 +1150,7 @@ Page({
     }
   },
   async saveDraft() {
-    if (this.data.busy) return;
+    if (this.data.busy || this.data.aiInlineStreaming || this.blockInlineAIConflict()) return;
     const input = this.draftInput(this.data.presentation === 'video');
     if (!input) return;
     const token = this._token; this.setData({ busy: true, error: '', notice: '' });
@@ -986,7 +1207,7 @@ Page({
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '预览媒体重试失败' }); }
   },
   async saveAndPreview() {
-    if (this.data.busy) return;
+    if (this.data.busy || this.data.aiInlineStreaming || this.blockInlineAIConflict()) return;
     const input = this.draftInput();
     if (!input) return;
     let epoch = this._epoch; const token = this._token; this.setData({ busy: true, error: '', notice: '', preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, videoStarted: {} });
@@ -1006,7 +1227,7 @@ Page({
     } catch (error) { if (this.sameSaveAccount(token)) this.setData({ busy: false, error: error.message || '保存预览失败' }); }
   },
   async publish() {
-    if (this.data.busy) return;
+    if (this.data.busy || this.data.aiInlineStreaming || this.blockInlineAIConflict()) return;
     const checkpoint = this._directPublishCheckpoint;
     const reusableCheckpoint = checkpoint && checkpoint.token === this._token && checkpoint.id === this.data.id && checkpoint.revision === this.data.revision && checkpoint.signature === this.draftSignature();
     const input = this.data.preview || reusableCheckpoint ? null : this.draftInput();
@@ -1128,23 +1349,25 @@ Page({
     wx.navigateTo({ url: '/pages/contentreader/contentreader?content_id=' + encodeURIComponent(this.data.id) + '&content_version=' + encodeURIComponent(String(this.data.version)) });
   },
   revoke() {
-    if (!this.data.id || this.data.version < 1 || this.data.busy) return;
+    if (!this.data.id || this.data.version < 1 || this.data.busy || this.data.aiInlineStreaming || this.blockInlineAIConflict()) return;
     const epoch = this._epoch;
     wx.showModal({ title: '撤回内容', content: '撤回后旧分享入口将不能继续阅读，请填写原因。', editable: true, placeholderText: '撤回原因', success: result => { if (this.current(epoch) && result.confirm && String(result.content || '').trim()) this.revokeContent(String(result.content).trim()); } });
   },
   async revokeContent(reason) {
+    if (this.data.aiInlineStreaming || this.blockInlineAIConflict()) return;
     const epoch = this._epoch; this.setData({ busy: true, error: '' });
     try { const content = await api.revokeContent(this.data.id, this.data.revision, reason, this.revokeKey(reason)); if (this.current(epoch)) { this._revokeSignature = ''; this._revokeKey = ''; this.setData({ revision: content.revision, status: content.status, preview: null, previewBlocks: [], previewCover: null, previewLayoutBlocks: [], previewLayoutReadOnly: false, busy: false, notice: '已撤回' }); } }
     catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '撤回失败' }); }
   },
   deleteDraft() {
-    if (!this.data.id || this.data.status !== 'draft' || this.data.version !== 0 || this.data.busy) return;
+    if (!this.data.id || this.data.status !== 'draft' || this.data.version !== 0 || this.data.busy || this.data.aiInlineStreaming || this.blockInlineAIConflict()) return;
     const epoch = this._epoch;
     wx.showModal({ title: '删除草稿', content: '只删除这份从未发布的草稿，不会撤回已发布内容，也不会删除原媒体文件。', confirmText: '删除草稿', confirmColor: '#a12622', success: result => {
       if (this.current(epoch) && result.confirm) this.deleteDraftConfirmed();
     } });
   },
   async deleteDraftConfirmed() {
+    if (this.data.aiInlineStreaming || this.blockInlineAIConflict()) return;
     const epoch = this._epoch; this.setData({ busy: true, error: '' });
     try {
       const deleted = await api.deleteContentDraft(this.data.id, this.data.revision);
