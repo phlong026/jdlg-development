@@ -1,8 +1,10 @@
 {
   "navigationBarTitleText": "私密方案",
+  "navigationStyle": "custom",
   "enableShareAppMessage": true,
   "enableShareTimeline": false,
   "usingComponents": {
-    "login-guard": "/components/login-guard/login-guard"
+    "login-guard": "/components/login-guard/login-guard",
+    "navigation-bar": "/components/navigation-bar/navigation-bar"
   }
 }

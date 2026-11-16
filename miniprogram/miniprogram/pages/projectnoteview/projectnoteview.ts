@@ -32,6 +32,11 @@ const feedbackRows = view => {
   for (const resolution of view && view.resolutions || []) replies.set(resolution.feedback_id, String(resolution.reply || ''));
   return (view && view.feedbacks || []).map(feedback => Object.assign({}, feedback, { resolution_reply: feedback.reply || replies.get(feedback.feedback_id) || '', satisfaction_label: satisfactionLabels[feedback.satisfaction] || '' }));
 };
+const designerPreview = view => {
+  const user = wx.getStorageSync('userInfo') || {};
+  const actorID = Number(user.id || user.actor_id || 0);
+  return actorID > 0 && Number(view && view.share && view.share.sharer_id || 0) === actorID;
+};
 const loadSharedMedia = async (token, asset) => {
   if (asset && asset.kind === 'video') {
     const playback = await api.getSharedProjectNoteMediaPlayback(token, asset.media_id);
@@ -71,7 +76,7 @@ Page({
     loading: true, busy: false, loginRequired: false, error: '', notice: '', memberMode: false, memberDirectory: null, memberNextCursor: '',
     activityTypes: [{ key: 'feedbacks', label: '反馈意见' }, { key: 'resolutions', label: '处理记录' }, { key: 'confirmations', label: '确认记录' }], activityType: 'feedbacks', activityIndex: 0, activityItems: [], activityPage: 0, activityCursors: [''], activityNextCursor: '', activityLoaded: false, activityLoading: false,
     satisfaction: '', readAcknowledged: false, acknowledgingRead: false,
-    view: null, memberDirectory: null, articleBlocks: [], media: [], attachments: [], feedbackRows: [], feedbackText: '', canConfirm: false, confirmed: false, shareReady: false,
+    view: null, memberDirectory: null, articleBlocks: [], media: [], attachments: [], feedbackRows: [], feedbackText: '', canConfirm: false, confirmed: false, shareReady: false, canReturnToEditor: false,
     mediaGroups: [], galleryPositions: {},
   },
   onLoad(options) {
@@ -111,7 +116,7 @@ Page({
   clearProtected() {
     this._accessAttempt = null;
     this._accessVerified = false;
-    this.setData({ activityType: 'feedbacks', activityIndex: 0, activityItems: [], activityPage: 0, activityCursors: [''], activityNextCursor: '', activityLoaded: false, activityLoading: false, view: null, memberDirectory: null, articleBlocks: [], media: [], mediaGroups: [], galleryPositions: {}, attachments: [], feedbackRows: [], canConfirm: false, confirmed: false, shareReady: false, feedbackText: '', satisfaction: '', readAcknowledged: !!this._openSent, acknowledgingRead: false, notice: '', busy: false });
+    this.setData({ activityType: 'feedbacks', activityIndex: 0, activityItems: [], activityPage: 0, activityCursors: [''], activityNextCursor: '', activityLoaded: false, activityLoading: false, view: null, memberDirectory: null, articleBlocks: [], media: [], mediaGroups: [], galleryPositions: {}, attachments: [], feedbackRows: [], canConfirm: false, confirmed: false, shareReady: false, canReturnToEditor: false, feedbackText: '', satisfaction: '', readAcknowledged: !!this._openSent, acknowledgingRead: false, notice: '', busy: false });
   },
   async loadMemberDirectory(event) {
     const append = !!(event && event.currentTarget);
@@ -133,6 +138,7 @@ Page({
     return this.loadShared();
   },
   backToMemberDirectory() { this._memberVersionID = ''; this.clearProtected(); return this.loadMemberDirectory(); },
+  returnToEditor() { wx.navigateBack({ delta: 1 }); },
   readSharedView() {
     return this._memberProjectID
       ? require('../../utils/project-member-api').version(this._memberProjectID, this._memberVersionID)
@@ -204,7 +210,7 @@ Page({
       const canConfirm = view.can_confirm === true;
       const confirmed = !!view.confirmation;
       this._accessVerified = true;
-      this.setData({ view, media, mediaGroups: groupNoteImages(media, media, windowInfo), galleryPositions: {}, attachments, articleBlocks, feedbackRows: feedbackRows(view), canConfirm, confirmed, loading: false, notice: mediaFailed ? SHARE_ERROR.media : '', mediaFailuresCount: mediaFailureCount(media), shareReady: !!view.share && !!this._shareToken }, () => {
+      this.setData({ view, media, mediaGroups: groupNoteImages(media, media, windowInfo), galleryPositions: {}, attachments, articleBlocks, feedbackRows: feedbackRows(view), canConfirm, confirmed, loading: false, notice: mediaFailed ? SHARE_ERROR.media : '', mediaFailuresCount: mediaFailureCount(media), shareReady: !!view.share && !!this._shareToken, canReturnToEditor: designerPreview(view) }, () => {
         if (!this.current(epoch)) return;
         if (!this._memberProjectID && wx.showShareMenu) wx.showShareMenu({ menus: ['shareAppMessage'] });
 
@@ -254,14 +260,14 @@ Page({
         // 图片/文档复用本地文件；视频签名地址短时有效，每次回到页面单独刷新。
         const mediaFailures = media.some(item => item && (item.preview_error || !item.local_path));
         const mediaPatch = hasVideos ? { media, mediaGroups: groupNoteImages(media, media, wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()), articleBlocks } : {};
-        this.setData(Object.assign({ view, feedbackRows: feedbackRows(view), canConfirm: view.can_confirm === true, confirmed: !!view.confirmation, loading: false, acknowledgingRead: false, activityLoading: false, busy: false, notice: mediaFailures || videoRefreshFailed ? SHARE_ERROR.media : '', mediaFailuresCount: mediaFailureCount(media), shareReady: !!view.share && !!this._shareToken }, mediaPatch), () => {
+        this.setData(Object.assign({ view, feedbackRows: feedbackRows(view), canConfirm: view.can_confirm === true, confirmed: !!view.confirmation, loading: false, acknowledgingRead: false, activityLoading: false, busy: false, notice: mediaFailures || videoRefreshFailed ? SHARE_ERROR.media : '', mediaFailuresCount: mediaFailureCount(media), shareReady: !!view.share && !!this._shareToken, canReturnToEditor: designerPreview(view) }, mediaPatch), () => {
           if (this.current(epoch) && !this._memberProjectID && wx.showShareMenu) wx.showShareMenu({ menus: ['shareAppMessage'] });
         });
         return;
       }
       const pendingMediaFailures = media.some(item => item && (item.preview_error || !item.local_path));
       const mediaPatch = hasVideos ? { media, mediaGroups: groupNoteImages(media, media, wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync()), articleBlocks } : {};
-      this.setData(Object.assign({ view, feedbackRows: feedbackRows(view), canConfirm: view.can_confirm === true, confirmed: !!view.confirmation, loading: false, acknowledgingRead: false, activityLoading: false, busy: false, notice: pendingMediaFailures || videoRefreshFailed ? SHARE_ERROR.media : '', mediaFailuresCount: mediaFailureCount(media), shareReady: !!view.share && !!this._shareToken }, mediaPatch), () => {
+      this.setData(Object.assign({ view, feedbackRows: feedbackRows(view), canConfirm: view.can_confirm === true, confirmed: !!view.confirmation, loading: false, acknowledgingRead: false, activityLoading: false, busy: false, notice: pendingMediaFailures || videoRefreshFailed ? SHARE_ERROR.media : '', mediaFailuresCount: mediaFailureCount(media), shareReady: !!view.share && !!this._shareToken, canReturnToEditor: designerPreview(view) }, mediaPatch), () => {
         if (this.current(epoch) && !this._memberProjectID && wx.showShareMenu) wx.showShareMenu({ menus: ['shareAppMessage'] });
       });
     } catch (error) {

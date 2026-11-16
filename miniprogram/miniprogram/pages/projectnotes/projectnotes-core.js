@@ -9,13 +9,14 @@ const { ANTI_FABRICATION_CLAUSE, noteWritingPrompt } = require('../../utils/writ
 
 const blankProtected = () => ({
   pageView: 'list', navigationTitle: '我的项目', projectSettingsOpen: false, projectManagementOpen: false, projectLoadFailed: false,
+  projectKeyword: '', projectVisibleCount: 0, shareCountLabel: '', pendingFeedbackCount: 0,
   customerRef: '', customerName: '', customerPickerOpen: false, projectCustomers: [], customerKeyword: '', customerCursor: '', customerAsOf: '', customerShareCursor: '', customerWindowNext: '', customerLoading: false, customerError: '',
   historyType: 'versions', historyIndex: 0, historyItems: [], historyPage: 0, historyCursors: [''], historyNextCursor: '', historyLoaded: false, historyLoading: false,
   projectEdit: {}, projectStatusLabel: '', notes: [], noteIndex: 0, versionChoices: [], selectedFeedback: null,
   projects: [], owners: [], ownerChoices: [], ownerIndex: 0, ownerID: '', projectName: '', crmID: '', selectedProject: null,
   members: [], activeMembers: [], joinRequests: [], memberInvitations: [], requestsLoading: false, confirmerChoices: [], confirmerIndex: 0, confirmerAccount: '',
   memberInvitation: null, memberInvitationPath: '',
-  note: null, noteTitle: '', noteBody: '', noteDirty: false, bodyReadOnly: false, noteMedia: [], frozenVersion: null, activeShare: null,
+  note: null, noteTitle: '', noteBody: '', noteDirty: false, noteBodyFocused: false, bodyReadOnly: false, noteMedia: [], frozenVersion: null, activeShare: null,
   feedbacks: [], confirmations: [], feedbackID: '', feedbackReply: '', truncationNotice: '', historyNotice: '',
   historyMode: false, versionView: null, versionBlocks: [], versionMedia: [],
   editorMode: 'edit', previewLoading: false, previewError: '', previewBodyFormat: 'plain', previewBody: '', previewBlocks: [], previewMedia: [], keyboardHeight: 0,
@@ -24,6 +25,13 @@ const blankProtected = () => ({
   mediaPermissionDenied: false, aiPanelOpen: false, aiPanelStreaming: false, aiPanelText: '', aiPanelPrompt: '', aiPanelError: '', aiPanelNotice: '',
 });
 const value = event => String(event.detail && event.detail.value || '').trim();
+const filteredProjectState = (projects, keyword) => {
+  const query = String(keyword || '').trim().toLowerCase();
+  const rows = (projects || []).map(project => Object.assign({}, project, {
+    search_visible: !query || [project.name, project.location, project.style].some(text => String(text || '').toLowerCase().includes(query)),
+  }));
+  return { projects: rows, projectVisibleCount: rows.filter(project => project.search_visible).length };
+};
 const mediaID = item => String(item && (item.media_id || item.id || item.asset && item.asset.media_id) || '');
 const noteContentSignature = draft => {
   const copy = Object.assign({}, draft);
@@ -54,6 +62,14 @@ const forgetShareToken = shareID => {
   try { const cache = shareTokenCache(); delete cache[shareID]; wx.setStorageSync(SHARE_TOKEN_CACHE_KEY, cache); } catch (_) {}
 };
 const assetOf = item => item && item.asset ? item.asset : item;
+const NOTE_ROW_PREVIEW_LIMIT = 6;
+const NOTE_ROW_PREVIEW_WORKERS = 2;
+const noteRowPreviewAsset = note => {
+  const assets = (note && note.media || []).map(assetOf).filter(Boolean);
+  const coverID = String(note && note.cover_media_id || '');
+  return assets.find(item => item.kind === 'image' && mediaID(item) === coverID)
+    || assets.find(item => item.kind === 'image') || null;
+};
 // T2.4 客户端预检：与服务端边界对齐（P4：图 20 MiB / 视频 500 MiB / 累计 50 项）。
 const NOTE_MEDIA_IMAGE_LIMIT = 20 * 1024 * 1024;
 const NOTE_MEDIA_VIDEO_LIMIT = 500 * 1024 * 1024;
@@ -199,7 +215,7 @@ Page({
     }
     if (this.data.pageView === 'editor') this.acceptPendingMedia();
     const afterRecheck = () => {
-      this.flushPickerFeedback(); this.resumeNoteMediaPreviews();
+      this.flushPickerFeedback(); this.resumeNoteMediaPreviews(); this.resumeNoteRowPreviews();
       if (this.data.pageView === 'version' || this.data.pageView === 'members') {
         if (this.data.requestsLoading) this._joinRequestsRetry = true; else this.loadJoinRequests();
       }
@@ -216,7 +232,7 @@ Page({
     this._aiPanelRequest = (this._aiPanelRequest || 0) + 1;
     this._aiPanelLaunch = null;
     this.abortNoteAI();
-    this.setData({ aiPanelOpen: false, aiPanelStreaming: false, aiPanelText: '', aiPanelPrompt: '', aiPanelError: '', aiPanelNotice: '' });
+    this.setData({ aiPanelOpen: false, aiPanelStreaming: false, aiPanelText: '', aiPanelPrompt: '', aiPanelError: '', aiPanelNotice: '', noteBodyFocused: false });
     this.editNote();
   },
   onUnload() { this._unloaded = true; this._visible = false; this._epoch = (this._epoch || 0) + 1; this.clearProtected(); },
@@ -249,7 +265,7 @@ Page({
   clearProtected() {
     // 保护性清空递增失效代际：在途上传/回调据此判断自己是否已作废，不得重建已清空的受保护状态。
     this._protectedGeneration = (this._protectedGeneration || 0) + 1;
-    this._noteFormBaseline = null; this._projectFormBaseline = null; this._loadedFormState = null; this.resetDraftInstance(); this._noteMediaFailures = null; this._noteMediaPending = null; this._noteMediaUpload = null; this._pendingPickerFeedback = null; this._hydrateResumePending = false; this._sendAttempt = null; this._aiPanelRequest = (this._aiPanelRequest || 0) + 1; this._aiPanelLaunch = null; this.abortNoteAI();
+    this._noteFormBaseline = null; this._projectFormBaseline = null; this._loadedFormState = null; this.resetDraftInstance(); this._noteMediaFailures = null; this._noteMediaPending = null; this._noteMediaUpload = null; this._pendingPickerFeedback = null; this._hydrateResumePending = false; this._noteRowPreviewRequest = (this._noteRowPreviewRequest || 0) + 1; this._noteRowPreviewContext = null; this._noteRowPreviewPromise = null; this._sendAttempt = null; this._aiPanelRequest = (this._aiPanelRequest || 0) + 1; this._aiPanelLaunch = null; this.abortNoteAI();
     this.setData(Object.assign(blankProtected(), { loading: false, loginRequired: false, accessRecheckRequired: false, error: '', notice: '', busy: false }));
   },
 
@@ -287,7 +303,7 @@ Page({
       return;
     }
     if (this.data.pageView === 'members' && this._returnToPackage) {
-      wx.navigateBack({ fail: () => this.setData({ pageView: 'detail', navigationTitle: '项目详情', error: '', notice: '' }) });
+      wx.navigateBack({ fail: () => this.setData({ pageView: 'detail', navigationTitle: this.data.selectedProject && this.data.selectedProject.name || '项目详情', error: '', notice: '' }) });
       return;
     }
     const epoch = this._epoch, project = this.data.selectedProject, view = this.data.pageView;
@@ -296,11 +312,11 @@ Page({
       if (!await this.confirmDiscardChanges() || !unchanged()) return;
       this.restoreLoadedForms();
       this.resetDraftInstance();
-      this.setData({ pageView: 'detail', navigationTitle: '项目详情', projectSettingsOpen: false, error: '', notice: '' }, () => this.scrollPage('detail'));
+      this.setData({ pageView: 'detail', navigationTitle: this.data.selectedProject && this.data.selectedProject.name || '项目详情', projectSettingsOpen: false, error: '', notice: '' }, () => this.scrollPage('detail'));
       return;
     }
     if (!await this.confirmDiscardChanges() || !unchanged()) return;
-    const kept = { projects: this.data.projects, owners: this.data.owners, ownerChoices: this.data.ownerChoices, ownerID: this.data.ownerID, ownerIndex: this.data.ownerIndex };
+    const kept = { projects: this.data.projects, projectKeyword: this.data.projectKeyword, projectVisibleCount: this.data.projectVisibleCount, owners: this.data.owners, ownerChoices: this.data.ownerChoices, ownerID: this.data.ownerID, ownerIndex: this.data.ownerIndex };
     this._selectedProjectID = ''; this._selectedNoteID = ''; this._selectedVersionID = ''; this._newNote = false;
     this._noteFormBaseline = null; this._projectFormBaseline = null; this._loadedFormState = null;
     this.setData(Object.assign(blankProtected(), kept), () => this.scrollPage('list'));
@@ -308,6 +324,7 @@ Page({
 
   openProjectSettings() { this.setData({ projectSettingsOpen: true }); },
   toggleProjectManagement() { this.setData({ projectManagementOpen: !this.data.projectManagementOpen }); },
+  setProjectKeyword(event) { this.setData(Object.assign({ projectKeyword: value(event) }, filteredProjectState(this.data.projects, value(event)))); },
   openProjectCreation() {
     if (this.data.busy || this.data.loading || this.data.projectLoadFailed) return;
     if (!this.data.owners.length) { this.setData({ projectLoadFailed: true, error: '暂无可用的项目归属，请重新加载或联系管理员。' }); return; }
@@ -322,11 +339,27 @@ Page({
     if (this._loadedFormState) this.setData({ projectEdit: Object.assign({}, this._loadedFormState.projectEdit) });
     this.setData({ projectSettingsOpen: false });
   },
-  openMembers() { this.setData({ pageView: 'members', navigationTitle: '项目成员', projectSettingsOpen: false }, () => this.scrollPage('members')); return this.loadJoinRequests(); },
-  openHistory() { this.setData({ pageView: 'history', navigationTitle: '项目记录', projectSettingsOpen: false }, () => this.scrollPage('history')); if (!this.data.historyLoaded) return this.loadHistory(); },
+  openMembers() { this.setData({ pageView: 'members', navigationTitle: '项目成员', projectSettingsOpen: false, projectManagementOpen: false }, () => this.scrollPage('members')); return this.loadJoinRequests(); },
+  openHistory() { this.setData({ pageView: 'history', navigationTitle: '项目记录', projectSettingsOpen: false, projectManagementOpen: false }, () => this.scrollPage('history')); if (!this.data.historyLoaded) return this.loadHistory(); },
+  openHistorySection(type) {
+    const index = this.data.historyTypes.findIndex(item => item.key === type);
+    if (index < 0 || this.data.busy) return;
+    this._historyRequest = (this._historyRequest || 0) + 1;
+    this.setData({ pageView: 'history', navigationTitle: type === 'feedbacks' ? '客户反馈' : '历史版本', projectSettingsOpen: false, projectManagementOpen: false, historyType: type, historyIndex: index, historyItems: [], historyPage: 0, historyCursors: [''], historyNextCursor: '', historyLoaded: false, historyLoading: false }, () => this.scrollPage('history'));
+    return this.loadHistory();
+  },
+  openVersionHistory() { return this.openHistorySection('versions'); },
+  openFeedbackHistory() { return this.openHistorySection('feedbacks'); },
+  openLatestVersionForExport() {
+    const version = this.data.versionChoices[0];
+    if (!version || this.data.busy) return;
+    this.setData({ projectManagementOpen: false });
+    return this.selectVersion({ currentTarget: { dataset: { id: version.version_id } } });
+  },
   openProjectPackage() {
     const project = this.data.selectedProject;
     if (!project || this.data.busy) return;
+    this.setData({ projectManagementOpen: false });
     wx.navigateTo({ url: '/pages/projectpackage/projectpackage?project_id=' + encodeURIComponent(project.project_id) });
   },
   openNote(event) {
@@ -392,7 +425,7 @@ Page({
         return { owner_id: ownerID, display_name: choice && choice.display_name || (owners.length === 1 ? '当前账号' : `项目归属 ${index + 1}`) };
       });
       this._loaded = true;
-      this.setData({ projects, owners, ownerChoices, ownerID: owners[0] || '', ownerIndex: 0, loading: false });
+      this.setData(Object.assign({ owners, ownerChoices, ownerID: owners[0] || '', ownerIndex: 0, loading: false }, filteredProjectState(projects, '')));
       const selectedID = this._targetProjectID || this._selectedProjectID;
       if (selectedID) { this._targetProjectID = ''; if (this._targetNoteID) { this._selectedNoteID = this._targetNoteID; this._targetNoteID = ''; } if (this._targetView) { this._nextPageView = this._targetView; this._targetView = ''; } await this.openProject(selectedID, epoch); }
       else if (this._targetCustomerRef) await this.preselectProjectCustomer(epoch);
@@ -409,7 +442,8 @@ Page({
   setConfirmerChoice(event) { const index = Number(event.detail.value) || 0, member = this.data.confirmerChoices[index]; this.setData({ confirmerIndex: index, confirmerAccount: member ? member.actor_id : '' }); },
   setNoteTitle(event) { this.setData({ noteTitle: value(event) }, () => this.setData({ noteDirty: this.hasUnsavedChanges() })); },
   setNoteBody(event) { if (!this.data.bodyReadOnly) { this._noteCursor = Number(event.detail && event.detail.cursor); this.setData({ noteBody: String(event.detail && event.detail.value || '') }, () => this.setData({ noteDirty: this.hasUnsavedChanges() })); } },
-  onNoteBodyBlur(event) { this._noteCursor = Number(event.detail && event.detail.cursor); },
+  focusNoteBody() { this.setData({ noteBodyFocused: true }); },
+  onNoteBodyBlur(event) { this._noteCursor = Number(event.detail && event.detail.cursor); this.setData({ noteBodyFocused: false }); },
   onNoteKeyboardHeight(event) { this.setData({ keyboardHeight: Math.max(0, Number(event.detail && event.detail.height) || 0) }); },
   onNoteGalleryChange(event) {
     this.setData({ galleryPositions: Object.assign({}, this.data.galleryPositions, { [event.currentTarget.dataset.key]: Number(event.detail.current) || 0 }) });
@@ -590,6 +624,74 @@ Page({
       Promise.resolve().then(() => this.resumeNoteMediaPreviews());
     }
   },
+  async hydrateNoteRowPreviews(epoch, projectRequest, projectID) {
+    const launch = {
+      epoch, projectRequest, projectID, token: this._token, account: draftAccount(),
+      generation: this._protectedGeneration || 0, request: (this._noteRowPreviewRequest || 0) + 1,
+    };
+    this._noteRowPreviewRequest = launch.request;
+    this._noteRowPreviewContext = launch;
+    const current = () => this.current(launch.epoch)
+      && this._noteRowPreviewRequest === launch.request
+      && this._projectRequest === launch.projectRequest
+      && this._token === launch.token && draftAccount() === launch.account
+      && (this._protectedGeneration || 0) === launch.generation
+      && this.data.pageView === 'detail' && !!this.data.selectedProject
+      && this.data.selectedProject.project_id === launch.projectID;
+    if (!current()) return;
+    const firstRows = (this.data.notes || []).slice(0, NOTE_ROW_PREVIEW_LIMIT);
+    const targets = firstRows.filter(item => item.preview_media_id && !item.preview_error
+      && (!item.preview_path || !localFileUsable(item.preview_path)));
+    if (!targets.length) return;
+    const targetIDs = new Set(targets.map(item => item.note_id));
+    this.setData({ notes: (this.data.notes || []).map(item => targetIDs.has(item.note_id)
+      ? Object.assign({}, item, { preview_path: localFileUsable(item.preview_path) ? item.preview_path : '', preview_loading: true, preview_error: '' }) : item) });
+    let cursor = 0;
+    const update = (target, patch) => {
+      if (!current()) return;
+      this.setData({ notes: (this.data.notes || []).map(item => item.note_id === target.note_id && item.preview_media_id === target.preview_media_id
+        ? Object.assign({}, item, patch) : item) });
+    };
+    const consume = async () => {
+      while (cursor < targets.length && current()) {
+        const target = targets[cursor++];
+        try {
+          const path = await api.downloadProjectNoteMedia(launch.projectID, target.preview_media_id);
+          update(target, { preview_path: path, preview_loading: false, preview_error: '' });
+        } catch (error) {
+          if (!current()) return;
+          const status = Number(error && error.statusCode);
+          if (status === 401 || status === 403) {
+            this.handleNoteMediaAccessFailure(status);
+            return;
+          }
+          update(target, { preview_path: '', preview_loading: false, preview_error: '缩略图暂时无法显示' });
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(NOTE_ROW_PREVIEW_WORKERS, targets.length) }, () => consume()));
+  },
+  resumeNoteRowPreviews() {
+    const project = this.data.selectedProject;
+    if (!project || this.data.pageView !== 'detail') return;
+    // 每次回到前台最多重试一轮首屏缩略图；不在 error 回调中立即重试，避免损坏文件形成循环。
+    const resumable = new Set((this.data.notes || []).slice(0, NOTE_ROW_PREVIEW_LIMIT).filter(item => item.preview_media_id).map(item => item.note_id));
+    this.setData({ notes: (this.data.notes || []).map(item => resumable.has(item.note_id) && (item.preview_loading || item.preview_error)
+      ? Object.assign({}, item, { preview_loading: false, preview_error: '' }) : item) });
+    this._noteRowPreviewPromise = this.hydrateNoteRowPreviews(this._epoch, this._projectRequest, project.project_id);
+    return this._noteRowPreviewPromise;
+  },
+  noteRowPreviewLoadError(event) {
+    const dataset = event.currentTarget.dataset || {};
+    const noteID = String(dataset.id || ''), failedMediaID = String(dataset.mediaId || ''), failedPath = String(dataset.path || '');
+    const context = this._noteRowPreviewContext, project = this.data.selectedProject;
+    if (!context || !this.current(this._epoch) || context.request !== this._noteRowPreviewRequest
+      || context.account !== draftAccount() || context.generation !== (this._protectedGeneration || 0)
+      || !project || project.project_id !== context.projectID || this.data.pageView !== 'detail') return;
+    this.setData({ notes: (this.data.notes || []).map(item => item.note_id === noteID
+      && item.preview_media_id === failedMediaID && item.preview_path === failedPath
+      ? Object.assign({}, item, { preview_path: '', preview_loading: false, preview_error: '缩略图暂时无法显示' }) : item) });
+  },
   // 回前台/重验后恢复未完成的缩略图下载（含被 epoch 中断的「加载中」项）。
   resumeNoteMediaPreviews() {
     const project = this.data.selectedProject;
@@ -658,7 +760,8 @@ Page({
     try {
       const saved = await api.updateProjectNoteProject(project.project_id, Object.assign({}, patch, { expected_revision: project.revision }));
       if (!this.current(epoch) || this._selectedProjectID && this._selectedProjectID !== project.project_id) return;
-      this.setData({ selectedProject: saved, projectEdit: projectForm(saved), projectStatusLabel: statusLabels[saved.status] || '初步方案', projects: this.data.projects.map(item => item.project_id === saved.project_id ? saved : item), busy: false, notice: '项目资料已保存，已冻结版本仍保留原有资料。' }, () => {
+      const projectState = filteredProjectState(this.data.projects.map(item => item.project_id === saved.project_id ? saved : item), this.data.projectKeyword);
+      this.setData(Object.assign({ selectedProject: saved, projectEdit: projectForm(saved), projectStatusLabel: statusLabels[saved.status] || '初步方案', busy: false, notice: '项目资料已保存，已冻结版本仍保留原有资料。' }, projectState), () => {
         this._projectFormBaseline = this.projectFormSignature();
         if (this._loadedFormState) this._loadedFormState.projectEdit = Object.assign({}, this.data.projectEdit);
       });
@@ -726,11 +829,12 @@ Page({
     try {
       const saved = await api.updateProjectNoteProject(project.project_id, { customer_ref: customerRef, expected_revision: project.revision });
       if (!this.current(launch.epoch) || this._token !== launch.token || !this.data.selectedProject || this.data.selectedProject.project_id !== launch.projectID) return;
-      this.setData({
+      const projectState = filteredProjectState(this.data.projects.map(item => item.project_id === saved.project_id ? saved : item), this.data.projectKeyword);
+      this.setData(Object.assign({
         selectedProject: saved, customerRef: saved.customer_ref || '', customerName: saved.customer_ref ? customerName : '',
-        projects: this.data.projects.map(item => item.project_id === saved.project_id ? saved : item), busy: false,
+        busy: false,
         notice: saved.customer_ref ? '客户已关联到项目。' : '已解除客户关联。',
-      });
+      }, projectState));
     } catch (error) {
       if (this.current(launch.epoch) && this._token === launch.token) this.setData({ busy: false, error: error.message || '客户关联保存失败，请重试。' });
     }
@@ -746,7 +850,7 @@ Page({
       const input = { name: this.data.projectName, owner_id: this.data.ownerID };
       if (this.data.customerRef) input.customer_ref = this.data.customerRef;
       const project = await api.createProjectNoteProject(input);
-      if (this.current(epoch)) { this._selectedProjectID = project.project_id; this._selectedNoteID = ''; this._selectedVersionID = ''; this._newNote = false; this.setData({ projects: [project, ...this.data.projects], projectName: '', busy: false }); this.applyProjectDetail({ project }, '项目已创建。', null, null, 'detail'); setTimeout(() => { if (this.current(epoch)) void this.startNewNote(); }, 0); }
+      if (this.current(epoch)) { this._selectedProjectID = project.project_id; this._selectedNoteID = ''; this._selectedVersionID = ''; this._newNote = false; this.setData(Object.assign({ projectName: '', busy: false }, filteredProjectState([project, ...this.data.projects], this.data.projectKeyword))); this.applyProjectDetail({ project }, '项目已创建。', null, null, 'detail'); setTimeout(() => { if (this.current(epoch)) void this.startNewNote(); }, 0); }
     } catch (error) { if (this.current(epoch)) this.setData({ busy: false, error: error.message || '项目创建失败' }); }
   },
   async selectProject(event) {
@@ -778,7 +882,7 @@ Page({
     try {
       await api.deleteProjectNoteProject(launch.id, launch.revision);
       if (!this.current(launch.epoch) || this._token !== launch.token) return;
-      this.setData({ projects: this.data.projects.filter(item => item.project_id !== launch.id), busy: false, notice: '项目已删除。' });
+      this.setData(Object.assign({ busy: false, notice: '项目已删除。' }, filteredProjectState(this.data.projects.filter(item => item.project_id !== launch.id), this.data.projectKeyword)));
     } catch (error) {
       if (!this.current(launch.epoch) || this._token !== launch.token) return;
       const message = Number(error && error.statusCode) === 409 ? '项目已更新，请刷新后再删除。' : error.message || '项目删除失败';
@@ -792,7 +896,7 @@ Page({
     const requestedView = this._nextPageView || (requested ? 'version' : ['editor', 'members', 'history'].includes(this.data.pageView) ? this.data.pageView : 'detail');
     this._nextPageView = '';
     this._selectedProjectID = projectID; this._selectedVersionID = requested; this._targetVersionID = '';
-    const kept = { projects: this.data.projects, owners: this.data.owners, ownerChoices: this.data.ownerChoices, ownerID: this.data.ownerID, ownerIndex: this.data.ownerIndex };
+    const kept = { projects: this.data.projects, projectKeyword: this.data.projectKeyword, projectVisibleCount: this.data.projectVisibleCount, owners: this.data.owners, ownerChoices: this.data.ownerChoices, ownerID: this.data.ownerID, ownerIndex: this.data.ownerIndex };
     this.setData(Object.assign(blankProtected(), kept, { busy: true, error: '', notice: notice || '' }));
     try {
       const result = await api.getProjectNoteProject(projectID);
@@ -872,12 +976,23 @@ Page({
     const historyNotice = requested ? '通知对应的固定版本，草稿不会在此修改。' : version && !note ? '历史草稿未加载，仅显示版本摘要。' : '';
     const pageView = requestedView || (requested || fixed ? 'version' : 'detail');
     const shareError = share && !share.share_token && pageView === 'version' ? '分享凭证未同步，如需预览请重新生成分享。' : '';
-    const navigationTitles = { detail: '项目详情', editor: note ? '编辑笔记' : '新建笔记', version: '方案版本', members: '项目成员', history: '项目记录' };
+    const navigationTitles = { detail: project.name || '项目详情', editor: '项目笔记', version: '方案版本', members: '项目成员', history: '项目记录' };
+    const noteRows = notes.map(draft => {
+      const draftVersions = versions.filter(item => item.note_id === draft.note_id);
+      const shared = draftVersions.some(item => shares.some(candidate => candidate.version_id === item.version_id && !candidate.revoked));
+      const preview = noteRowPreviewAsset(draft);
+      return Object.assign({}, draft, {
+        note_state_label: shared ? '可再次分享' : draftVersions.length ? '已固定' : '草稿',
+        preview_media_id: preview ? mediaID(preview) : '', preview_path: '', preview_loading: false, preview_error: '',
+      });
+    });
+    const shareCount = shares.length, shareCountLabel = shareCount ? String(shareCount) + (result.truncated && result.truncated.shares ? '+' : '') : '';
     this._targetVersionID = ''; this._selectedProjectID = project.project_id;
     this._loaded = true;
     this.setData({
       pageView, navigationTitle: navigationTitles[pageView] || project.name || '项目详情', projectSettingsOpen: false, projectManagementOpen: false,
-      selectedProject: project, projectEdit: projectForm(project), projectStatusLabel: statusLabels[project.status] || '初步方案', notes, noteIndex: Math.max(0, notes.findIndex(item => item.note_id === noteID)), versionChoices, members, activeMembers: available, confirmerChoices,
+      selectedProject: project, projectEdit: projectForm(project), projectStatusLabel: statusLabels[project.status] || '初步方案', notes: noteRows, noteIndex: Math.max(0, noteRows.findIndex(item => item.note_id === noteID)), versionChoices, members, activeMembers: available, confirmerChoices,
+      shareCountLabel, pendingFeedbackCount: (result.feedbacks || []).filter(item => !item.resolved).length,
       confirmerIndex: foundIndex < 0 ? 0 : foundIndex + 1, confirmerAccount: foundIndex < 0 ? '' : available[foundIndex].actor_id,
       note, noteTitle: note && note.title || '', noteBody: note && note.body || '', bodyReadOnly,
       noteMedia: note ? ((note.media && note.media.length ? note.media.map(assetOf) : (note.media_ids || []).map(id => ({ media_id: id, kind: id === note.cover_media_id ? 'image' : 'private' }))).map(item => Object.assign({}, item, { media_id: mediaID(item) }))) : [],
@@ -898,6 +1013,7 @@ Page({
       this.setData({ noteDirty: false });
       if (pageView === 'editor') { this.restorePendingMedia(); this.acceptPendingMedia(); }
       if (pageView === 'editor') void this.hydrateNoteMedia(this._epoch, project.project_id);
+      if (pageView === 'detail') this._noteRowPreviewPromise = this.hydrateNoteRowPreviews(this._epoch, this._projectRequest, project.project_id);
       this.scrollPage(pageView);
     });
   },
@@ -962,7 +1078,7 @@ Page({
     if (this.data.busy || !await this.confirmDiscardChanges()) return;
     this._newNote = true; this._selectedNoteID = ''; this._selectedVersionID = ''; this._targetVersionID = ''; this._shareAttempt = null; this._sendAttempt = null;
     this.editNote(); this._editorScrollTop = 0;
-    this.setData({ pageView: 'editor', navigationTitle: '新建笔记', projectSettingsOpen: false, note: null, noteTitle: '', noteBody: '', noteMedia: [], bodyReadOnly: false, historyMode: false, versionView: null, versionMedia: [], versionBlocks: [], historyNotice: '', feedbacks: [], confirmations: [], selectedFeedback: null, feedbackID: '', feedbackReply: '' }, () => { this.ensureDraftInstance(true); this.publishMediaFailures(); this._noteFormBaseline = this.noteFormSignature(); this.scrollPage('editor'); });
+    this.setData({ pageView: 'editor', navigationTitle: '项目笔记', projectSettingsOpen: false, note: null, noteTitle: '', noteBody: '', noteMedia: [], bodyReadOnly: false, historyMode: false, versionView: null, versionMedia: [], versionBlocks: [], historyNotice: '', feedbacks: [], confirmations: [], selectedFeedback: null, feedbackID: '', feedbackReply: '' }, () => { this.ensureDraftInstance(true); this.publishMediaFailures(); this._noteFormBaseline = this.noteFormSignature(); this.scrollPage('editor'); });
   },
   openNoteMore() {
     if (!this.data.note || this.data.busy || this.data.historyMode) return;

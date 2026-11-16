@@ -390,15 +390,17 @@ test('project list and detail keep one title and one empty-note action', () => {
   const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
   assert.match(template, /pageView === 'create'/);
   assert.match(template, /range="\{\{ownerChoices\}\}" range-key="display_name"/);
-  assert.match(template, /selectedProject\.creator_display_name/);
+  assert.match(template, /class="detail-summary-row"/);
   assert.doesNotMatch(template, /class="page-title">我的项目/);
   assert.doesNotMatch(template, />开始记录</);
   assert.doesNotMatch(template, /\{\{ownerID \|\| '选择项目归属'\}\}/);
   assert.doesNotMatch(template, /组合方案并指定接收人|版本、意见与确认/);
-  assert.match(template, /class="menu-meta">\{\{activeMembers\.length\}\} 人/);
+  assert.match(template, /class="sheet-meta">\{\{activeMembers\.length\}\} 人/);
   assert.match(template, /\{\{activeMembers\.length\}\} 位成员/);
   assert.match(template, /wx:if="\{\{activeMembers\.length\}\}" class="card"><text class="section-title">方案确认人/);
-  assert.match(template, /wx:if="\{\{projects\.length\}\}" class="primary list-create"/);
+  const projectList = template.split("pageView === 'list'")[2].split("pageView === 'create'")[0];
+  assert.match(projectList, /class="list-dock"/);
+  assert.equal((projectList.match(/bindtap="openProjectCreation"/g) || []).length, 1, 'empty and populated lists share one bottom create action');
   const styles = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxss'), 'utf8');
   assert.match(styles, /\.page \.project-row[^}]*width:100%!important/);
   assert.match(styles, /\.page \.project-list\{overflow:hidden\}/);
@@ -1100,7 +1102,7 @@ test('private reader template uses native branches for view, rich text, truncati
   assert.match(document, /nodes="\{\{body\}\}"/);
   assert.match(document, />\{\{body\}\}<\/text>/);
   assert.match(template, /wx:if="\{\{view\.activity_truncated\}\}"[^>]*>[^<]*最近 50 条记录/);
-  assert.match(template, /wx:if="\{\{!memberMode && \(canConfirm \|\| confirmed\)\}\}"\s+class="card confirm"/);
+  assert.match(template, /wx:if="\{\{!memberMode && !canReturnToEditor && \(canConfirm \|\| confirmed\)\}\}"\s+class="card confirm"/);
   assert.match(template, /disabled="\{\{busy \|\| confirmed\}\}"/);
 });
 
@@ -2467,7 +2469,7 @@ test('the media list exposes fallbacks, retries and video playback wiring', () =
   assert.match(wxml, /'retryNoteMediaPreview'/);
   assert.match(wxml, /bindtap="openNoteVideo"/);
   assert.match(wxml, /poster="\{\{item\.thumb_path \|\| ''\}\}"/);
-  assert.match(wxml, /item\.kind === 'private' \? '素材'/);
+  assert.match(wxml, /class="attachment-placeholder"/);
 });
 
 // 批次 2 复评回归：跨后台恢复、提示保留、身份守卫、单项重试、结构化草稿、视频闭环。
@@ -3228,6 +3230,31 @@ test('project note template keeps project creation minimal and editor actions to
   assert.doesNotMatch(editorView, /生成方案版本|历史版本|下一步/);
 });
 
+test('project note editor follows the approved document canvas and compact attachment strip', () => {
+  const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
+  const editorView = template.slice(template.indexOf("<block wx:elif=\"{{pageView === 'editor'"), template.indexOf("<block wx:elif=\"{{pageView === 'version'"));
+  assert.match(template, /<navigation-bar[^>]+variant="workbench"/);
+  assert.match(editorView, /class="editor-sheet"/);
+  assert.doesNotMatch(editorView, /class="card editor-card"/);
+  assert.match(editorView, /class="attachment-strip"/);
+  assert.match(editorView, /class="attachment-tile/);
+  assert.match(editorView, /class="attachment-add"[^>]+bindtap="chooseNoteMedia"/);
+  assert.match(editorView, /class="editor-tools"/);
+  assert.match(editorView, /<mini-icon name="image"[^>]*\/>\s*<text>\+ 图片\/视频<\/text>/);
+  assert.match(editorView, /<mini-icon name="edit"[^>]*\/>\s*<text>AI辅助<\/text>/);
+  assert.doesNotMatch(editorView, />笔记标题<|>方案内容<|>方案素材</);
+});
+
+test('project note editor keeps reference text density and one native video play control', () => {
+  const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
+  const styles = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxss'), 'utf8');
+  assert.match(template, /bindfocus="focusNoteBody"[^>]+bindblur="onNoteBodyBlur"/);
+  assert.match(template, /wx:if="\{\{noteBodyFocused\}\}" class="field-hint">\{\{noteBody\.length \|\| 0\}\} \/ 8000/);
+  assert.match(styles, /\.note-body-input\{[^}]*font-size:32rpx!important/);
+  assert.match(styles, /\.attachment-video::after\{display:none\}/);
+  assert.match(template, /show-center-play-btn="\{\{true\}\}"/);
+});
+
 test('project detail keeps one safe-area new-note action and folds management tools by default', () => {
   const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
   const detailView = template.slice(template.indexOf("<block wx:elif=\"{{pageView === 'detail'"), template.indexOf("<block wx:elif=\"{{pageView === 'editor'"));
@@ -3236,7 +3263,7 @@ test('project detail keeps one safe-area new-note action and folds management to
   assert.match(detailView, />新建笔记</);
   assert.match(detailView, /bindtap="toggleProjectManagement"/);
   assert.match(detailView, /wx:if="{{projectManagementOpen}}"/);
-  assert.match(detailView, /方案版本/);
+  assert.match(detailView, /历史版本/);
   assert.match(detailView, /分享资料/);
   assert.match(detailView, /项目成员/);
   assert.match(detailView, /项目记录/);
@@ -3247,11 +3274,249 @@ test('project detail keeps one safe-area new-note action and folds management to
   page.toggleProjectManagement(); assert.equal(page.data.projectManagementOpen, false);
 });
 
+test('project list, detail, create and more sheet follow the approved compact hierarchy', () => {
+  const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
+  const listView = template.slice(template.indexOf("<block wx:if=\"{{pageView === 'list'}}\">"), template.indexOf("<block wx:elif=\"{{pageView === 'create'}}\">"));
+  const createView = template.slice(template.indexOf("<block wx:elif=\"{{pageView === 'create'}}\">"), template.indexOf("<block wx:elif=\"{{pageView === 'detail'"));
+  const detailView = template.slice(template.indexOf("<block wx:elif=\"{{pageView === 'detail'"), template.indexOf("<block wx:elif=\"{{pageView === 'editor'"));
+  assert.match(listView, /class="project-search"/);
+  assert.match(listView, /placeholder="搜索项目"/);
+  assert.match(createView, /class="create-hint"[^>]*>客户与项目资料可稍后补充</);
+  assert.match(createView, /class="create-dock"/);
+  assert.match(detailView, /class="detail-summary-row"/);
+  assert.match(detailView, />项目资料</);
+  assert.match(detailView, /class="detail-customer-row"/);
+  assert.match(detailView, />分享资料</);
+  assert.match(detailView, />客户反馈</);
+  assert.match(detailView, /class="management-sheet-mask"/);
+  assert.match(detailView, />历史版本</);
+  assert.match(detailView, />导出方案</);
+});
+
+test('project detail downloads only six real image thumbnails with two workers', async () => {
+  let active = 0, maxActive = 0;
+  const downloads = [];
+  const page = pageHarness('projectnotes', {
+    downloadProjectNoteMedia: async (_projectID, mediaID) => {
+      downloads.push(mediaID); active += 1; maxActive = Math.max(maxActive, active);
+      await new Promise(resolve => setTimeout(resolve, 4));
+      active -= 1; return '/tmp/' + mediaID + '.jpg';
+    },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._projectRequest = 3;
+  const notes = Array.from({ length: 8 }, (_, index) => ({
+    note_id: 'note-' + index, revision: 1, title: '笔记 ' + index, body: '正文', body_format: 'plain',
+    cover_media_id: index === 0 ? 'cover-0' : '',
+    media: index === 7
+      ? [{ media_id: 'video-7', kind: 'video' }]
+      : [{ media_id: 'image-' + index, kind: 'image' }, ...(index === 0 ? [{ media_id: 'cover-0', kind: 'image' }] : [])],
+  }));
+  page.applyProjectDetail({ project: { project_id: 'project-one', name: '林宅' }, notes, versions: [] }, '', null, null, 'detail');
+  await page._noteRowPreviewPromise;
+  assert.deepEqual(downloads, ['cover-0', 'image-1', 'image-2', 'image-3', 'image-4', 'image-5']);
+  assert.equal(maxActive, 2);
+  assert.equal(page.data.notes[0].preview_path, '/tmp/cover-0.jpg');
+  assert.equal(page.data.notes[6].preview_path, '');
+  assert.equal(page.data.notes[7].preview_media_id, '', 'video must not be fabricated as an image thumbnail');
+});
+
+test('project detail thumbnail response cannot cross an actor change with the same token', async () => {
+  let actor = 101, finish;
+  const page = pageHarness('projectnotes', {
+    downloadProjectNoteMedia: () => new Promise(resolve => { finish = resolve; }),
+  }, { getStorageSync: key => key === 'token' ? 'session-token' : key === 'userInfo' ? { id: actor } : '' });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._projectRequest = 1;
+  page.setData({ pageView: 'detail', selectedProject: { project_id: 'project-one' }, notes: [{ note_id: 'old', preview_media_id: 'old-image', preview_path: '', preview_loading: false }] });
+  const pending = page.hydrateNoteRowPreviews(1, 1, 'project-one');
+  actor = 202;
+  finish('/tmp/old-image.jpg'); await pending;
+  assert.equal(page.data.notes[0].note_id, 'old');
+  assert.equal(page.data.notes[0].preview_path, '');
+});
+
+test('project detail thumbnail response cannot cross a project request boundary', async () => {
+  let finish;
+  const page = pageHarness('projectnotes', { downloadProjectNoteMedia: () => new Promise(resolve => { finish = resolve; }) });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._projectRequest = 1;
+  page.setData({ pageView: 'detail', selectedProject: { project_id: 'project-one' }, notes: [{ note_id: 'old', preview_media_id: 'old-image', preview_path: '', preview_loading: false }] });
+  const pending = page.hydrateNoteRowPreviews(1, 1, 'project-one');
+  page._projectRequest = 2;
+  page.setData({ selectedProject: { project_id: 'project-two' }, notes: [{ note_id: 'new', preview_media_id: 'new-image', preview_path: '', preview_loading: false }] });
+  finish('/tmp/old-image.jpg'); await pending;
+  assert.equal(page.data.notes[0].note_id, 'new');
+  assert.equal(page.data.notes[0].preview_path, '');
+});
+
+test('project detail thumbnail keeps missing media local but closes current authorization failures', async () => {
+  for (const statusCode of [404, 403, 401]) {
+    const page = pageHarness('projectnotes', {
+      downloadProjectNoteMedia: async () => { throw Object.assign(new Error('download failed'), { statusCode }); },
+    });
+    page._visible = true; page._token = 'session-token'; page._epoch = 1; page._projectRequest = 1;
+    page.setData({ pageView: 'detail', selectedProject: { project_id: 'project-one' }, notes: [{ note_id: 'note-one', preview_media_id: 'image-one', preview_path: '', preview_loading: false }] });
+    await page.hydrateNoteRowPreviews(1, 1, 'project-one');
+    if (statusCode === 401) {
+      assert.equal(page.data.selectedProject, null);
+      assert.equal(page.data.loginRequired, true);
+      assert.equal(page.data.projectLoadFailed, false);
+    } else if (statusCode === 403) {
+      assert.equal(page.data.selectedProject, null);
+      assert.equal(page.data.projectLoadFailed, true);
+    } else {
+      assert.equal(page.data.selectedProject.project_id, 'project-one');
+      assert.match(page.data.notes[0].preview_error, /暂时无法显示/);
+    }
+  }
+});
+
+test('project detail thumbnail markup only renders downloaded real images', () => {
+  const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
+  assert.match(template, /<image wx:if="\{\{item\.preview_path\}\}"[^>]+mode="aspectFill"[^>]+binderror="noteRowPreviewLoadError"/);
+  assert.match(template, /data-media-id="\{\{item\.preview_media_id\}\}"/);
+  assert.match(template, /data-path="\{\{item\.preview_path\}\}"/);
+  assert.match(template, /<mini-icon wx:else name="file"/);
+  assert.doesNotMatch(template, /preview_media_id[^\n]+<video/);
+});
+
+test('project detail resumes an interrupted thumbnail and replaces an invalid temp file', async () => {
+  const downloads = [];
+  const page = pageHarness('projectnotes', {
+    downloadProjectNoteMedia: async (_projectID, mediaID) => { downloads.push(mediaID); return '/tmp/fresh.jpg'; },
+  }, { getFileSystemManager: () => ({ accessSync(file) { if (file === '/tmp/stale.jpg') throw new Error('gone'); } }) });
+  page._visible = true; page._token = 'session-token'; page._epoch = 4; page._projectRequest = 2;
+  page.setData({ pageView: 'detail', selectedProject: { project_id: 'project-one' }, notes: [{ note_id: 'note-one', preview_media_id: 'image-one', preview_path: '/tmp/stale.jpg', preview_loading: true, preview_error: '' }] });
+  await page.resumeNoteRowPreviews();
+  assert.deepEqual(downloads, ['image-one']);
+  assert.equal(page.data.notes[0].preview_path, '/tmp/fresh.jpg');
+  assert.equal(page.data.notes[0].preview_loading, false);
+});
+
+test('project detail thumbnail interrupted by background resumes through onShow', async () => {
+  const downloads = [];
+  let finishFirst;
+  const project = { project_id: 'project-one', name: '林宅' };
+  const note = { note_id: 'note-one', title: '方案', body: '正文', body_format: 'plain', media: [{ media_id: 'image-one', kind: 'image' }] };
+  const page = pageHarness('projectnotes', {
+    getProjectNoteProject: async () => ({ project, notes: [note], versions: [] }),
+    downloadProjectNoteMedia: async (_projectID, mediaID) => {
+      downloads.push(mediaID);
+      if (downloads.length === 1) return new Promise(resolve => { finishFirst = resolve; });
+      return '/tmp/fresh-row.jpg';
+    },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._projectRequest = 1; page._loaded = true;
+  page.applyProjectDetail({ project, notes: [note], versions: [] }, '', null, null, 'detail');
+  page.onHide();
+  finishFirst('/tmp/stale-row.jpg');
+  await new Promise(resolve => setTimeout(resolve, 0));
+  assert.equal(page.data.notes[0].preview_path, '');
+  await page.onShow();
+  await page._noteRowPreviewPromise;
+  assert.deepEqual(downloads, ['image-one', 'image-one']);
+  assert.equal(page.data.notes[0].preview_path, '/tmp/fresh-row.jpg');
+  assert.equal(page.data.notes[0].preview_loading, false);
+});
+
+test('a late image error cannot clear a newer project row thumbnail', () => {
+  let actor = 101;
+  const page = pageHarness('projectnotes', {}, { getStorageSync: key => key === 'token' ? 'session-token' : key === 'userInfo' ? { id: actor } : '' });
+  page._visible = true; page._token = 'session-token'; page._epoch = 3; page._projectRequest = 2;
+  page._noteRowPreviewRequest = 4;
+  page._noteRowPreviewContext = { request: 4, account: '101', projectID: 'project-one', generation: page._protectedGeneration || 0 };
+  page.setData({
+    pageView: 'detail', selectedProject: { project_id: 'project-one' },
+    notes: [{ note_id: 'note-one', preview_media_id: 'image-one', preview_path: '/tmp/fresh.jpg', preview_loading: false, preview_error: '' }],
+  });
+  page.noteRowPreviewLoadError({ currentTarget: { dataset: { id: 'note-one', mediaId: 'image-one', path: '/tmp/stale.jpg' } } });
+  assert.equal(page.data.notes[0].preview_path, '/tmp/fresh.jpg');
+  assert.equal(page.data.notes[0].preview_error, '');
+
+  actor = 202;
+  page.noteRowPreviewLoadError({ currentTarget: { dataset: { id: 'note-one', mediaId: 'image-one', path: '/tmp/fresh.jpg' } } });
+  assert.equal(page.data.notes[0].preview_path, '/tmp/fresh.jpg');
+
+  actor = 101;
+  page.setData({ selectedProject: { project_id: 'project-two' } });
+  page.noteRowPreviewLoadError({ currentTarget: { dataset: { id: 'note-one', mediaId: 'image-one', path: '/tmp/fresh.jpg' } } });
+  assert.equal(page.data.notes[0].preview_path, '/tmp/fresh.jpg');
+
+  page.setData({ selectedProject: { project_id: 'project-one' } });
+  page.noteRowPreviewLoadError({ currentTarget: { dataset: { id: 'note-one', mediaId: 'image-one', path: '/tmp/fresh.jpg' } } });
+  assert.equal(page.data.notes[0].preview_path, '');
+  assert.match(page.data.notes[0].preview_error, /暂时无法显示/);
+});
+
+test('project row thumbnail state never enters the editable note payload', () => {
+  const page = pageHarness('projectnotes', {});
+  page.setData({
+    selectedProject: { project_id: 'project-one' }, noteTitle: '方案', noteBody: '正文',
+    noteMedia: [{ media_id: 'draft-image', kind: 'image' }],
+    notes: [{ note_id: 'note-one', preview_media_id: 'row-image', preview_path: '/tmp/row.jpg', preview_loading: false }],
+  });
+  const payload = page.noteDraft();
+  assert.deepEqual(Array.from(payload.media_ids), ['draft-image']);
+  assert.equal(Object.prototype.hasOwnProperty.call(payload, 'preview_media_id'), false);
+  assert.equal(JSON.stringify(payload).includes('/tmp/row.jpg'), false);
+});
+
+test('project search filters only the already authorized local list', () => {
+  const page = pageHarness('projectnotes', {});
+  page.setData({ projects: [
+    { project_id: 'p1', name: '林宅改造', location: '杭州' },
+    { project_id: 'p2', name: '陈宅新建', style: '现代' },
+  ] });
+  page.setProjectKeyword({ detail: { value: '林宅' } });
+  assert.equal(page.data.projectVisibleCount, 1);
+  assert.deepEqual(page.data.projects.map(item => item.search_visible), [true, false]);
+  page.setProjectKeyword({ detail: { value: '' } });
+  assert.equal(page.data.projectVisibleCount, 2);
+  assert.deepEqual(page.data.projects.map(item => item.search_visible), [true, true]);
+});
+
 test('minimal project creation promises the existing automatic note step', () => {
   const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
   const createView = template.slice(template.indexOf("<block wx:elif=\"{{pageView === 'create'}}\">"), template.indexOf("<block wx:elif=\"{{pageView === 'detail'"));
   assert.match(createView, />创建并写笔记</);
   assert.doesNotMatch(createView, />创建项目</);
+});
+
+test('private preview uses the approved send-preview shell without changing collaboration actions', () => {
+  const template = fs.readFileSync(path.join(root, 'pages/projectnoteview/projectnoteview.wxml'), 'utf8');
+  const config = JSON.parse(fs.readFileSync(path.join(root, 'pages/projectnoteview/projectnoteview.json'), 'utf8'));
+  assert.equal(config.navigationStyle, 'custom');
+  assert.equal(config.usingComponents['navigation-bar'], '/components/navigation-bar/navigation-bar');
+  assert.match(template, /<navigation-bar[^>]+title="\{\{canReturnToEditor \? '发送预览' : '方案详情'\}\}"[^>]+variant="workbench"/);
+  assert.match(template, /class="reader-document"/);
+  assert.match(template, /再次编辑不会改变已发送内容/);
+  assert.match(template, /bindtap="returnToEditor"/);
+  assert.match(template, /open-type="share"[^>]*>发给客户</);
+  assert.match(template, /class="card feedback-card"/);
+  assert.match(template, /class="card confirm"/);
+});
+
+test('private preview shows return-to-edit only to the real sharer', async () => {
+  const view = { project: { project_id: 'p', name: '林宅' }, share: { share_id: 's', sharer_id: 7 }, version: { version_id: 'v', revision: 1, title: '方案', body: '正文', body_format: 'plain', media: [] }, feedbacks: [], resolutions: [] };
+  const api = { getSharedProjectNote: async () => view };
+  const sharer = pageHarness('projectnoteview', api, { getStorageSync: key => key === 'token' ? 'token' : key === 'userInfo' ? { id: 7 } : '' });
+  sharer.onLoad({ pns: 'private-token' }); await sharer.onShow();
+  assert.equal(sharer.data.canReturnToEditor, true);
+  const recipient = pageHarness('projectnoteview', api, { getStorageSync: key => key === 'token' ? 'token' : key === 'userInfo' ? { id: 8 } : '' });
+  recipient.onLoad({ pns: 'private-token' }); await recipient.onShow();
+  assert.equal(recipient.data.canReturnToEditor, false);
+});
+
+test('sender preview hides recipient collaboration panels while recipients keep them', () => {
+  const template = fs.readFileSync(path.join(root, 'pages/projectnoteview/projectnoteview.wxml'), 'utf8');
+  assert.match(template, /title="\{\{canReturnToEditor \? '发送预览' : '方案详情'\}\}"/);
+  for (const label of ['阅读回执', '下载当前固定版本', '反馈给设计师', '此版本完整协作记录', '方案版本确认']) {
+    const position = template.indexOf(label);
+    assert.notEqual(position, -1, `missing recipient panel: ${label}`);
+    const openingView = template.lastIndexOf('<view', position);
+    assert.match(template.slice(openingView, position), /wx:if="\{\{!memberMode && !canReturnToEditor/);
+  }
+  assert.match(template, /<text wx:if="\{\{!canReturnToEditor\}\}" class="footer">/);
+  assert.match(template, /wx:if="\{\{canReturnToEditor\}\}" class="secondary" bindtap="returnToEditor">返回编辑/);
+  assert.match(template, /open-type="share">发给客户/);
 });
 
 test('saving a project note completes the internal task and preserves edits typed during the request', async () => {
