@@ -77,3 +77,15 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* 工作台确认稿：保持原生安全区和胶囊布局，只收敛这组页面的视觉尺度。 */
+.uni-nav--workbench .uni-nav-title-main {
+  font-size: 40rpx;
+}
+.uni-nav--workbench .uni-nav-back {
+  width: 64rpx;
+  height: 64rpx;
+  margin-left: 24rpx;
+  border-radius: 16rpx;
+  box-shadow: 0 4rpx 12rpx rgba(113, 80, 63, 0.12);
+}

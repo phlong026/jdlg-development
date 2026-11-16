@@ -47,6 +47,8 @@ Component({
   properties: {
     /** 标题文字 */
     title: { type: String, value: '' },
+    /** 已确认工作台效果图的导航排版，仅由对应页面显式启用 */
+    variant: { type: String, value: '' },
     /** 背景色，默认透明 */
     background: { type: String, value: 'transparent' },
     /** 图标和标题颜色，默认深棕（暖色背景用） */

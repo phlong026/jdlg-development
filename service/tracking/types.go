@@ -142,36 +142,44 @@ type ArticleDocument struct {
 	LayoutHTML   string         `json:"layout_html,omitempty"`
 	Blocks       []ArticleBlock `json:"blocks"`
 }
+type ContentAuthor struct {
+	DisplayName string `json:"display_name"`
+	Avatar      string `json:"avatar,omitempty"`
+}
 type Content struct {
-	Presentation string     `json:"presentation,omitempty"`
-	ReadOnly     bool       `json:"read_only,omitempty"`
-	Route        string     `json:"route_key,omitempty"`
-	VersionMode  string     `json:"version_mode,omitempty"`
-	ID           string     `json:"content_id"`
-	Version      int        `json:"version"`
-	Revision     int        `json:"revision"`
-	Title        string     `json:"title"`
-	Type         string     `json:"type"`
-	Status       string     `json:"status"`
-	Tags         []string   `json:"tags,omitempty"`
-	Pinned       bool       `json:"pinned,omitempty"`
-	Cover        *Asset     `json:"cover,omitempty"`
-	Media        []Asset    `json:"media"`
-	Body         string     `json:"body"`
-	BodyFormat   string     `json:"body_format"`
-	SourceURL    string     `json:"source_url,omitempty"`
-	SourceNote   string     `json:"source_note,omitempty"`
-	ProjectID    string     `json:"project_id,omitempty"`
-	Rights       string     `json:"rights"`
-	Owner        string     `json:"owner_id"`
-	CreatedAt    *time.Time `json:"created_at,omitempty"`
-	PublishedAt  *time.Time `json:"published_at,omitempty"`
-	Identified   int        `json:"identified_count"`
-	Anonymous    int        `json:"anonymous_count"`
-	PageViews    int        `json:"page_views"`
-	Shares       int        `json:"share_count"`
-	VisibleMS    int64      `json:"visible_ms"`
-	LastVisit    *time.Time `json:"last_visit,omitempty"`
+	Presentation string         `json:"presentation,omitempty"`
+	ReadOnly     bool           `json:"read_only,omitempty"`
+	Route        string         `json:"route_key,omitempty"`
+	VersionMode  string         `json:"version_mode,omitempty"`
+	ID           string         `json:"content_id"`
+	Version      int            `json:"version"`
+	Revision     int            `json:"revision"`
+	Title        string         `json:"title"`
+	Type         string         `json:"type"`
+	Status       string         `json:"status"`
+	Tags         []string       `json:"tags,omitempty"`
+	Pinned       bool           `json:"pinned,omitempty"`
+	Cover        *Asset         `json:"cover,omitempty"`
+	Media        []Asset        `json:"media"`
+	Body         string         `json:"body"`
+	BodyFormat   string         `json:"body_format"`
+	SourceURL    string         `json:"source_url,omitempty"`
+	SourceNote   string         `json:"source_note,omitempty"`
+	ProjectID    string         `json:"project_id,omitempty"`
+	Rights       string         `json:"rights"`
+	Owner        string         `json:"owner_id"`
+	CreatedAt    *time.Time     `json:"created_at,omitempty"`
+	PublishedAt  *time.Time     `json:"published_at,omitempty"`
+	Identified   int            `json:"identified_count"`
+	Anonymous    int            `json:"anonymous_count"`
+	PageViews    int            `json:"page_views"`
+	Shares       int            `json:"share_count"`
+	VisibleMS    int64          `json:"visible_ms"`
+	LastVisit    *time.Time     `json:"last_visit,omitempty"`
+	Author       *ContentAuthor `json:"author,omitempty"`
+	// CreatorID is persisted by the service but never serialized to clients.
+	// Authorization continues to use Owner and Scope only.
+	CreatorID int64 `json:"-"`
 }
 type Draft struct {
 	Title      string   `json:"title"`

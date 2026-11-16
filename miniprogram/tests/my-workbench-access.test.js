@@ -106,6 +106,27 @@ test('认证资料只决定设计师标题和主页，不替代后端创作授�
   assert.equal(explicitlyGranted.page.data.workbenchMenuItems.some(item => item.action === 'designerHome'), false);
 });
 
+test('工作台授权先返回时仍保留 AI 视频第四格，认证完成后原位启用', async () => {
+  const harness = loadPage();
+  await harness.page.loadWorkbenchAccess();
+
+  assert.deepEqual(Array.from(harness.page.data.workbenchMenuItems, item => item.action), [
+    'myProjects', 'contentWorkbench', 'aiVideoStudio', 'customers',
+  ]);
+  const pendingAI = harness.page.data.workbenchMenuItems.find(item => item.action === 'aiVideoStudio');
+  assert.equal(pendingAI.available, false);
+  harness.page.onWorkbenchMenuTap({ currentTarget: { dataset: { action: 'aiVideoStudio' } } });
+  assert.deepEqual(harness.navigations, []);
+  assert.equal(harness.toasts.at(-1), '仅已认证设计师可用');
+
+  harness.page.setData({ certStatus: 'approved', certType: 'designer', certIdentityType: '设计师' });
+  harness.page.refreshWorkbenchMenuItems();
+  const approvedAI = harness.page.data.workbenchMenuItems.find(item => item.action === 'aiVideoStudio');
+  assert.equal(approvedAI.available, true);
+  harness.page.onWorkbenchMenuTap({ currentTarget: { dataset: { action: 'aiVideoStudio' } } });
+  assert.deepEqual(harness.navigations, ['/pages/aivideostudio/index']);
+});
+
 test('账号切换后旧请求不能把前一个账号的工作台重新显示', async () => {
   const first = deferred();
   let callCount = 0;

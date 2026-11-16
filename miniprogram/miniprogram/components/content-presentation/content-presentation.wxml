@@ -60,5 +60,9 @@
     </block>
    </view>
   </block>
+  <view wx:if="{{view.author}}" class="presentation-author">
+   <view class="presentation-author-avatar"><text>{{view.author.displayName[0]}}</text><image wx:if="{{view.author.avatar}}" src="{{view.author.avatar}}" mode="aspectFill" data-avatar="{{view.author.avatar}}" binderror="presentationAuthorAvatarError" /></view>
+   <view class="presentation-author-copy"><text class="presentation-author-label">作者</text><text class="presentation-author-name">{{view.author.displayName}}</text></view>
+  </view>
  </view>
 </template>

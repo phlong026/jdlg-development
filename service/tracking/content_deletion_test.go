@@ -23,6 +23,18 @@ func TestDeleteContentDraftSoftDeletesUnpublishedDraftAndKeepsMedia(t *testing.T
 	if err != nil || deleted.ContentID != draft.ID || deleted.Revision != draft.Revision+1 || deleted.Status != "deleted" || deleted.DeletedAt.IsZero() {
 		t.Fatalf("deleted=%#v err=%v", deleted, err)
 	}
+	if err = s.readTransaction(ctx, func(r Repository) error {
+		stored, loadErr := loadCatalogContent(r, "content", draft.ID)
+		if loadErr != nil {
+			return loadErr
+		}
+		if stored.CreatorID != scope.Actor {
+			t.Fatalf("draft deletion lost creator: %d", stored.CreatorID)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
 	listed, err := s.Contents(ctx, scope, Filter{}, draft.ID)
 	if err != nil || len(listed.Items.([]Content)) != 0 {
 		t.Fatalf("软删除草稿仍在内容目录可见: %#v %v", listed, err)
@@ -148,6 +160,25 @@ func TestDeleteCreatedContentSupportsPublishedAndRevokedAndInvalidatesFixedVersi
 	deleted, err := s.DeleteCreatedContent(ctx, scope, current.ID, current.Revision)
 	if err != nil || deleted.Status != "deleted" || deleted.Revision != current.Revision+1 {
 		t.Fatalf("deleted=%#v err=%v", deleted, err)
+	}
+	if err = s.readTransaction(ctx, func(r Repository) error {
+		stored, loadErr := loadCatalogContent(r, "content", current.ID)
+		if loadErr != nil {
+			return loadErr
+		}
+		if stored.CreatorID != scope.Actor {
+			t.Fatalf("created-content deletion lost creator: %d", stored.CreatorID)
+		}
+		version, loadErr := decode[Content](r, "version", contentKey(current.ID, current.Version))
+		if loadErr != nil {
+			return loadErr
+		}
+		if version.CreatorID != scope.Actor {
+			t.Fatalf("published version lost creator: %d", version.CreatorID)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
 	}
 	if _, err = s.ReadContent(ctx, current.ID, current.Version); err == nil {
 		t.Fatal("删除后固定版本仍可访问")

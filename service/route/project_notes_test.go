@@ -440,6 +440,26 @@ func TestProjectNoteSharedMediaUsesOnlyTokenAuthorizedProxy(t *testing.T) {
 	note := projectNoteData[tracking.ProjectNote](t, noteRec)
 	versionRec := projectNoteRequest(t, router, http.MethodPost, "/api/v1/miniprogram/project-notes/notes/"+note.ID+"/versions", map[string]any{"expected_revision": note.Revision})
 	version := projectNoteData[tracking.ProjectNoteVersion](t, versionRec)
+	listRec := projectNoteRequest(t, router, http.MethodGet, "/api/v1/miniprogram/project-notes/projects", nil)
+	list := projectNoteData[tracking.ProjectNoteProjectPage](t, listRec)
+	if listRec.Code != http.StatusOK || len(list.Items) != 1 || list.Items[0].PreviewMedia == nil || list.Items[0].PreviewMedia.ID != mediaID || list.Items[0].PreviewMedia.Kind != "image" || list.Items[0].PreviewMedia.Width != 2 || list.Items[0].PreviewMedia.Height != 3 {
+		t.Fatalf("project list preview = %d %s", listRec.Code, listRec.Body.String())
+	}
+	var rawList struct {
+		Data struct {
+			Items []struct {
+				PreviewMedia map[string]any `json:"preview_media"`
+			} `json:"items"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(listRec.Body.Bytes(), &rawList); err != nil {
+		t.Fatal(err)
+	}
+	for _, forbidden := range []string{"url", "mime", "title", "token", "storage"} {
+		if _, exists := rawList.Data.Items[0].PreviewMedia[forbidden]; exists {
+			t.Fatalf("preview_media exposed %s: %s", forbidden, listRec.Body.String())
+		}
+	}
 	shareRec := projectNoteRequest(t, router, http.MethodPost, "/api/v1/miniprogram/project-notes/versions/"+version.ID+"/shares", map[string]any{"expires_at": "2026-10-28T08:00:00Z", "idempotency_key": "share-media-key-1"})
 	share := projectNoteData[tracking.ProjectNoteShare](t, shareRec)
 

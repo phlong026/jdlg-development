@@ -52,7 +52,7 @@ func (s *Service) DeleteContentDraft(ctx context.Context, scope Scope, id string
 		now := s.Now().UTC()
 		content.Status = "deleted"
 		content.Revision++
-		if err = r.Put(record("content", id, content.Owner, now, content)); err != nil {
+		if err = r.Put(record("content", id, content.Owner, now, persistedContent(content))); err != nil {
 			return err
 		}
 		out = ContentDeletion{ContentID: id, Revision: content.Revision, Status: content.Status, DeletedAt: now}
@@ -102,7 +102,7 @@ func (s *Service) DeleteCreatedContent(ctx context.Context, scope Scope, id stri
 		}
 		content.Status = "deleted"
 		content.Revision++
-		if err = r.Put(record("content", id, content.Owner, now, content)); err != nil {
+		if err = r.Put(record("content", id, content.Owner, now, persistedContent(content))); err != nil {
 			return err
 		}
 		out = ContentDeletion{ContentID: id, Revision: content.Revision, Status: content.Status, DeletedAt: now}

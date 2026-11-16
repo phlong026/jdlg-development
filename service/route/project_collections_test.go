@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"service/model"
 	"service/tracking"
 )
 
@@ -36,6 +38,11 @@ func publishCollectionRouteContent(t *testing.T, svc *tracking.Service, scope tr
 
 func newProjectCollectionRouteFixture(t *testing.T, scope *tracking.Scope) (*gin.Engine, *tracking.Service) {
 	t.Helper()
+	return newProjectCollectionRouteFixtureWithProfiles(t, scope, nil)
+}
+
+func newProjectCollectionRouteFixtureWithProfiles(t *testing.T, scope *tracking.Scope, profiles projectNoteProfileResolver) (*gin.Engine, *tracking.Service) {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 	svc := tracking.New(&governanceTestStore{records: map[string]tracking.Record{}}, tracking.Config{
 		Tenant: "workbench", ContentEnabled: true,
@@ -44,7 +51,7 @@ func newProjectCollectionRouteFixture(t *testing.T, scope *tracking.Scope) (*gin
 	router := gin.New()
 	management := router.Group("/workbench", func(c *gin.Context) { c.Set("workbench.scope", *scope); c.Next() })
 	registerProjectCollectionHandlers(management, svc)
-	registerPublicProjectCollectionHandlers(router.Group("/public"), svc)
+	registerPublicProjectCollectionHandlers(router.Group("/public"), svc, profiles)
 	return router, svc
 }
 
@@ -244,5 +251,68 @@ func TestCollectionCandidatesIntersectRequestedOwnerWithGrantedOwners(t *testing
 	denied := workbenchRequest(t, router, http.MethodGet, "/workbench/project-collections/candidates?owner=foreign-owner", nil)
 	if denied.Code != 403 {
 		t.Fatalf("foreign owner: %d %s", denied.Code, denied.Body.String())
+	}
+}
+
+func TestPublicProjectCollectionContentKeepsStandaloneAuthorAndReadAvailability(t *testing.T) {
+	for _, test := range []struct {
+		name         string
+		profileError error
+	}{
+		{name: "author available"},
+		{name: "profile directory unavailable", profileError: errors.New("profile directory unavailable")},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			scope := tracking.Scope{Tenant: "workbench", Actor: 11, Owners: []string{"owner-a"}, Manage: true}
+			profiles := func(_ context.Context, ids []int64) (map[int64]model.UserProfilePresentation, error) {
+				if len(ids) != 1 || ids[0] != scope.Actor {
+					t.Fatalf("author profile IDs = %#v", ids)
+				}
+				return map[int64]model.UserProfilePresentation{11: {UserID: 11, Nickname: "陈设计师", Avatar: "https://cdn.example.com/author.png"}}, test.profileError
+			}
+			router, svc := newProjectCollectionRouteFixtureWithProfiles(t, &scope, profiles)
+			registerPublicContentReadHandler(router.Group("/public"), svc, profiles)
+			source := publishCollectionRouteContent(t, svc, scope, "真实作者的作品", "collection-author-content")
+			ctx := context.Background()
+			collection, err := svc.SaveProjectCollection(ctx, scope, "", tracking.ProjectCollectionDraft{
+				Title: "作者合集", Owner: "owner-a", IdempotencyKey: "collection-author-create",
+				Items: []tracking.ProjectCollectionItemInput{{ContentID: source.ID, ContentVersion: source.Version}},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			preview, err := svc.PreviewProjectCollection(ctx, scope, collection.ID, collection.Revision)
+			if err != nil {
+				t.Fatal(err)
+			}
+			published, err := svc.PublishProjectCollection(ctx, scope, collection.ID, collection.Revision, preview.PreviewToken, "collection-author-publish")
+			if err != nil {
+				t.Fatal(err)
+			}
+			paths := []string{
+				"/public/contents/" + source.ID + "/versions/" + strconv.Itoa(source.Version),
+				"/public/project-collections/" + collection.ID + "/versions/" + strconv.Itoa(published.Version) + "/items/0/content",
+			}
+			for _, path := range paths {
+				response := workbenchRequest(t, router, http.MethodGet, path, nil)
+				if response.Code != http.StatusOK {
+					t.Fatalf("read %s = %d %s", path, response.Code, response.Body.String())
+				}
+				content := projectCollectionRouteData[tracking.Content](t, response.Body.Bytes())
+				if content.ID != source.ID || content.Body != source.Body {
+					t.Fatalf("read %s changed content: %#v", path, content)
+				}
+				if test.profileError == nil {
+					if content.Author == nil || content.Author.DisplayName != "陈设计师" || content.Author.Avatar != "https://cdn.example.com/author.png" {
+						t.Fatalf("read %s lost author: %#v", path, content.Author)
+					}
+				} else if content.Author != nil {
+					t.Fatalf("read %s fabricated author after profile failure: %#v", path, content.Author)
+				}
+				if strings.Contains(response.Body.String(), "creator_id") {
+					t.Fatalf("read %s exposed internal creator: %s", path, response.Body.String())
+				}
+			}
+		})
 	}
 }

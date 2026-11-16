@@ -93,7 +93,7 @@ test('清除素材筛选同时丢弃素材绑定的分享窗口', async () => {
 test('客户详情仅对普通内容固定版本显示管理预览入口',()=>{
  const h=runtime('visitdetail',{});h.page.setData({entries:[{route_key:'pages/collectionreader/collectionreader',content_id:'collection-one',content_version:1,can_manage_preview:false},{route_key:'pages/contentreader/contentreader',content_id:'content-one',content_version:0,can_manage_preview:false}]});
  h.page.openEntryContent({currentTarget:{dataset:{index:0}}});h.page.openEntryContent({currentTarget:{dataset:{index:1}}});assert.equal(h.navigation.length,0);
- const wxml=fs.readFileSync(path.join(__dirname,'../miniprogram/pages/visitdetail/visitdetail.wxml'),'utf8');assert.match(wxml,/wx:if="{{item\.can_manage_preview}}"[\s\S]*bindtap="openEntryContent"/);
+ const wxml=fs.readFileSync(path.join(__dirname,'../miniprogram/pages/visitdetail/visitdetail.wxml'),'utf8');assert.match(wxml,/bindtap="{{item\.can_manage_preview \? 'openEntryContent' : ''}}"/);
 });
 
 test('原生编译树只给合法固定版本绑定管理预览点击', { skip: !fs.existsSync(wxmlCompiler) }, () => {
@@ -104,8 +104,8 @@ test('原生编译树只给合法固定版本绑定管理预览点击', { skip: 
   assert.match(validShare, /openVisitContent|普通内容 ›/);
 
   const detailBase = { __profileAccessMounted: true, mode: 'customer', loading: false, loginRequired: false, denied: false, error: '', visitor_name: '陈先生', projectActivities: [], visibleProjectActivities: [] };
-  const invalidDetail = compiledWXML('visitdetail', { ...detailBase, entries: [{ view_id: 'collection', title: '合集作品', can_manage_preview: false }] });
-  const validDetail = compiledWXML('visitdetail', { ...detailBase, entries: [{ view_id: 'content', title: '普通内容', can_manage_preview: true }] });
+  const invalidDetail = compiledWXML('visitdetail', { ...detailBase, visibleEntries: [{ view_id: 'collection', title: '合集作品', can_manage_preview: false }] });
+  const validDetail = compiledWXML('visitdetail', { ...detailBase, visibleEntries: [{ view_id: 'content', title: '普通内容', can_manage_preview: true }] });
   assert.doesNotMatch(invalidDetail, /openEntryContent|合集作品 ›/);
   assert.match(validDetail, /openEntryContent|普通内容 ›/);
 });

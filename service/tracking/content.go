@@ -15,6 +15,32 @@ type contentCreateRequest struct {
 	Fingerprint string `json:"fingerprint"`
 }
 
+// storedContent keeps the immutable creator alongside content records without
+// exposing the account ID through the public Content JSON contract.
+type storedContent struct {
+	contentJSON
+	CreatorID int64 `json:"creator_id,omitempty"`
+}
+
+type contentJSON Content
+
+func persistedContent(c Content) storedContent {
+	c.Author = nil
+	return storedContent{contentJSON: contentJSON(c), CreatorID: c.CreatorID}
+}
+
+// UnmarshalJSON accepts both legacy content payloads and payloads carrying the
+// server-owned creator field. Marshal remains the default and hides CreatorID.
+func (c *Content) UnmarshalJSON(data []byte) error {
+	var stored storedContent
+	if err := json.Unmarshal(data, &stored); err != nil {
+		return err
+	}
+	*c = Content(stored.contentJSON)
+	c.CreatorID = stored.CreatorID
+	return nil
+}
+
 func contentCreateFingerprint(in Draft) string {
 	in.IdempotencyKey = ""
 	return hash(string(marshal(in)))
@@ -185,6 +211,7 @@ func (s *Service) saveContentIn(r Repository, scope Scope, id string, in Draft, 
 	var oldPinned bool
 	var oldTags []string
 	var oldProjectID string
+	creatorID := scope.Actor
 	// ProjectID 关联必须校验项目归属：项目 DesignerID 必须是当前账号，
 	// 防止把他人的私有项目挂到自己的素材上（codex 批次2 P1）。
 	if in.ProjectID != "" {
@@ -217,6 +244,7 @@ func (s *Service) saveContentIn(r Repository, scope Scope, id string, in Draft, 
 		version = old.Version
 		created = *old.CreatedAt
 		oldPinned, oldTags, oldProjectID = old.Pinned, old.Tags, old.ProjectID
+		creatorID = old.CreatorID
 	} else {
 		id = opaque()
 	}
@@ -267,7 +295,7 @@ func (s *Service) saveContentIn(r Repository, scope Scope, id string, in Draft, 
 	if in.BodyFormat == "document_v1" {
 		contentType = "document"
 	}
-	out = Content{ID: id, CreatedAt: &created, Revision: revision, Version: version, Title: strings.TrimSpace(in.Title), Type: contentType, Status: "draft", Tags: in.Tags, Cover: cover, Media: media, Body: in.Body, BodyFormat: in.BodyFormat, SourceURL: in.SourceURL, SourceNote: in.SourceNote, ProjectID: in.ProjectID, Rights: in.Rights, Owner: in.Owner}
+	out = Content{ID: id, CreatedAt: &created, Revision: revision, Version: version, Title: strings.TrimSpace(in.Title), Type: contentType, Status: "draft", Tags: in.Tags, Cover: cover, Media: media, Body: in.Body, BodyFormat: in.BodyFormat, SourceURL: in.SourceURL, SourceNote: in.SourceNote, ProjectID: in.ProjectID, Rights: in.Rights, Owner: in.Owner, CreatorID: creatorID}
 	out.Presentation = ContentPresentation(out)
 	// B11 置顶：新内容默认 false；更新时显式传入则覆盖，否则保留原值。
 	if id != "" {
@@ -283,7 +311,7 @@ func (s *Service) saveContentIn(r Repository, scope Scope, id string, in Draft, 
 			out.ProjectID = oldProjectID // 未显式改关联时保留原关联
 		}
 	}
-	if e := r.Put(record("content", id, in.Owner, now, out)); e != nil {
+	if e := r.Put(record("content", id, in.Owner, now, persistedContent(out))); e != nil {
 		return out, e
 	}
 	return out, audit(r, in.Owner, "save_content", scope.Actor, id, now, map[string]any{"revision": revision})
@@ -370,10 +398,10 @@ func (s *Service) Publish(ctx context.Context, scope Scope, id string, revision 
 		c.Version++
 		c.Revision++
 		c.PublishedAt = &now
-		if e = r.Insert(record("version", contentKey(id, c.Version), c.Owner, now, c)); e != nil {
+		if e = r.Insert(record("version", contentKey(id, c.Version), c.Owner, now, persistedContent(c))); e != nil {
 			return e
 		}
-		if e = r.Put(record("content", id, c.Owner, now, c)); e != nil {
+		if e = r.Put(record("content", id, c.Owner, now, persistedContent(c))); e != nil {
 			return e
 		}
 		out = map[string]any{"content": c, "revision": revision, "share_methods": map[string]any{"message": "请在小程序自有素材页打开后使用原生分享。微信码与URL Link须完成服务端权限核验后开放。", "route_key": "pages/contentreader/contentreader", "content_id": id, "content_version": c.Version}}
@@ -415,7 +443,7 @@ func (s *Service) Revoke(ctx context.Context, scope Scope, id string, revision i
 		}
 		c.Status = "revoked"
 		c.Revision++
-		if e = r.Put(record("content", id, c.Owner, s.Now(), c)); e != nil {
+		if e = r.Put(record("content", id, c.Owner, s.Now(), persistedContent(c))); e != nil {
 			return e
 		}
 		if e = r.Insert(record("revocation", requestKey, c.Owner, s.Now(), c)); e != nil {

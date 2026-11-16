@@ -396,6 +396,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 	svc.ResolveLegacyContext = makeTrackingLegacyResolver(users.DB)
 	svc.ResolveLegacyBatchContext = makeTrackingLegacyBatchResolver(users.DB)
 	svc.ResolveVisitorProfiles = makeTrackingProfileResolver(users.DB)
+	contentProfiles := makeProjectNoteProfileResolver(users.DB)
 	registerContentWorkbenchRoutes(v1, svc, users, codes)
 	registerProjectNoteRoutes(v1, svc, users, codes)
 	// This is a separate capability group, not an implicit platform-admin data grant.
@@ -635,6 +636,9 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 			return
 		}
 		v, e := svc.Contents(c.Request.Context(), sc(c), f, "")
+		if e == nil {
+			v, e = presentContentList(c.Request.Context(), v, contentProfiles)
+		}
 		trackingResponse(c, v, e)
 	})
 	mg.GET("/contents/:id", func(c *gin.Context) {
@@ -644,6 +648,11 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 			return
 		}
 		v, e := svc.Contents(c.Request.Context(), sc(c), f, c.Param("id"))
+		if e != nil {
+			trackingResponse(c, nil, e)
+			return
+		}
+		v, e = presentContentList(c.Request.Context(), v, contentProfiles)
 		if e != nil {
 			trackingResponse(c, nil, e)
 			return
@@ -788,7 +797,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 		trackingResponse(c, gin.H{"status": status}, e)
 	})
 	pub := v1.Group("/miniprogram/tracking")
-	registerPublicProjectCollectionHandlers(pub, svc)
+	registerPublicProjectCollectionHandlers(pub, svc, contentProfiles)
 	registerContentInteractionRoutes(pub, svc, users, codes, makeProjectNoteProfileResolver(users.DB))
 	registerTrackingMaterialRoutes(pub, svc, users, codes)
 	registerTrackingMyRoutes(pub, svc, users, codes)
@@ -806,12 +815,7 @@ func RegisterTrackingRoutes(v1 *gin.RouterGroup, users *model.UserModel, codes *
 	pub.GET("/config", func(c *gin.Context) {
 		trackingResponse(c, gin.H{"enabled": cfg.Enabled, "content_enabled": cfg.ContentEnabled, "video_enabled": cfg.VideoEnabled, "intent_enabled": cfg.IntentEnabled, "consent_version": cfg.ConsentVersion, "privacy_notice": cfg.PrivacyNotice, "sample_ms": 10000, "max_queue": 500, "ttl_hours": 72}, nil)
 	})
-	pub.GET("/contents/:id/versions/:version", func(c *gin.Context) {
-		c.Header("Cache-Control", "no-store")
-		version, _ := strconv.Atoi(c.Param("version"))
-		v, e := svc.ReadContent(c.Request.Context(), c.Param("id"), version)
-		trackingResponse(c, v, e)
-	})
+	registerPublicContentReadHandler(pub, svc, contentProfiles)
 	registerTrackingSignedMediaRoute(pub, svc, users, codes)
 	pub.Match([]string{http.MethodGet, http.MethodHead}, "/media/:id", func(c *gin.Context) {
 		if expiresRaw := c.Query("exp"); expiresRaw != "" {

@@ -57,25 +57,35 @@ type ProjectNoteProjectUpdate struct {
 }
 
 type ProjectNoteProject struct {
-	ID                 string    `json:"project_id"`
-	Name               string    `json:"name"`
-	Owner              string    `json:"owner_id"`
-	CRMID              string    `json:"crm_id,omitempty"`
-	CustomerRef        string    `json:"customer_ref,omitempty"`
-	Location           string    `json:"location,omitempty"`
-	BuildingArea       float64   `json:"building_area,omitempty"`
-	Floors             int       `json:"floors,omitempty"`
-	Style              string    `json:"style,omitempty"`
-	Status             string    `json:"status"`
-	CurrentVersionID   string    `json:"current_version_id,omitempty"`
-	DesignerID         int64     `json:"designer_id"`
-	CreatorDisplayName string    `json:"creator_display_name,omitempty"`
-	ConfirmerID        int64     `json:"confirmer_id,omitempty"`
-	Revision           int       `json:"revision"`
-	Stage              int       `json:"stage,omitempty"`
-	NextAction         string    `json:"next_action,omitempty"`
-	CreatedAt          time.Time `json:"created_at"`
-	UpdatedAt          time.Time `json:"updated_at"`
+	ID                 string                   `json:"project_id"`
+	Name               string                   `json:"name"`
+	Owner              string                   `json:"owner_id"`
+	CRMID              string                   `json:"crm_id,omitempty"`
+	CustomerRef        string                   `json:"customer_ref,omitempty"`
+	Location           string                   `json:"location,omitempty"`
+	BuildingArea       float64                  `json:"building_area,omitempty"`
+	Floors             int                      `json:"floors,omitempty"`
+	Style              string                   `json:"style,omitempty"`
+	Status             string                   `json:"status"`
+	CurrentVersionID   string                   `json:"current_version_id,omitempty"`
+	DesignerID         int64                    `json:"designer_id"`
+	CreatorDisplayName string                   `json:"creator_display_name,omitempty"`
+	PreviewMedia       *ProjectNotePreviewMedia `json:"preview_media,omitempty"`
+	ConfirmerID        int64                    `json:"confirmer_id,omitempty"`
+	Revision           int                      `json:"revision"`
+	Stage              int                      `json:"stage,omitempty"`
+	NextAction         string                   `json:"next_action,omitempty"`
+	CreatedAt          time.Time                `json:"created_at"`
+	UpdatedAt          time.Time                `json:"updated_at"`
+}
+
+// ProjectNotePreviewMedia is the minimum authorized metadata needed to render
+// a project-list thumbnail. Bytes remain behind the existing project media route.
+type ProjectNotePreviewMedia struct {
+	ID     string `json:"media_id"`
+	Kind   string `json:"kind"`
+	Width  int    `json:"width"`
+	Height int    `json:"height"`
 }
 
 type ProjectNoteProjectPage struct {
@@ -585,9 +595,69 @@ func (s *Service) ProjectNoteListProjects(ctx context.Context, scope Scope, limi
 			}
 			out.Items = append(out.Items, normalized)
 		}
-		return nil
+		return projectNoteAttachPreviewMedia(r, scope, out.Items)
 	})
 	return out, err
+}
+
+func projectNoteVersionPreviewMedia(version ProjectNoteVersion) *ProjectNotePreviewMedia {
+	asset := Asset{}
+	if version.Cover != nil && version.Cover.Kind == "image" && validID(version.Cover.ID) {
+		asset = *version.Cover
+	} else {
+		for _, candidate := range version.Media {
+			if candidate.Kind == "image" && validID(candidate.ID) {
+				asset = candidate
+				break
+			}
+		}
+	}
+	if asset.ID == "" {
+		return nil
+	}
+	return &ProjectNotePreviewMedia{ID: asset.ID, Kind: "image", Width: asset.Width, Height: asset.Height}
+}
+
+func projectNoteAttachPreviewMedia(r Repository, scope Scope, projects []ProjectNoteProject) error {
+	versionProjects := make(map[string][]int, len(projects))
+	versionIDs := make([]string, 0, len(projects))
+	for index := range projects {
+		versionID := projects[index].CurrentVersionID
+		if versionID == "" || !validID(versionID) {
+			continue
+		}
+		if _, exists := versionProjects[versionID]; !exists {
+			versionIDs = append(versionIDs, versionID)
+		}
+		versionProjects[versionID] = append(versionProjects[versionID], index)
+	}
+	if len(versionIDs) == 0 {
+		return nil
+	}
+	rows, err := pageRecords(r, projectNoteVersionKind, RecordQuery{
+		Owners: scope.Owners, IDs: versionIDs, Limit: len(versionIDs),
+	})
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		indexes := versionProjects[row.ID]
+		if len(indexes) == 0 {
+			continue
+		}
+		var version ProjectNoteVersion
+		if json.Unmarshal(row.Payload, &version) != nil || version.ID != row.ID {
+			return ErrUnavailable
+		}
+		for _, index := range indexes {
+			project := projects[index]
+			if project.DesignerID != scope.Actor || !scope.Allows(project.Owner) || row.Owner != project.Owner || version.ProjectID != project.ID {
+				continue
+			}
+			projects[index].PreviewMedia = projectNoteVersionPreviewMedia(version)
+		}
+	}
+	return nil
 }
 
 func (s *Service) ProjectNoteGetProject(ctx context.Context, scope Scope, projectID string) (ProjectNoteProject, error) {

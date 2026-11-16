@@ -214,6 +214,69 @@ func TestWorkbenchDraftPreviewPublishAndOwnerIsolation(t *testing.T) {
 	}
 }
 
+func TestWorkbenchContentReadsExposeAuthorWithoutCreatorID(t *testing.T) {
+	t.Setenv("CONTENT_WORKBENCH_ENABLED", "true")
+	scope := tracking.Scope{Tenant: "workbench", Actor: 11, Owners: []string{"company"}, Manage: true}
+	r, svc := newWorkbenchHandlerFixtureWithProfiles(t, &scope, func(_ context.Context, ids []int64) (map[int64]model.UserProfilePresentation, error) {
+		if len(ids) != 1 || ids[0] != scope.Actor {
+			t.Fatalf("profile ids = %#v", ids)
+		}
+		return map[int64]model.UserProfilePresentation{11: {UserID: 11, Nickname: "陈设计师", Avatar: "https://cdn.example.com/avatar.png"}}, nil
+	})
+	tampered := workbenchRequest(t, r, http.MethodPost, "/workbench/contents", map[string]any{
+		"title": "真实作者", "body": "正文", "body_format": "plain", "rights": "own", "owner_id": "company",
+		"creator_id": 999, "author": map[string]any{"display_name": "伪造作者"},
+	})
+	if tampered.Code != http.StatusBadRequest {
+		t.Fatalf("client author fields accepted: %d %s", tampered.Code, tampered.Body.String())
+	}
+	created := workbenchRequest(t, r, http.MethodPost, "/workbench/contents", map[string]any{
+		"title": "真实作者", "body": "正文", "body_format": "plain", "rights": "own", "owner_id": "company",
+	})
+	if created.Code != http.StatusOK {
+		t.Fatal(created.Code, created.Body.String())
+	}
+	var saved struct {
+		Data tracking.Content `json:"data"`
+	}
+	if err := json.Unmarshal(created.Body.Bytes(), &saved); err != nil {
+		t.Fatal(err)
+	}
+	if saved.Data.CreatorID != 0 || strings.Contains(created.Body.String(), "creator_id") || strings.Contains(created.Body.String(), "伪造作者") {
+		t.Fatalf("write response leaked client/internal author: %s", created.Body.String())
+	}
+
+	read := workbenchRequest(t, r, http.MethodGet, "/workbench/contents/"+saved.Data.ID, nil)
+	if read.Code != http.StatusOK || !strings.Contains(read.Body.String(), `"display_name":"陈设计师"`) || !strings.Contains(read.Body.String(), `"avatar":"https://cdn.example.com/avatar.png"`) {
+		t.Fatalf("managed content author = %d %s", read.Code, read.Body.String())
+	}
+	if strings.Contains(read.Body.String(), "creator_id") || strings.Contains(read.Body.String(), "伪造作者") {
+		t.Fatalf("managed read leaked internal/client author: %s", read.Body.String())
+	}
+	stored, err := svc.Contents(context.Background(), scope, tracking.Filter{}, saved.Data.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := stored.Items.([]tracking.Content)[0].CreatorID; got != scope.Actor {
+		t.Fatalf("stored creator = %d, want %d", got, scope.Actor)
+	}
+}
+
+func TestWorkbenchContentReadDegradesWhenOptionalAuthorResolverFails(t *testing.T) {
+	scope := tracking.Scope{Tenant: "workbench", Actor: 11, Owners: []string{"company"}, Manage: true}
+	router, svc := newWorkbenchHandlerFixtureWithProfiles(t, &scope, func(context.Context, []int64) (map[int64]model.UserProfilePresentation, error) {
+		return nil, errors.New("profile directory unavailable")
+	})
+	draft, err := svc.SaveContent(context.Background(), scope, "", tracking.Draft{Title: "管理内容", Body: "正文", BodyFormat: "plain", Rights: "own", Owner: "company"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	read := workbenchRequest(t, router, http.MethodGet, "/workbench/contents/"+draft.ID, nil)
+	if read.Code != http.StatusOK || !strings.Contains(read.Body.String(), "管理内容") || strings.Contains(read.Body.String(), `"author"`) {
+		t.Fatalf("managed degraded response = %d %s", read.Code, read.Body.String())
+	}
+}
+
 func TestWorkbenchReadinessDoesNotPretendMediaAndURLLinkAreEnabled(t *testing.T) {
 	scope := tracking.Scope{Tenant: "workbench", Actor: 11, Owners: []string{"owner-a"}, Manage: true}
 	r, _ := newWorkbenchHandlerFixture(t, &scope)

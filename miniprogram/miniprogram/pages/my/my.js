@@ -109,11 +109,9 @@ function buildWorkbenchMenuItems(options) {
     const items = [
         { action: 'myProjects', label: '我的项目', icon: 'folder', description: '项目与方案', available: true },
         { action: 'contentWorkbench', label: '内容创作', icon: 'video', description: '作品与资料', available: true },
+        { action: 'aiVideoStudio', label: 'AI 视频', icon: 'play-circle', description: '独立视频创作', available: hasDesignerAccess, meta: hasDesignerAccess ? '' : '仅已认证设计师可用' },
+        { action: 'customers', label: '客户跟踪', icon: 'user', description: '浏览 · 意向 · 追踪', available: true },
     ];
-    if (hasDesignerAccess) {
-        items.push({ action: 'aiVideoStudio', label: 'AI 视频', icon: 'play-circle', description: '独立视频创作', available: true });
-    }
-    items.push({ action: 'customers', label: '客户跟踪', icon: 'user', description: '浏览 · 意向 · 追踪', available: true });
     return items;
 }
 Page({

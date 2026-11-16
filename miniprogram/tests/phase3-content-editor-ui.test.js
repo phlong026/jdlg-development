@@ -5,8 +5,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { spawnSync } = require('node:child_process');
 
 const root = path.join(__dirname, '../miniprogram/pages');
+const wxmlCompiler = process.env.WXML_COMPILER || '/Applications/wechatwebdevtools.app/Contents/Resources/app.asar.unpacked/node_modules/wcc-exec/wcc';
 
 function loadEditor(apiOverrides = {}) {
   let definition;
@@ -631,6 +633,239 @@ test('gallery uses compact thumbnails with one selected-image toolbar and video 
   assert.doesNotMatch(editorWxml, /class="video-layout-card"/);
 });
 
+test('gallery keeps one compact action row and moves optional captions into more settings', () => {
+  const editorWxml = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
+  const toolbarStart = editorWxml.indexOf('class="gallery-selected-tools"');
+  const toolbarEnd = editorWxml.indexOf('</view>', editorWxml.indexOf('</view>', toolbarStart) + 1) + 7;
+  const toolbar = editorWxml.slice(toolbarStart, toolbarEnd);
+  assert.match(toolbar, /bindtap="setBlockCover"/);
+  assert.match(toolbar, /bindtap="sortSelectedGalleryImage"[^>]*>排序</);
+  assert.match(toolbar, /bindtap="removeBlock"[^>]*>删除</);
+  assert.doesNotMatch(toolbar, /editCaption|前移|后移/);
+  assert.match(editorWxml, /settingsExpanded[\s\S]*presentation === 'gallery' && selectedImageBlock[\s\S]*bindinput="editCaption"/);
+});
+
+test('gallery sorting asks for a direction then reuses the existing block move behavior', () => {
+  const { page, actionSheets } = loadEditor();
+  const blocks = [
+    { kind: 'image', media_id: 'image-a', caption: '' },
+    { kind: 'image', media_id: 'image-b', caption: '' },
+  ];
+  page.setData({
+    presentation: 'gallery', blocks, media: [],
+    imageBlocks: blocks.map((block, blockIndex) => ({ ...block, blockIndex })),
+    selectedImageBlock: { ...blocks[1], blockIndex: 1 },
+  });
+
+  page.sortSelectedGalleryImage();
+  assert.deepEqual(Array.from(actionSheets[0].itemList), ['前移', '后移']);
+  actionSheets[0].success({ tapIndex: 0 });
+  assert.equal(page.data.blocks[0].media_id, 'image-b');
+  assert.equal(page.data.selectedImageBlock.media_id, 'image-b');
+});
+
+test('a late gallery sort cannot reorder another account, draft or unloaded page', () => {
+  for (const invalidate of [
+    runtime => runtime.token('account-two'),
+    runtime => runtime.page.setData({ title: '已切换到另一份草稿' }),
+    runtime => runtime.page.onUnload(),
+  ]) {
+    const runtime = loadEditor();
+    const { page, actionSheets } = runtime;
+    const blocks = [
+      { kind: 'image', media_id: 'image-a', caption: '' },
+      { kind: 'image', media_id: 'image-b', caption: '' },
+    ];
+    page.setData({
+      id: 'draft-one', title: '原草稿', owner_id: 'owner-a', presentation: 'gallery', blocks, media: [],
+      imageBlocks: blocks.map((block, blockIndex) => ({ ...block, blockIndex })),
+      selectedImageBlock: { ...blocks[1], blockIndex: 1 },
+    });
+
+    page.sortSelectedGalleryImage();
+    invalidate(runtime);
+    actionSheets[0].success({ tapIndex: 0 });
+
+    assert.deepEqual(page.data.blocks.map(block => block.media_id), ['image-a', 'image-b']);
+  }
+});
+
+test('empty video uses one guarded chooser for phone or media library', () => {
+  const editorWxml = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
+  assert.match(editorWxml, /class="video-compact-empty"[^>]*bindtap="chooseVideoSource"/);
+  assert.doesNotMatch(editorWxml, /class="video-empty-actions"/);
+
+  const { page, actionSheets } = loadEditor();
+  let phoneSelections = 0;
+  let librarySelections = 0;
+  page.chooseMedia = () => { phoneSelections += 1; };
+  page.openMediaPicker = () => { librarySelections += 1; };
+  page.setData({ presentation: 'video', videoBlocks: [] });
+  page.chooseVideoSource();
+  assert.deepEqual(Array.from(actionSheets[0].itemList), ['从手机选择', '从素材库选择']);
+  actionSheets[0].success({ tapIndex: 0 });
+  page.chooseVideoSource();
+  actionSheets[1].success({ tapIndex: 1 });
+  assert.equal(phoneSelections, 1);
+  assert.equal(librarySelections, 1);
+
+  page.setData({ busy: true });
+  page.chooseVideoSource();
+  assert.equal(actionSheets.length, 2, '忙碌时不应重复打开来源选择');
+});
+
+test('a late video source choice cannot start work for another account, draft or unloaded page', () => {
+  for (const invalidate of [
+    runtime => runtime.token('account-two'),
+    runtime => runtime.page.setData({ title: '新草稿' }),
+    runtime => runtime.page.onUnload(),
+  ]) {
+    const runtime = loadEditor();
+    const { page, actionSheets } = runtime;
+    let phoneSelections = 0;
+    let librarySelections = 0;
+    page.chooseMedia = () => { phoneSelections += 1; };
+    page.openMediaPicker = () => { librarySelections += 1; };
+    page.setData({ id: 'draft-one', title: '原草稿', owner_id: 'owner-a', presentation: 'video', videoBlocks: [] });
+
+    page.chooseVideoSource();
+    invalidate(runtime);
+    actionSheets[0].success({ tapIndex: 0 });
+    actionSheets[0].success({ tapIndex: 1 });
+
+    assert.equal(phoneSelections, 0);
+    assert.equal(librarySelections, 0);
+  }
+});
+
+test('native article drafts expose a secondary preview without changing the save and publish footer', { skip: !fs.existsSync(wxmlCompiler) }, () => {
+  const file = './pages/contentedit/contentedit.wxml';
+  const compiled = spawnSync(wxmlCompiler, [file, './components/content-presentation/content-presentation.wxml'], {
+    cwd: path.dirname(root), encoding: 'utf8', timeout: 10000, maxBuffer: 4 * 1024 * 1024,
+  });
+  assert.equal(compiled.status, 0, compiled.stderr || compiled.stdout);
+  const context = { window: {}, console };
+  vm.createContext(context);
+  vm.runInContext(compiled.stdout, context);
+  const { page } = loadEditor();
+  const initial = { ...page.data, __profileAccessMounted: true, loading: false, presentation: 'article', status: 'draft' };
+  const render = overrides => context.$gwx(file)({ ...initial, ...overrides });
+  const allNodes = node => node && typeof node === 'object'
+    ? [node, ...(node.children || []).flatMap(allNodes)] : [];
+  const hasClass = (node, name) => String(node.attr && node.attr.class || '').split(/\s+/).includes(name);
+  const previewButtons = node => allNodes(node).filter(item => item.tag === 'wx-button' && item.attr.bindtap === 'saveAndPreview');
+
+  for (const id of ['', 'article-one']) {
+    const tree = render({ id });
+    const hero = allNodes(tree).find(node => hasClass(node, 'editor-hero'));
+    const buttons = previewButtons(hero);
+    assert.equal(buttons.length, 1, `${id || 'new article'} needs an actual rendered preview action`);
+    assert.equal(hasClass(buttons[0], 'primary'), false, '预览保持次要操作');
+    const busyHero = allNodes(render({ id, busy: true })).find(node => hasClass(node, 'editor-hero'));
+    assert.equal(previewButtons(busyHero)[0].attr.disabled, true);
+  }
+  for (const presentation of ['article', 'gallery', 'video']) {
+    for (const id of ['', 'saved-content']) {
+      const footer = allNodes(render({ presentation, id })).find(node => hasClass(node, 'editor-actions'));
+      assert.deepEqual(Array.from(allNodes(footer).filter(node => node.tag === 'wx-button'), node => node.attr.bindtap), ['saveDraft', 'publish']);
+    }
+  }
+  for (const blocked of [
+    { deleted: true }, { documentReadOnly: true }, { legacyReadOnly: true },
+    { __profileAccessMounted: false }, { loading: true }, { loginRequired: true },
+    { denied: true }, { disabled: true }, { preview: { preview_token: 'current-preview' } },
+  ]) {
+    for (const id of ['', 'article-one']) {
+      assert.equal(previewButtons(render({ id, ...blocked })).length, 0, `blocked article exposed preview: ${JSON.stringify(blocked)}`);
+    }
+  }
+});
+
+test('gallery and video editors follow the approved compact note layout', () => {
+  const editorWxml = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
+  const editorStyle = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxss'), 'utf8');
+  const editorJson = fs.readFileSync(path.join(root, 'contentedit/contentedit.json'), 'utf8');
+
+  assert.match(editorWxml, /variant="workbench"/);
+  assert.match(editorWxml, /'新建图文笔记'/);
+  assert.match(editorWxml, /'新建视频笔记'/);
+  assert.match(editorJson, /"mini-icon"/);
+  assert.match(editorWxml, /class="social-editor-toolbar"[\s\S]*bindtap="saveAndPreview"[\s\S]*name="more"/);
+  assert.match(editorWxml, /class="gallery-add-tile"/);
+  assert.match(editorWxml, /name="edit"[\s\S]*AI辅助/);
+  assert.match(editorWxml, /class="video-options-mask"/);
+  assert.match(editorWxml, /class="video-options-sheet"/);
+  assert.doesNotMatch(editorWxml, /class="preview-link"/);
+  assert.match(editorStyle, /\.gallery-thumb\s*\{[^}]*width:\s*168rpx[^}]*height:\s*168rpx/);
+  assert.match(editorStyle, /\.gallery-stage-empty\s*\{[^}]*width:\s*220rpx[^}]*height:\s*220rpx/);
+  assert.match(editorStyle, /\.gallery-stage-empty\s*\{[^}]*margin-left:\s*0\s*!important[^}]*margin-right:\s*0\s*!important/);
+  assert.match(editorStyle, /\.gallery-copy-group\s+\.intro-field,\s*\.video-copy-group\s+\.intro-field\s*\{[^}]*border-top:\s*0/);
+  assert.match(editorStyle, /\.editor-copy-group\s*>\s*\.title-input\s*\{[^}]*font-size:\s*40rpx[^}]*font-weight:\s*600/);
+  assert.match(editorStyle, /\.video-compact-empty\s*\{[^}]*border:\s*1rpx dashed/);
+  assert.match(editorStyle, /\.editor-copy-group\s*\{[^}]*border:\s*0/);
+  assert.match(editorStyle, /\.video-media-card\s*\{[^}]*border:\s*0/);
+});
+
+test('video option rows open one bottom sheet at a time and can be closed', () => {
+  const { page } = loadEditor();
+  page.toggleVideoShare();
+  assert.equal(page.data.videoShareExpanded, true);
+  assert.equal(page.data.videoDisplayExpanded, false);
+  page.toggleVideoDisplay();
+  assert.equal(page.data.videoShareExpanded, false);
+  assert.equal(page.data.videoDisplayExpanded, true);
+  page.closeVideoOptions();
+  assert.equal(page.data.videoShareExpanded, false);
+  assert.equal(page.data.videoDisplayExpanded, false);
+});
+
+test('both video setting rows open the same complete share and display sheet', () => {
+  const editorWxml = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
+  const start = editorWxml.indexOf('class="video-options-sheet"');
+  const end = editorWxml.indexOf('</view></block>', start);
+  const sheet = editorWxml.slice(start, end);
+  assert.match(sheet, />分享与显示</);
+  assert.match(sheet, /data-field="shareCopy"/);
+  assert.match(sheet, /data-field="momentsCopy"/);
+  assert.match(sheet, />阅读样式</);
+  assert.match(sheet, />标准视频</);
+  assert.match(sheet, />沉浸视频</);
+  assert.match(sheet, /仅影响小程序内的阅读效果/);
+  assert.match(sheet, /bindtap="openVideoSettings"[^>]*>更多设置</);
+  assert.doesNotMatch(sheet, /wx:if="\{\{videoShareExpanded\}\}"/);
+  assert.doesNotMatch(sheet, /视频短注释/);
+  assert.match(editorWxml, /settingsExpanded[\s\S]*presentation === 'video' && videoBlocks\.length[\s\S]*视频短注释/);
+  const editorStyle = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxss'), 'utf8');
+  assert.match(editorStyle, /\.video-sheet-head\s*\{[^}]*justify-content:\s*center[^}]*position:\s*relative/);
+  assert.match(editorStyle, /\.video-options-sheet \.video-copy-card textarea\s*\{[^}]*min-height:\s*72rpx/);
+  assert.match(editorStyle, /\.video-layout-options button\.selected\s*\{[^}]*background:\s*#a87943[^}]*color:\s*#fff/);
+});
+
+test('video hides the third settings row by default and the sheet can reveal the complete settings', () => {
+  const editorWxml = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
+  assert.match(editorWxml, /wx:if="\{\{presentation !== 'video' \|\| settingsExpanded\}\}" class="settings-card"/);
+  assert.match(editorWxml, /settingsExpanded[\s\S]*版权来源[\s\S]*原文链接/);
+
+  const { page } = loadEditor();
+  page.setData({ presentation: 'video', videoShareExpanded: true, videoDisplayExpanded: false, settingsExpanded: false });
+  page.openVideoSettings();
+  assert.equal(page.data.videoShareExpanded, false);
+  assert.equal(page.data.videoDisplayExpanded, false);
+  assert.equal(page.data.settingsExpanded, true);
+});
+
+test('social toolbar never labels a dirty draft as saved', () => {
+  const editorWxml = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
+  assert.doesNotMatch(editorWxml, /busy \? '保存中' : '已保存'/);
+  assert.match(editorWxml, /notice === '有未保存修改' \? '未保存'/);
+
+  const { page } = loadEditor();
+  page._savedSignature = page.draftSignature();
+  page.setField({ currentTarget: { dataset: { field: 'title' } }, detail: { value: '修改后的标题' } });
+  assert.notEqual(page._savedSignature, page.draftSignature());
+  assert.equal(page.data.notice, '有未保存修改');
+});
+
 test('the selected gallery image stays selected while its caption and order change', () => {
   const { page } = loadEditor();
   const blocks = [
@@ -655,7 +890,8 @@ test('the selected gallery image stays selected while its caption and order chan
 
 test('editor footer keeps preview optional and exposes save and direct publish together', () => {
   const editorWxml = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
-  assert.match(editorWxml, /class="preview-link" bindtap="saveAndPreview"/);
+  assert.match(editorWxml, /class="social-editor-toolbar"[\s\S]*bindtap="saveAndPreview"/);
+  assert.doesNotMatch(editorWxml, /class="preview-link"/);
   assert.match(editorWxml, /bindtap="saveDraft"[^>]*>保存草稿</);
   assert.match(editorWxml, /bindtap="publish"[^>]*>发布</);
   assert.doesNotMatch(editorWxml, />预览发布</);

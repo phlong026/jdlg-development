@@ -158,6 +158,9 @@ func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service,
 		filter.TypeFilter = c.Query("type")
 		filter.ProjectID = c.Query("project_id")
 		out, err := svc.Contents(c.Request.Context(), scope(c), filter, "")
+		if err == nil {
+			out, err = presentContentList(c.Request.Context(), out, profiles)
+		}
 		trackingResponse(c, out, err)
 	})
 	g.GET("/contents/:id", func(c *gin.Context) {
@@ -167,6 +170,11 @@ func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service,
 			return
 		}
 		out, err := svc.Contents(c.Request.Context(), scope(c), filter, c.Param("id"))
+		if err != nil {
+			trackingResponse(c, nil, err)
+			return
+		}
+		out, err = presentContentList(c.Request.Context(), out, profiles)
 		if err != nil {
 			trackingResponse(c, nil, err)
 			return
@@ -185,6 +193,9 @@ func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service,
 			return
 		}
 		out, err := svc.ReadManagedContent(c.Request.Context(), scope(c), c.Param("id"), version)
+		if err == nil {
+			out, err = presentContentAuthor(c.Request.Context(), out, profiles)
+		}
 		trackingResponse(c, out, err)
 	})
 	writes := g.Group("", func(c *gin.Context) {
