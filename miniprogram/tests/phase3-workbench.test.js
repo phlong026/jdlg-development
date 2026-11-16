@@ -42,6 +42,8 @@ function pageHarness(name, api, wxOverrides = {}) {
     if (id === '../../utils/article-document') return require(path.join(root, 'utils/article-document.js'));
     if (id === '../../utils/content-presentation') return require(path.join(root, 'utils/content-presentation.js'));
     if (id === '../../utils/resumable-video-upload') return require(path.join(root, 'utils/resumable-video-upload.js'));
+    if (id === '../../utils/ai-stream') return { startAIStream: () => ({ abort() {} }) };
+    if (id === '../../utils/writing-policy') return require(path.join(root, 'utils/writing-policy.js'));
     throw new Error(`unexpected require ${id}`);
   }, console, Promise, JSON, Error, Object, String, Number, Date, Map, Set, encodeURIComponent });
   const page = Object.assign({ data: JSON.parse(JSON.stringify(definition.data)), setData(values, callback) { Object.assign(this.data, values); if (callback) callback.call(this); } }, definition);
@@ -556,7 +558,7 @@ test('video editor leads with a full-width preview and keeps secondary copy sett
   const wxml = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.wxml'), 'utf8');
   const style = fs.readFileSync(path.join(root, 'pages/contentedit/contentedit.wxss'), 'utf8');
   assert.match(wxml, /class="video-media-card"/);
-  assert.match(wxml, />AI辅助</);
+  assert.match(wxml, /bindtap="openAIWriting"[\s\S]*AI辅助/);
   assert.match(wxml, /maxlength="2000"/);
   assert.match(style, /\.video-thumbnail\s*\{[^}]*width:\s*100%[^}]*height:\s*360rpx/);
   assert.match(wxml, /class="video-media-summary"/);

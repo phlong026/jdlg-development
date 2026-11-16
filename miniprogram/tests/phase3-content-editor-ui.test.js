@@ -19,6 +19,7 @@ function loadEditor(apiOverrides = {}) {
   const actionSheets = [];
   const mediaChoosers = [];
   const clipboards = [], mediaPreviews = [], scrolls = [];
+  let aiStreamOptions = null;
   let sessionToken = 'session-token';
   const api = {
     mutationKey: prefix => `${prefix}-key`,
@@ -46,9 +47,11 @@ function loadEditor(apiOverrides = {}) {
     fs.readFileSync(path.join(root, 'contentedit/contentedit.js'), 'utf8'),
     {
       Page: page => { definition = page; }, wx, Promise, JSON, Set, Map,
-      require: id => id.includes('phase3-api') ? api : {
-        preserveLayoutBody: (_layout, fallback) => fallback,
-        renderArticleDocument: () => [],
+      require: id => {
+        if (id.includes('phase3-api')) return api;
+        if (id.includes('ai-stream')) return { startAIStream: options => { aiStreamOptions = options; return { abort() {} }; } };
+        if (id.includes('writing-policy')) return require(path.join(__dirname, '../miniprogram/utils/writing-policy.js'));
+        return { preserveLayoutBody: (_layout, fallback) => fallback, renderArticleDocument: () => [] };
       },
     },
   );
@@ -60,7 +63,7 @@ function loadEditor(apiOverrides = {}) {
     _visible: true,
     setData(values) { Object.assign(this.data, values); },
   };
-  return { page, navigations, navigationOptions, toasts, modals, backs, actionSheets, mediaChoosers, clipboards, mediaPreviews, scrolls, token(value) { sessionToken = value; } };
+  return { page, navigations, navigationOptions, toasts, modals, backs, actionSheets, mediaChoosers, clipboards, mediaPreviews, scrolls, aiStream: () => aiStreamOptions, token(value) { sessionToken = value; } };
 }
 
 test('editor exposes separate draft, preview, publish and published-reader actions', async () => {
@@ -79,6 +82,73 @@ test('editor exposes separate draft, preview, publish and published-reader actio
   page.setData({ status: 'published', version: 3, id: 'content-one' });
   page.openPublished();
   assert.equal(navigations[0], '/pages/contentreader/contentreader?content_id=content-one&content_version=3');
+});
+
+test('inline AI streaming cannot save preview or publish a partial introduction', async () => {
+  let saves = 0, previews = 0, publishes = 0;
+  const { page } = loadEditor({
+    saveContent: async () => { saves += 1; return { content_id: 'content-one', revision: 2, version: 0, status: 'draft' }; },
+    previewContent: async () => { previews += 1; return { preview_token: 'preview-one' }; },
+    publishContent: async () => { publishes += 1; return {}; },
+  });
+  page.setData({ presentation: 'gallery', title: '庭院方案', owner_id: 'owner-a', blocks: [{ kind: 'image', media_id: 'image-one' }, { kind: 'paragraph', text: 'AI 半截内容' }], aiInlineStreaming: true });
+  await page.saveDraft();
+  await page.saveAndPreview();
+  await page.publish();
+  assert.equal(saves, 0);
+  assert.equal(previews, 0);
+  assert.equal(publishes, 0);
+});
+
+test('inline AI streaming disables and debounces every destructive management action', () => {
+  const { page, modals } = loadEditor();
+  page.setData({ id: 'content-one', revision: 2, version: 1, status: 'published', pinned: false, moreExpanded: false, aiInlineStreaming: true });
+  page.toggleMore();
+  page.togglePinned();
+  page.revoke();
+  page.setData({ version: 0, status: 'draft' });
+  page.deleteDraft();
+  assert.equal(page.data.moreExpanded, false);
+  assert.equal(page.data.pinned, false);
+  assert.equal(modals.length, 0);
+
+  page.setData({ aiInlineStreaming: false, version: 1, status: 'published' });
+  page.revoke();
+  page.setData({ aiInlineStreaming: true });
+  modals[0].success({ confirm: true, content: '测试撤回' });
+  assert.equal(page.data.busy, false, '弹窗打开后开始生成也不得撤回');
+
+  page.setData({ aiInlineStreaming: false, version: 0, status: 'draft' });
+  page.deleteDraft();
+  page.setData({ aiInlineStreaming: true });
+  modals[1].success({ confirm: true });
+  assert.equal(page.data.busy, false, '弹窗打开后开始生成也不得删除');
+
+  const wxml = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
+  assert.match(wxml, /class="plain-action editor-more"[\s\S]*disabled="\{\{busy \|\| aiInlineStreaming \|\| aiInlineConflict\}\}"/);
+  assert.match(wxml, /bindtap="revoke" disabled="\{\{busy \|\| aiInlineStreaming \|\| aiInlineConflict\}\}"/);
+  assert.match(wxml, /bindtap="togglePinned" disabled="\{\{busy \|\| aiInlineStreaming \|\| aiInlineConflict\}\}"/);
+  assert.match(wxml, /bindtap="deleteDraft" disabled="\{\{busy \|\| aiInlineStreaming \|\| aiInlineConflict\}\}"/);
+});
+
+test('inline AI conflict also blocks revoke and delete at markup and handler boundaries', async () => {
+  let revokes = 0, deletes = 0;
+  const { page, modals } = loadEditor({
+    revokeContent: async () => { revokes += 1; return {}; },
+    deleteContentDraft: async () => { deletes += 1; return {}; },
+  });
+  page.setData({ id: 'content-one', revision: 2, version: 1, status: 'published', aiInlineConflict: true });
+  page.revoke();
+  await page.revokeContent('原因');
+  page.setData({ version: 0, status: 'draft' });
+  page.deleteDraft();
+  await page.deleteDraftConfirmed();
+  assert.equal(modals.length, 0);
+  assert.equal(revokes, 0);
+  assert.equal(deletes, 0);
+  const wxml = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
+  assert.match(wxml, /bindtap="revoke" disabled="\{\{busy \|\| aiInlineStreaming \|\| aiInlineConflict\}\}"/);
+  assert.match(wxml, /bindtap="deleteDraft" disabled="\{\{busy \|\| aiInlineStreaming \|\| aiInlineConflict\}\}"/);
 });
 
 test('publish saves the latest draft, requests a current preview token, then publishes without opening preview', async () => {
@@ -318,73 +388,53 @@ test('AI writing prefill stays account-scoped and never overwrites a saved draft
   assert.equal(page.data.blocks[0].text, '已保存正文');
 });
 
-test('new editor opens AI writing with an event return path into the same empty draft', () => {
-  const { page, navigationOptions } = loadEditor();
+test('new article editor generates AI text in the same draft without opening another page', () => {
+  const editor = loadEditor();
+  const { page, navigationOptions } = editor;
   page._loaded = true;
-  page.setData({ context: { owners: ['owner-a'] }, owner_id: 'owner-a' });
+  page.setData({ context: { owners: ['owner-a'] }, owner_id: 'owner-a', presentation: 'article', title: '返回原编辑器' });
 
   page.openAIWriting();
-  assert.equal(navigationOptions.length, 1);
-  assert.equal(navigationOptions[0].url, '/pages/contentwriting/contentwriting?source=editor');
-  assert.equal(typeof navigationOptions[0].events.prefillContent, 'function');
-
-  navigationOptions[0].events.prefillContent({ title: '返回原编辑器', text: '同一草稿中的正文' });
+  assert.equal(navigationOptions.length, 0);
+  assert.ok(editor.aiStream());
+  editor.aiStream().onDone('同一草稿中的正文');
   assert.equal(page.data.title, '返回原编辑器');
   assert.equal(page.data.blocks[0].text, '同一草稿中的正文');
-  assert.equal(navigationOptions.length, 1, '回填不得再打开第二个编辑器');
-
-  page.setData({ id: 'saved-content', title: '已有标题', blocks: [{ kind: 'paragraph', text: '已有正文' }] });
-  navigationOptions[0].events.prefillContent({ title: '迟到标题', text: '迟到正文' });
-  assert.equal(page.data.title, '已有标题');
-  assert.equal(page.data.blocks[0].text, '已有正文');
 });
 
-test('AI writing return appends once without replacing an unchanged unsaved draft', () => {
-  const { page, navigationOptions, toasts } = loadEditor();
+test('inline article AI appends to a full draft and restores the exact original blocks', () => {
+  const editor = loadEditor();
+  const { page, navigationOptions } = editor;
   page._loaded = true;
-  page.setData({ context: { owners: ['owner-a'] }, owner_id: 'owner-a', title: '原有标题', blocks: [{ kind: 'paragraph', text: '原有正文' }] });
+  const original = [{ kind: 'heading', level: 2, text: '原有小标题' }, { kind: 'paragraph', text: '原有正文' }];
+  page.setData({ context: { owners: ['owner-a'] }, owner_id: 'owner-a', presentation: 'article', title: '原有标题', blocks: original });
 
   page.openAIWriting();
-  const returned = navigationOptions[0].events.prefillContent;
-  returned({ title: 'AI 标题', text: '采用的 AI 正文' });
+  editor.aiStream().onDone('采用的 AI 正文');
   assert.equal(page.data.title, '原有标题');
-  assert.deepEqual(page.data.blocks.map(block => block.text), ['原有正文', '采用的 AI 正文']);
-
-  returned({ title: 'AI 标题', text: '采用的 AI 正文' });
-  assert.deepEqual(page.data.blocks.map(block => block.text), ['原有正文', '采用的 AI 正文'], '同一次返回事件不得重复追加');
-  assert.match(page.data.notice, /已采用|已处理/);
-
-  page.openAIWriting();
-  navigationOptions[1].events.prefillContent({ title: 'AI 标题', text: '采用的 AI 正文' });
-  assert.deepEqual(page.data.blocks.map(block => block.text), ['原有正文', '采用的 AI 正文'], '正文中已有同一文案时不得重复追加');
-
-  page.openAIWriting();
-  page.setData({ title: '期间已修改标题' });
-  navigationOptions[2].events.prefillContent({ title: '新 AI 标题', text: '不应采用' });
-  assert.equal(page.data.blocks.some(block => block.text === '不应采用'), false);
-  assert.match(page.data.notice, /未采用/);
-  assert.ok(toasts.some(toast => /未采用/.test(toast.title)));
+  assert.deepEqual(page.data.blocks.map(block => block.text), ['原有小标题', '原有正文', '采用的 AI 正文']);
+  page.restoreInlineAIOriginal();
+  assert.equal(JSON.stringify(page.data.blocks), JSON.stringify(original));
+  assert.equal(navigationOptions.length, 0);
 });
 
-test('AI writing return explains changed-draft and account-change rejection without overwriting', () => {
+test('inline article AI rejects late revision and account results without overwriting', () => {
   const saved = loadEditor();
   saved.page._loaded = true;
-  saved.page.setData({ context: { owners: ['owner-a'] }, owner_id: 'owner-a' });
+  saved.page.setData({ context: { owners: ['owner-a'] }, owner_id: 'owner-a', presentation: 'article', title: '标题', revision: 1, blocks: [{ kind: 'paragraph', text: '原正文' }] });
   saved.page.openAIWriting();
-  saved.page.setData({ id: 'saved-content', title: '已保存标题', blocks: [{ kind: 'paragraph', text: '已保存正文' }] });
-  saved.navigationOptions[0].events.prefillContent({ title: 'AI 标题', text: '不应覆盖保存内容' });
-  assert.equal(saved.page.data.blocks[0].text, '已保存正文');
-  assert.match(saved.page.data.notice, /草稿版本已变化/);
+  saved.page.setData({ revision: 2 });
+  saved.aiStream().onDone('不应覆盖保存内容');
+  assert.equal(saved.page.data.blocks[0].text, '原正文');
 
   const switched = loadEditor();
   switched.page._loaded = true;
-  switched.page.setData({ context: { owners: ['owner-a'] }, owner_id: 'owner-a', title: '当前标题', blocks: [{ kind: 'paragraph', text: '当前正文' }] });
+  switched.page.setData({ context: { owners: ['owner-a'] }, owner_id: 'owner-a', presentation: 'article', title: '当前标题', blocks: [{ kind: 'paragraph', text: '当前正文' }] });
   switched.page.openAIWriting();
   switched.token('session-two');
-  switched.navigationOptions[0].events.prefillContent({ title: '上一账号标题', text: '上一账号正文' });
+  switched.aiStream().onDone('上一账号正文');
   assert.equal(switched.page.data.blocks.length, 1);
   assert.equal(switched.page.data.blocks[0].text, '当前正文');
-  assert.match(switched.page.data.notice, /账号已变化/);
 });
 
 test('block insert menu offers heading, quote and list blocks that serialize correctly', () => {
@@ -574,7 +624,7 @@ test('video owner stays available in content settings and validation opens the a
 test('empty gallery exposes AI assistance and both social editors use one compact copy group', () => {
   const wxml = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxml'), 'utf8');
   const style = fs.readFileSync(path.join(root, 'contentedit/contentedit.wxss'), 'utf8');
-  assert.match(wxml, /presentation === 'gallery'[\s\S]*class="editor-copy-group gallery-copy-group"[\s\S]*bindtap="openAIWriting"[^>]*>AI辅助</);
+  assert.match(wxml, /presentation === 'gallery'[\s\S]*class="editor-copy-group gallery-copy-group"[\s\S]*bindtap="openAIWriting"[\s\S]*AI辅助/);
   assert.match(wxml, /class="editor-copy-group video-copy-group"/);
   assert.match(wxml, /class="compact-intro"/);
   assert.match(style, /\.compact-intro\s*\{[^}]*min-height:\s*72rpx[^}]*height:\s*72rpx/);
@@ -898,12 +948,12 @@ test('editor footer keeps preview optional and exposes save and direct publish t
 });
 
 test('U6 form polish: sticky error banner, rights wording and rejection toast carry the reason', () => {
-  const { page, navigationOptions, toasts } = loadEditor();
+  const { page, toasts } = loadEditor();
   page._loaded = true;
   page.setData({ context: { owners: ['owner-a'] }, owner_id: 'owner-a', title: '标题', blocks: [{ kind: 'paragraph', text: '正文' }] });
-  page.openAIWriting();
+  const launch = { token: 'session-token', contentID: '', revision: 0, signature: page.draftSignature(), state: '', message: '', channel: null };
   page.setData({ title: '期间已修改' });
-  navigationOptions[0].events.prefillContent({ title: 'AI', text: '不应采用' });
+  page.receiveWritingReturn({ title: 'AI', text: '不应采用' }, launch);
   // 拒收 toast 必须带原因，只写"未采用"用户不知道下一步
   assert.ok(toasts.some(toast => /已发生变化/.test(toast.title)));
 

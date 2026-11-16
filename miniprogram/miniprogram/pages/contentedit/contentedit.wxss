@@ -852,3 +852,25 @@ textarea.compact-intro { box-sizing: border-box; width: 100%; min-height: 72rpx;
   width: 100%;
   margin: 24rpx 0 0;
 }
+
+.inline-ai-feedback {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8rpx 18rpx;
+  margin-top: 6rpx;
+  color: #8a7968;
+  font-size: 22rpx;
+  line-height: 1.5;
+}
+
+.inline-ai-feedback .text-action {
+  min-height: 48rpx;
+  margin: 0;
+  padding: 0;
+}
+
+.inline-ai-error {
+  color: #9d433b;
+}

@@ -1,0 +1,74 @@
+{
+  "base_commit": "5c410aa32a2e6229b6b405047612e1a53e2a69ce",
+  "mini_tests": {
+    "total": 1807,
+    "passed": 1807,
+    "failed": 0,
+    "skipped": 0,
+    "native_wxml_compiler": true
+  },
+  "typescript": {
+    "baseline_diagnostics": 188,
+    "candidate_diagnostics": 188,
+    "new": [],
+    "removed": []
+  },
+  "auth_signer_check": true,
+  "tracking_build_check": true,
+  "tracking_route_policy": {
+    "app": 78,
+    "public": 23,
+    "excluded": 55
+  },
+  "javascript_syntax": {
+    "files": 9,
+    "failed": 0
+  },
+  "npm_vulnerabilities": {
+    "info": 0,
+    "low": 0,
+    "moderate": 0,
+    "high": 0,
+    "critical": 0,
+    "total": 0
+  },
+  "high_confidence_credentials": [],
+  "source_manifest": {
+    "miniprogram/README.md": "49f233496886b39c80cdcad05de71fdcf0b54a7d0589daea20169bd0121bbc9b",
+    "miniprogram/miniprogram/components/tdesign-miniprogram/icon/icon.js": "fe7f82cf9ab9bbf8fb15f7eec6a543ca4bc7e48e1a0b805774e2d75b52defda2",
+    "miniprogram/miniprogram/pages/contentedit/contentedit.js": "bf8b2f83ca820ebd446626ec5dcb919a23749d4be8d6be07d103a26a688b47b5",
+    "miniprogram/miniprogram/pages/contentedit/contentedit.ts": "3318c4589938a152030f54867097a7fd5ebd544fa50ec00fd59d1831c329efaf",
+    "miniprogram/miniprogram/pages/contentedit/contentedit.wxml": "ce107d13f0617d7c809a301e11bf058fe9d1945e4e85032797612f9d9e2a5d48",
+    "miniprogram/miniprogram/pages/contentedit/contentedit.wxss": "6a3837aea82d371fe9bee24532f889e0ad6345bcffee82bccd9887cefc6cc18d",
+    "miniprogram/miniprogram/utils/ai-stream.js": "2f5fee04af01ede675ffa814ea30bdf40f2e3706f64b61f0326691b4adce6d25",
+    "miniprogram/miniprogram/utils/ai-stream.ts": "9ee8857a9ab00c821c7460e34093149c4a7d00b51ca8116aee5d99f7d9cd69ef",
+    "miniprogram/miniprogram/utils/writing-policy.js": "6ae29942253bbff56a804079ce5476e9692cfcda9c50dd7178ad81a949366272",
+    "miniprogram/miniprogram/utils/writing-policy.ts": "64738585c15f855080afd335e32a35d7e59818dd6b27e6f92e5b5895b6e6c0d2",
+    "miniprogram/tests/ai-stream.test.js": "1627eecc466e5904fcd658e4c88daa39acee2c09db043f7c1ec3c0e251624a51",
+    "miniprogram/tests/content-ai-resume.test.js": "96ea4bf40d94abb058c6b8e768b1997b65b031ea374d155268e8e88e65a2b5d4",
+    "miniprogram/tests/phase3-content-editor-ui.test.js": "9f416cb6e9f63eb8baf38f080b549f8a968e4727f22c7a221b3b43a7e0dd16de",
+    "miniprogram/tests/phase3-workbench.test.js": "8249015818a58baa9974d2feaf1e71e0878266838a56823880244c273411942c",
+    "miniprogram/tests/tdesign-icon-runtime.test.js": "14e275c509a688e3b81e87ea06aa7116f6a2c8894942b22873b8f33028f808f8"
+  },
+  "independent_editor_review": {
+    "decision": "APPROVE",
+    "p0": 0,
+    "p1": 0,
+    "p2": 0,
+    "focused_passed": 48,
+    "reviewed_followup": true
+  },
+  "server_source_unchanged": true,
+  "native_sse_supplier_uat_completed": false,
+  "review_fixes": {
+    "github_pr": 54,
+    "p2_findings": 2,
+    "reproduced": true,
+    "fixed": true,
+    "targeted_passed": 189,
+    "behaviors": [
+      "preserve revised text after background cancellation",
+      "invalidate callbacks before synchronous abort"
+    ]
+  }
+}

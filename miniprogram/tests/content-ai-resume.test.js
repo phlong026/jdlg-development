@@ -57,11 +57,18 @@ function loadPage(name, shared) {
   return { page, navigations, toasts, listeners, emitted, channel, backs, storage, aiStreamStub, token(value) { token = value; } };
 }
 
-test('a saved draft sends only existing text facts to AI and appends the return without losing media blocks', () => {
+function legacyEditorLaunch(h) {
+  return { token: 'session-one', contentID: String(h.page.data.id || ''), revision: Number(h.page.data.revision || 0), signature: h.page.draftSignature(), state: '', message: '', channel: h.channel };
+}
+
+test('a saved article draft sends only existing text facts to inline AI and appends without losing structure', () => {
   const h = loadPage('contentedit');
+  let stream;
+  h.aiStreamStub.startAIStream = options => { stream = options; return { abort() {} }; };
   h.page.setData({
     id: 'content-42',
     revision: 7,
+    presentation: 'article',
     title: '已保存的庭院方案',
     blocks: [
       { kind: 'paragraph', text: '入口朝南' },
@@ -71,43 +78,35 @@ test('a saved draft sends only existing text facts to AI and appends the return 
   });
 
   h.page.openAIWriting();
-  assert.equal(h.navigations.length, 1, '已保存草稿也应能继续 AI 编辑');
-  h.navigations[0].success({ eventChannel: h.channel });
-  const context = h.emitted.find(item => item.event === 'writingContext').value;
-  assert.equal(context.source, 'editor');
-  assert.equal(context.content_id, 'content-42');
-  assert.equal(context.revision, 7);
-  assert.equal(context.title, '已保存的庭院方案');
-  assert.match(context.facts, /入口朝南/);
-  assert.match(context.facts, /保留现有大树/);
-  assert.match(context.facts, /不改建围墙/);
-  assert.doesNotMatch(context.facts, /private-image/);
-
-  const returned = h.navigations[0].events.prefillContent;
-  returned({ title: '不覆盖原标题', text: 'AI 补充的设计说明' });
+  assert.equal(h.navigations.length, 0);
+  assert.match(stream.messages[0].content, /入口朝南/);
+  assert.match(stream.messages[0].content, /保留现有大树/);
+  assert.match(stream.messages[0].content, /不改建围墙/);
+  assert.doesNotMatch(stream.messages[0].content, /private-image/);
+  stream.onDone('AI 补充的设计说明');
   assert.equal(h.page.data.title, '已保存的庭院方案');
-  assert.deepEqual(h.page.data.blocks[1], { kind: 'image', media_id: 'private-image', caption: '保留现有大树' });
+  assert.equal(JSON.stringify(h.page.data.blocks[1]), JSON.stringify({ kind: 'image', media_id: 'private-image', caption: '保留现有大树' }));
   assert.equal(h.page.data.blocks.at(-1).text, 'AI 补充的设计说明');
-  returned({ title: '不覆盖原标题', text: 'AI 补充的设计说明' });
+  stream.onDone('AI 补充的设计说明');
   assert.equal(h.page.data.blocks.filter(block => block.text === 'AI 补充的设计说明').length, 1);
 });
 
-test('saved-draft AI return keeps account, revision, busy and original-layout guards', () => {
+test('inline article AI keeps account, revision, busy and original-layout guards', () => {
   const changed = loadPage('contentedit');
-  changed.page.setData({ id: 'content-42', revision: 7, title: '标题', blocks: [{ kind: 'paragraph', text: '原文' }] });
+  let changedStream;
+  changed.aiStreamStub.startAIStream = options => { changedStream = options; return { abort() {} }; };
+  changed.page.setData({ id: 'content-42', revision: 7, presentation: 'article', title: '标题', blocks: [{ kind: 'paragraph', text: '原文' }] });
   changed.page.openAIWriting();
   changed.page.setData({ revision: 8 });
-  changed.navigations[0].events.prefillContent({ text: '不应回填' });
+  changedStream.onDone('不应回填');
   assert.equal(changed.page.data.blocks.length, 1);
-  assert.match(changed.page.data.notice, /变化|版本/);
 
   const busy = loadPage('contentedit');
-  busy.page.setData({ id: 'content-42', revision: 7, title: '标题', blocks: [{ kind: 'paragraph', text: '原文' }] });
+  let busyCalls = 0;
+  busy.aiStreamStub.startAIStream = () => { busyCalls += 1; return { abort() {} }; };
+  busy.page.setData({ id: 'content-42', revision: 7, presentation: 'article', title: '标题', blocks: [{ kind: 'paragraph', text: '原文' }], busy: true });
   busy.page.openAIWriting();
-  busy.page.setData({ busy: true });
-  busy.navigations[0].events.prefillContent({ text: '不应回填' });
-  assert.equal(busy.page.data.blocks.length, 1);
-  assert.match(busy.page.data.notice, /保存|处理/);
+  assert.equal(busyCalls, 0);
 
   const readOnly = loadPage('contentedit');
   readOnly.page.setData({ id: 'content-layout', layoutReadOnly: true });
@@ -115,12 +114,13 @@ test('saved-draft AI return keeps account, revision, busy and original-layout gu
   assert.equal(readOnly.navigations.length, 0);
 
   const switched = loadPage('contentedit');
-  switched.page.setData({ id: 'content-42', revision: 7, title: '标题', blocks: [{ kind: 'paragraph', text: '原文' }] });
+  let switchedStream;
+  switched.aiStreamStub.startAIStream = options => { switchedStream = options; return { abort() {} }; };
+  switched.page.setData({ id: 'content-42', revision: 7, presentation: 'article', title: '标题', blocks: [{ kind: 'paragraph', text: '原文' }] });
   switched.page.openAIWriting();
   switched.token('session-two');
-  switched.navigations[0].events.prefillContent({ text: '不应回填' });
+  switchedStream.onDone('不应回填');
   assert.equal(switched.page.data.blocks.length, 1);
-  assert.match(switched.page.data.notice, /账号/);
 });
 
 test('writing page receives editor context through EventChannel and returns to the same draft', () => {
@@ -172,29 +172,424 @@ test('saved editable drafts expose AI writing while original-layout content stay
   assert.match(wxml, /<block wx:if="\{\{!layoutReadOnly\}\}">/);
 });
 
-test('AI writing navigation failure keeps the draft and reports a retryable error', () => {
-  const h = loadPage('contentedit');
-  h.page.setData({ id: 'content-42', revision: 7, title: '标题', blocks: [{ kind: 'paragraph', text: '原文' }] });
-  h.page.openAIWriting();
-  h.navigations[0].fail();
-  assert.equal(h.page.data.blocks.length, 1);
-  assert.equal(h.page.data.blocks[0].text, '原文');
-  assert.match(h.page.data.notice, /无法打开|重试/);
+test('content editor AI entry no longer references the independent writing page', () => {
+  const source = fs.readFileSync(path.join(pagesRoot, 'contentedit/contentedit.js'), 'utf8');
+  assert.doesNotMatch(source, /\/pages\/contentwriting\/contentwriting\?source=editor/);
 });
 
-test('video editor requests one-click bundle copy and preserves omitted returned fields', () => {
+test('gallery and video editors generate introductions inline without navigating', () => {
+  for (const presentation of ['gallery', 'video']) {
+    const h = loadPage('contentedit');
+    let stream;
+    h.aiStreamStub.startAIStream = options => { stream = options; return { abort() {} }; };
+    const media = presentation === 'gallery'
+      ? [{ kind: 'image', media_id: 'image-1', caption: '保留院子里的老树' }]
+      : [{ kind: 'video', media_id: 'video-1', caption: '庭院改造前后对比' }];
+    h.page.setData({ presentation, title: '新中式乡村别墅', postText: '原介绍', blocks: media.concat({ kind: 'paragraph', text: '原介绍' }) });
+    h.page.openAIWriting();
+    assert.equal(h.navigations.length, 0, `${presentation} 不应跳出编辑页`);
+    assert.ok(stream, `${presentation} 应复用原流式通道`);
+    assert.match(stream.messages[0].content, /无法看到图片或视频画面/);
+    assert.doesNotMatch(stream.messages[0].content, /image-1|video-1|\/tmp|wxfile:/, '不向文本模型伪装传入私有素材');
+    stream.onChunk('AI 生成中');
+    assert.equal(h.page.data.postText, 'AI 生成中');
+    assert.equal(h.page.data.blocks.at(-1).text, 'AI 生成中');
+    stream.onDone('AI 生成完整介绍');
+    assert.equal(h.page.data.postText, 'AI 生成完整介绍');
+    assert.equal(h.page.data.blocks.at(-1).text, 'AI 生成完整介绍');
+    assert.equal(h.page.data.aiInlineCanRestore, true);
+    assert.equal(h.page.data.aiInlineStreaming, false);
+  }
+});
+
+test('article editor generates inline into a paragraph without flattening structured blocks and can restore', () => {
   const h = loadPage('contentedit');
-  h.page.setData({ presentation: 'video', title: '新中式乡村别墅', shareCopy: '保留的转发文案', momentsCopy: '', blocks: [{ kind: 'video', media_id: 'video-1', caption: '' }] });
+  let stream;
+  h.aiStreamStub.startAIStream = options => { stream = options; return { abort() {} }; };
+  const original = [
+    { kind: 'heading', level: 2, text: '院落改造要点' },
+    { kind: 'paragraph', text: '保留东侧老树。' },
+    { kind: 'list', ordered: false, items: ['不改建围墙', '保留老井'] },
+    { kind: 'image', media_id: 'private-image', caption: '院落现状' },
+    { kind: 'quote', text: '业主确认不迁移老树' },
+    { kind: 'paragraph', text: '' },
+  ];
+  h.page.setData({ presentation: 'article', title: '院落改造方案', postText: '保留东侧老树。', blocks: original });
   h.page.openAIWriting();
-  h.navigations[0].success({ eventChannel: h.channel });
-  const context = h.emitted.find(item => item.event === 'writingContext').value;
-  assert.equal(context.target, 'video_bundle');
-  assert.equal(context.auto_generate, true);
-  assert.equal(context.share_copy, '保留的转发文案');
-  h.navigations[0].events.prefillContent({ video_copy: { title: 'AI 新标题', moments_copy: 'AI 朋友圈文案' } });
-  assert.equal(h.page.data.title, 'AI 新标题');
-  assert.equal(h.page.data.shareCopy, '保留的转发文案');
-  assert.equal(h.page.data.momentsCopy, 'AI 朋友圈文案');
+  assert.equal(h.navigations.length, 0, '文章 AI 不应再打开独立页');
+  assert.ok(stream, '文章应复用原流式生成通道');
+  assert.doesNotMatch(stream.messages[0].content, /private-image/, '只传入可确认文本');
+  stream.onChunk('AI 正文生成中');
+  assert.equal(JSON.stringify(h.page.data.blocks.slice(0, 5)), JSON.stringify(original.slice(0, 5)), '标题、列表、媒体和引用必须保留');
+  assert.equal(h.page.data.blocks[5].kind, 'paragraph');
+  assert.equal(h.page.data.blocks[5].text, 'AI 正文生成中');
+  stream.onDone('AI 完整正文');
+  assert.equal(h.page.data.blocks[5].text, 'AI 完整正文');
+  h.page.restoreInlineAIOriginal();
+  assert.equal(JSON.stringify(h.page.data.blocks), JSON.stringify(original), '恢复时应精确还原生成前结构');
+});
+
+test('article without an empty paragraph reuses one appended target across chunks, completion and retry', () => {
+  const h = loadPage('contentedit');
+  const streams = [];
+  h.aiStreamStub.startAIStream = options => { streams.push(options); return { abort() {} }; };
+  const original = [{ kind: 'heading', level: 2, text: '改造要点' }, { kind: 'paragraph', text: '原有正文' }];
+  h.page.setData({ presentation: 'article', title: '庭院方案', postText: '原有正文', blocks: original });
+  h.page.openAIWriting();
+  streams[0].onChunk('第一个流式片段');
+  streams[0].onChunk('第二个流式片段');
+  streams[0].onDone('第一次完整正文');
+  assert.equal(h.page.data.blocks.length, original.length + 1);
+  assert.equal(JSON.stringify(h.page.data.blocks.slice(0, original.length)), JSON.stringify(original));
+  assert.equal(h.page.data.blocks[original.length].text, '第一次完整正文');
+
+  h.page.openAIWriting();
+  streams[1].onChunk('第二次流式片段');
+  streams[1].onDone('第二次完整正文');
+  assert.equal(h.page.data.blocks.length, original.length + 1, '重试不得重复追加段落');
+  assert.equal(h.page.data.blocks[original.length].text, '第二次完整正文');
+});
+
+test('manual edits to a streaming article paragraph abort AI and keep the editable paragraph', () => {
+  const h = loadPage('contentedit');
+  let stream, aborted = 0;
+  h.aiStreamStub.startAIStream = options => { stream = options; return { abort() { aborted += 1; } }; };
+  h.page.setData({ presentation: 'article', title: '庭院方案', blocks: [{ kind: 'heading', level: 2, text: '改造要点' }] });
+  h.page.openAIWriting();
+  stream.onChunk('AI 半截正文');
+  h.page.editBlock({ currentTarget: { dataset: { index: 1 } }, detail: { value: '用户手工正文' } });
+  stream.onDone('迟到的 AI 正文');
+  assert.equal(aborted, 1);
+  assert.equal(h.page.data.blocks[1].kind, 'paragraph');
+  assert.equal(h.page.data.blocks[1].text, '用户手工正文');
+});
+
+test('article stream failure removes its partial appended paragraph and preserves the original structure', () => {
+  const h = loadPage('contentedit');
+  let stream;
+  h.aiStreamStub.startAIStream = options => { stream = options; return { abort() {} }; };
+  const original = [{ kind: 'heading', level: 2, text: '改造要点' }, { kind: 'paragraph', text: '保留原正文' }, { kind: 'list', ordered: true, items: ['第一项'] }];
+  h.page.setData({ presentation: 'article', title: '庭院方案', postText: '保留原正文', blocks: original });
+  h.page.openAIWriting();
+  stream.onChunk('AI 半截正文');
+  stream.onError('网络异常');
+  assert.equal(JSON.stringify(h.page.data.blocks), JSON.stringify(original));
+  assert.equal(h.page.data.postText, '保留原正文');
+  assert.match(h.page.data.aiInlineError, /网络异常/);
+});
+
+test('failed article generation cannot restore an older draft after manual editing and a second failure', () => {
+  const h = loadPage('contentedit');
+  const streams = [];
+  h.aiStreamStub.startAIStream = options => { streams.push(options); return { abort() {} }; };
+  h.page.setData({ presentation: 'article', title: '庭院方案', blocks: [{ kind: 'paragraph', text: '第一版人工稿' }] });
+  h.page.openAIWriting();
+  streams[0].onChunk('第一次 AI 半截');
+  streams[0].onError('第一次失败');
+  h.page.editBlock({ currentTarget: { dataset: { index: 0 } }, detail: { value: '第二版人工稿' } });
+  h.page.openAIWriting();
+  streams[1].onChunk('第二次 AI 半截');
+  streams[1].onError('第二次失败');
+  assert.equal(h.page.data.blocks[0].text, '第二版人工稿');
+  assert.equal(streams.length, 2, '每次点击只发起一个请求');
+});
+
+test('402 after partial output restores the original and keeps the exact balance message retryable', () => {
+  const h = loadPage('contentedit');
+  const streams = [];
+  h.aiStreamStub.startAIStream = options => { streams.push(options); return { abort() {} }; };
+  h.page.setData({ presentation: 'gallery', title: '庭院方案', postText: '人工原介绍', blocks: [{ kind: 'paragraph', text: '人工原介绍' }] });
+  h.page.openAIWriting();
+  streams[0].onChunk('AI 半截介绍');
+  const message = '当前生成需要 5 灵石，你的余额为 2 灵石，请先充值后再试。';
+  streams[0].onError(message, 402);
+  assert.equal(h.page.data.postText, '人工原介绍');
+  assert.equal(h.page.data.aiInlineError, message);
+  h.page.openAIWriting();
+  assert.equal(streams.length, 2, '重试单击只能新增一个请求');
+});
+
+test('a completed inline introduction can restore the exact original blocks', () => {
+  const h = loadPage('contentedit');
+  let stream;
+  h.aiStreamStub.startAIStream = options => { stream = options; return { abort() {} }; };
+  const original = [{ kind: 'image', media_id: 'image-1', caption: '庭院入口' }, { kind: 'paragraph', text: '第一段' }, { kind: 'paragraph', text: '第二段' }];
+  h.page.setData({ presentation: 'gallery', title: '庭院方案', postText: '第一段\n\n第二段', blocks: original });
+  h.page.openAIWriting();
+  stream.onDone('AI 介绍');
+  h.page.restoreInlineAIOriginal();
+  assert.equal(h.page.data.postText, '第一段\n\n第二段');
+  assert.equal(JSON.stringify(h.page.data.blocks), JSON.stringify(original));
+  assert.equal(h.page.data.aiInlineCanRestore, false);
+});
+
+test('inline social AI failure restores the original introduction and remains retryable', () => {
+  const h = loadPage('contentedit');
+  let stream, calls = 0;
+  h.aiStreamStub.startAIStream = options => { calls += 1; stream = options; return { abort() {} }; };
+  h.page.setData({ presentation: 'video', title: '新中式乡村别墅', postText: '人工原稿', blocks: [{ kind: 'video', media_id: 'video-1', caption: '' }, { kind: 'paragraph', text: '人工原稿' }] });
+  h.page.openAIWriting();
+  stream.onChunk('半截 AI 文案');
+  stream.onError('网络异常');
+  assert.equal(h.page.data.postText, '人工原稿');
+  assert.equal(h.page.data.blocks.at(-1).text, '人工原稿');
+  assert.match(h.page.data.aiInlineError, /网络异常/);
+  h.page.openAIWriting();
+  assert.equal(calls, 2, '失败后可原页重试');
+});
+
+test('late inline AI callbacks cannot cross account actor or draft changes', () => {
+  for (const boundary of ['token', 'actor', 'owner', 'draft']) {
+    const storage = new Map([['userInfo', { id: 101 }]]);
+    const h = loadPage('contentedit', { storage });
+    let stream;
+    h.aiStreamStub.startAIStream = options => { stream = options; return { abort() {} }; };
+    h.page.setData({ id: 'draft-one', revision: 3, owner_id: 'owner-a', presentation: 'gallery', title: '庭院方案', postText: '原稿', blocks: [{ kind: 'image', media_id: 'image-1', caption: '老树' }, { kind: 'paragraph', text: '原稿' }] });
+    h.page.openAIWriting();
+    if (boundary === 'token') h.token('session-two');
+    if (boundary === 'actor') storage.set('userInfo', { id: 202 });
+    if (boundary === 'owner') h.page.setData({ owner_id: 'owner-b' });
+    if (boundary === 'draft') h.page.setData({ id: 'draft-two' });
+    stream.onDone('迟到的旧文案');
+    assert.equal(h.page.data.postText, '原稿', `${boundary} 边界不得写入迟到结果`);
+  }
+});
+
+test('identity changes after a partial stream restore the original instead of leaving old AI text savable', () => {
+  for (const boundary of ['actor', 'owner', 'draft', 'revision']) {
+    const storage = new Map([['userInfo', { id: 101 }]]);
+    const h = loadPage('contentedit', { storage });
+    let stream;
+    h.aiStreamStub.startAIStream = options => { stream = options; return { abort() {} }; };
+    const original = [{ kind: 'image', media_id: 'image-1', caption: '老树' }, { kind: 'paragraph', text: '人工原稿' }];
+    h.page.setData({ id: 'draft-one', revision: 3, owner_id: 'owner-a', presentation: 'gallery', title: '庭院方案', postText: '人工原稿', blocks: original });
+    h.page.openAIWriting();
+    stream.onChunk('旧身份 AI 半截结果');
+    if (boundary === 'actor') storage.set('userInfo', { id: 202 });
+    if (boundary === 'owner') h.page.setData({ owner_id: 'owner-b' });
+    if (boundary === 'draft') h.page.setData({ id: 'draft-two' });
+    if (boundary === 'revision') h.page.setData({ revision: 4 });
+    stream.onDone('迟到的完整结果');
+    assert.equal(h.page.data.postText, '人工原稿', `${boundary} 变化后必须移除旧 AI 半截内容`);
+    assert.equal(JSON.stringify(h.page.data.blocks), JSON.stringify(original));
+    assert.equal(h.page.data.aiInlineConflict, false);
+  }
+});
+
+test('an identity change plus a new draft body blocks saving instead of overwriting the new body', async () => {
+  const h = loadPage('contentedit');
+  let stream;
+  h.aiStreamStub.startAIStream = options => { stream = options; return { abort() {} }; };
+  h.page.setData({ id: 'draft-one', revision: 1, owner_id: 'owner-a', presentation: 'article', title: '旧草稿', blocks: [{ kind: 'paragraph', text: '旧正文' }] });
+  h.page.openAIWriting();
+  stream.onChunk('旧 AI 半截正文');
+  h.page.setData({ id: 'draft-two', revision: 2, title: '新草稿', blocks: [{ kind: 'paragraph', text: '新草稿正文' }] });
+  stream.onDone('迟到的旧 AI 正文');
+  assert.equal(h.page.data.blocks[0].text, '新草稿正文');
+  assert.equal(h.page.data.aiInlineConflict, true);
+  const before = h.page.data.busy;
+  await h.page.saveDraft();
+  assert.equal(h.page.data.busy, before);
+  assert.match(h.page.data.error, /重新进入|重新加载/);
+});
+
+test('manual introduction edits stop inline AI and are never overwritten by late chunks', () => {
+  const h = loadPage('contentedit');
+  let stream, aborted = 0;
+  h.aiStreamStub.startAIStream = options => { stream = options; return { abort() { aborted += 1; } }; };
+  h.page.setData({ presentation: 'gallery', title: '庭院方案', postText: '原稿', blocks: [{ kind: 'image', media_id: 'image-1', caption: '老树' }, { kind: 'paragraph', text: '原稿' }] });
+  h.page.openAIWriting();
+  stream.onChunk('AI 半截结果');
+  h.page.editPostText({ detail: { value: '用户手工修改' } });
+  stream.onChunk('迟到的 AI 结果');
+  stream.onDone('迟到的完整结果');
+  assert.equal(aborted, 1);
+  assert.equal(h.page.data.postText, '用户手工修改');
+  assert.equal(h.page.data.blocks.at(-1).text, '用户手工修改');
+});
+
+test('editing non-target fields restores the pre-stream body before applying the human change', () => {
+  const title = loadPage('contentedit');
+  let titleStream;
+  title.aiStreamStub.startAIStream = options => { titleStream = options; return { abort() {} }; };
+  title.page.setData({ presentation: 'gallery', title: '原标题', owner_id: 'owner-a', postText: '原介绍', blocks: [{ kind: 'paragraph', text: '原介绍' }] });
+  title.page.openAIWriting();
+  titleStream.onChunk('AI 半截介绍');
+  title.page.setField({ currentTarget: { dataset: { field: 'title' } }, detail: { value: '人工新标题' } });
+  assert.equal(title.page.data.title, '人工新标题');
+  assert.equal(title.page.data.postText, '原介绍');
+  assert.equal(title.page.data.blocks[0].text, '原介绍');
+  assert.doesNotMatch(title.page.draftInput().draft.body, /AI 半截/);
+
+  const caption = loadPage('contentedit');
+  let captionStream;
+  caption.aiStreamStub.startAIStream = options => { captionStream = options; return { abort() {} }; };
+  caption.page.setData({ presentation: 'gallery', title: '庭院', postText: '原介绍', blocks: [{ kind: 'image', media_id: 'i1', caption: '旧注释' }, { kind: 'paragraph', text: '原介绍' }] });
+  caption.page.openAIWriting();
+  captionStream.onChunk('AI 半截介绍');
+  caption.page.editCaption({ currentTarget: { dataset: { index: 0 } }, detail: { value: '人工新注释' } });
+  assert.equal(caption.page.data.blocks[0].caption, '人工新注释');
+  assert.equal(caption.page.data.blocks[1].text, '原介绍');
+
+  const structured = loadPage('contentedit');
+  let structuredStream;
+  structured.aiStreamStub.startAIStream = options => { structuredStream = options; return { abort() {} }; };
+  structured.page.setData({ presentation: 'article', title: '庭院', blocks: [{ kind: 'heading', level: 2, text: '原小标题' }, { kind: 'paragraph', text: '' }] });
+  structured.page.openAIWriting();
+  structuredStream.onChunk('AI 半截正文');
+  structured.page.editBlock({ currentTarget: { dataset: { index: 0 } }, detail: { value: '人工新小标题' } });
+  assert.equal(structured.page.data.blocks[0].text, '人工新小标题');
+  assert.equal(structured.page.data.blocks[1].text, '', '非 AI 目标块编辑前应撤掉半截正文');
+
+  const list = loadPage('contentedit');
+  let listStream;
+  list.aiStreamStub.startAIStream = options => { listStream = options; return { abort() {} }; };
+  list.page.setData({ presentation: 'article', title: '庭院', blocks: [{ kind: 'list', ordered: false, items: ['原列表'] }, { kind: 'paragraph', text: '' }] });
+  list.page.openAIWriting();
+  listStream.onChunk('AI 半截正文');
+  list.page.editListItem({ currentTarget: { dataset: { index: 0, itemIndex: 0 } }, detail: { value: '人工新列表' } });
+  assert.equal(list.page.data.blocks[0].items[0], '人工新列表');
+  assert.equal(list.page.data.blocks[1].text, '');
+});
+
+test('owner changes after a partial stream keep the human owner choice without retaining AI partial text', async () => {
+  const h = loadPage('contentedit');
+  let stream;
+  h.aiStreamStub.startAIStream = options => { stream = options; return { abort() {} }; };
+  h.page._token = 'session-one';
+  h.page.setData({ id: '', presentation: 'gallery', title: '庭院', owner_id: 'owner-a', ownerIndex: 0,
+    context: { owner_choices: [{ owner_id: 'owner-a', display_name: 'A' }, { owner_id: 'owner-b', display_name: 'B' }] },
+    postText: '原介绍', blocks: [{ kind: 'paragraph', text: '原介绍' }] });
+  h.page.openAIWriting();
+  stream.onChunk('AI 半截介绍');
+  h.page.setOwner({ detail: { value: 1 } });
+  await Promise.resolve();
+  assert.equal(h.page.data.owner_id, 'owner-b');
+  assert.equal(h.page.data.blocks[0].text, '原介绍');
+  assert.equal(h.page.data.aiInlineStreaming, false);
+});
+
+test('structure actions recompute safely after an appended AI paragraph is restored', () => {
+  const h = loadPage('contentedit');
+  let stream;
+  h.aiStreamStub.startAIStream = options => { stream = options; return { abort() {} }; };
+  const original = [{ kind: 'heading', level: 2, text: '原小标题' }];
+  h.page.setData({ presentation: 'article', title: '庭院', blocks: original });
+  h.page.openAIWriting();
+  stream.onChunk('AI 追加正文');
+  h.page.moveBlock({ currentTarget: { dataset: { index: 1, step: -1 } } });
+  assert.equal(JSON.stringify(h.page.data.blocks), JSON.stringify(original));
+  assert.equal(h.page.data.blocks.includes(undefined), false);
+});
+
+test('backgrounding restores the original and unloading rejects every late stream callback', () => {
+  const h = loadPage('contentedit');
+  let stream, aborted = 0;
+  h.aiStreamStub.startAIStream = options => { stream = options; return { abort() { aborted += 1; } }; };
+  h.page.setData({ presentation: 'video', title: '庭院视频', postText: '原介绍', blocks: [{ kind: 'video', media_id: 'v1', caption: '' }, { kind: 'paragraph', text: '原介绍' }] });
+  h.page.openAIWriting();
+  stream.onChunk('AI 半截');
+  h.page.onHide();
+  assert.equal(aborted, 1);
+  assert.equal(h.page.data.postText, '原介绍');
+
+  h.page.openAIWriting();
+  const unloadedStream = stream;
+  h.page.onUnload();
+  unloadedStream.onChunk('卸载后的迟到内容');
+  unloadedStream.onDone('卸载后的迟到完成');
+  assert.equal(h.page.data.postText, '原介绍');
+});
+
+test('background cancellation never reuses an old snapshot after manual edits', () => {
+  for (const presentation of ['gallery', 'video', 'article']) {
+    for (const outcome of ['failure', 'success-restore']) {
+      const h = loadPage('contentedit');
+      const streams = [];
+      h.aiStreamStub.startAIStream = options => { streams.push(options); return { abort() {} }; };
+      const media = presentation === 'gallery'
+        ? [{ kind: 'image', media_id: 'i1', caption: '' }]
+        : presentation === 'video' ? [{ kind: 'video', media_id: 'v1', caption: '' }] : [];
+      h.page.setData({ presentation, title: '庭院方案', postText: '第一版人工稿', blocks: media.concat({ kind: 'paragraph', text: '第一版人工稿' }) });
+      h.page.openAIWriting();
+      streams[0].onChunk('第一次 AI 半截');
+      h.page.onHide();
+      if (presentation === 'article') h.page.editBlock({ currentTarget: { dataset: { index: media.length } }, detail: { value: '第二版人工稿' } });
+      else h.page.editPostText({ detail: { value: '第二版人工稿' } });
+      h.page.openAIWriting();
+      streams[1].onChunk('第二次 AI 半截');
+      if (outcome === 'failure') streams[1].onError('网络异常');
+      else { streams[1].onDone('第二次 AI 完整稿'); h.page.restoreInlineAIOriginal(); }
+      assert.equal(h.page.data.blocks[media.length].text, '第二版人工稿', `${presentation}/${outcome} 不得恢复后台前旧稿`);
+      if (presentation !== 'article') assert.equal(h.page.data.postText, '第二版人工稿', `${presentation}/${outcome} 介绍状态应与正文块一致`);
+      assert.equal(h.page.data.blocks.length, media.length + 1, `${presentation}/${outcome} 不得残留 AI 半截块`);
+    }
+  }
+});
+
+test('backgrounding after a completed generation keeps its explicit restore action', () => {
+  const h = loadPage('contentedit');
+  let stream;
+  h.aiStreamStub.startAIStream = options => { stream = options; return { abort() {} }; };
+  h.page.setData({ presentation: 'gallery', title: '庭院', postText: '人工原稿', blocks: [{ kind: 'paragraph', text: '人工原稿' }] });
+  h.page.openAIWriting();
+  stream.onDone('AI 完整稿');
+  h.page.onHide();
+  assert.equal(h.page.data.aiInlineCanRestore, true);
+  h.page.restoreInlineAIOriginal();
+  assert.equal(h.page.data.postText, '人工原稿');
+});
+
+test('synchronous abort callbacks cannot double-restore title edits or background cancellation', () => {
+  for (const action of ['title', 'hide']) {
+    const h = loadPage('contentedit');
+    let stream, aborts = 0;
+    h.aiStreamStub.startAIStream = options => {
+      stream = options;
+      return { abort() { aborts += 1; stream.onError('同步取消'); } };
+    };
+    h.page.setData({ presentation: 'article', title: '原标题', blocks: [{ kind: 'heading', level: 2, text: '结构' }] });
+    h.page.openAIWriting();
+    stream.onChunk('AI 半截正文');
+    if (action === 'title') h.page.setField({ currentTarget: { dataset: { field: 'title' } }, detail: { value: '人工新标题' } });
+    else h.page.onHide();
+    assert.equal(aborts, 1, `${action} 只能取消一次`);
+    assert.equal(h.page.data.aiInlineConflict, false);
+    assert.equal(h.page.data.blocks.length, 1);
+    assert.equal(h.page.data.blocks[0].text, '结构');
+    if (action === 'title') assert.equal(h.page.data.title, '人工新标题');
+  }
+});
+
+test('synchronous abort callbacks stay stale across signature and identity cancellation', () => {
+  for (const boundary of ['signature', 'identity']) {
+    const h = loadPage('contentedit');
+    let stream, aborts = 0;
+    h.aiStreamStub.startAIStream = options => {
+      stream = options;
+      return { abort() { aborts += 1; stream.onError('同步取消'); } };
+    };
+    h.page.setData({ id: 'draft-one', revision: 1, owner_id: 'owner-a', presentation: 'gallery', title: '庭院', postText: '人工原稿', blocks: [{ kind: 'paragraph', text: '人工原稿' }] });
+    h.page.openAIWriting();
+    stream.onChunk('AI 半截');
+    if (boundary === 'signature') h.page.setData({ title: '外部更新标题' });
+    else h.page.setData({ owner_id: 'owner-b' });
+    stream.onDone('迟到结果');
+    assert.equal(aborts, 1, `${boundary} 只能取消一次`);
+    assert.equal(h.page.data.postText, '人工原稿');
+    assert.equal(h.page.data.aiInlineConflict, false);
+  }
+});
+
+test('empty social editors ask for a real topic and never pretend to inspect media', () => {
+  const h = loadPage('contentedit');
+  let calls = 0;
+  h.aiStreamStub.startAIStream = () => { calls += 1; return { abort() {} }; };
+  h.page.setData({ presentation: 'gallery', title: '', postText: '', blocks: [{ kind: 'image', media_id: 'image-1', caption: '' }] });
+  h.page.openAIWriting();
+  assert.equal(calls, 0);
+  assert.equal(h.navigations.length, 0);
+  assert.match(h.page.data.aiInlineError, /标题|介绍|短注释/);
 });
 
 // F1 / T1.1：AI 页必须在原页面确认后才关闭；暂时拒绝不关闭、不丢文案；回放不重复追加。
@@ -249,9 +644,8 @@ test('video copy return uses the same acknowledgement and fills only selected fi
 test('an applied return replays its success ack instead of appending a second time', () => {
   const h = loadPage('contentedit');
   h.page.setData({ id: 'content-42', revision: 7, title: '标题', blocks: [{ kind: 'paragraph', text: '原有正文' }] });
-  h.page.openAIWriting();
-  h.navigations[0].success({ eventChannel: h.channel });
-  const returned = h.navigations[0].events.prefillContent;
+  const launch = legacyEditorLaunch(h);
+  const returned = payload => h.page.receiveWritingReturn(payload, launch);
   returned({ title: '标题', text: 'AI 新正文' });
   const first = h.emitted.filter(item => item.event === 'writingAck').map(item => item.value);
   assert.equal(first.length, 1);
@@ -269,9 +663,8 @@ test('an applied editor AI return turns invalid once the draft or the returned c
   const prepare = () => {
     const h = loadPage('contentedit');
     h.page.setData({ id: 'content-42', revision: 7, title: '标题', blocks: [{ kind: 'paragraph', text: '原有正文' }] });
-    h.page.openAIWriting();
-    h.navigations[0].success({ eventChannel: h.channel });
-    const returned = h.navigations[0].events.prefillContent;
+    const launch = legacyEditorLaunch(h);
+    const returned = payload => h.page.receiveWritingReturn(payload, launch);
     returned({ title: '标题', text: 'AI 新正文', request: 1, operation: 'op-1' });
     const acks = () => h.emitted.filter(item => item.event === 'writingAck').map(item => item.value);
     assert.equal(acks()[0].state, 'applied');
@@ -336,9 +729,8 @@ test('a late applied ack cannot close the page after the account changed', async
 test('a deferred prefill cannot resurrect an invalidated return', () => {
   const h = loadPage('contentedit');
   h.page.setData({ id: '', revision: 0, title: '', blocks: [{ kind: 'paragraph', text: '' }] });
-  h.page.openAIWriting();
-  h.navigations[0].success({ eventChannel: h.channel });
-  const returned = h.navigations[0].events.prefillContent;
+  const launch = legacyEditorLaunch(h);
+  const returned = payload => h.page.receiveWritingReturn(payload, launch);
   returned({ title: 'AI 标题', text: 'AI 正文', request: 1, operation: 'op-1' });
   let acks = h.emitted.filter(item => item.event === 'writingAck').map(item => item.value);
   assert.equal(acks.at(-1).state, 'retryable', '编辑器未载入时先延后');

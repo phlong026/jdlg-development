@@ -25,6 +25,10 @@ npm run test:tracking
 
 两个 `project.config.json` 同步排除云图，保留原生 TabBar 配置要求的 5 张本地图标（123,513 字节）；这些图标也已备份到云端。不要忽略整个 `assets` 目录，也不要恢复强制包含整个 `assets/share` 的配置。
 
+## TDesign 图标组件
+
+页面的 `t-icon` 使用仓库内 `miniprogram/components/tdesign-miniprogram/icon/icon`。此副本使用原生 `async`/`await` 和组件注册调用，避免 TDesign 1.15.3 产物中未随包提供的 `tslib` 导致页面加载失败。升级或重新复制 TDesign 时应保留此修复，并运行 `node --test tests/tdesign-icon-runtime.test.js`，确认本地组件不依赖未打包的 npm 模块。单独执行“构建 npm”不会修复这个源码副本。原因、验证与回滚见[修复记录](../docs/fixes/tdesign-icon-20261116/CHANGELOG.md)。
+
 ## 首页与预算分享封面
 
 首页标题为“甲第灵光 · AI建房助手\n建别墅从这里开始”，点击后进入 `/pages/index/index?from=share`。
@@ -63,3 +67,5 @@ npm run test:tracking
 ## AI 先浏览后登录
 
 AI 表单允许匿名浏览，实际生成、优化和服务端上传在用户操作时要求账号登录；AI 登录不强制头像昵称。八个表单、四个个人结果/历史页面和受保护分享的访问边界见 [AI 访问契约](../docs/api/ai-preview-access.md)。配置调整需要同步前后端，原生验证与发布状态见 [本次记录](../docs/phase3/ai-preview-login-20261111/CHANGELOG.md)。
+
+内容编辑页「AI辅助」原页生成、回填与恢复行为，以及 8.0.11 候选验证记录，见 [本轮说明](../docs/phase3/inline-ai-fill-20261116/README.md)。复用既有流式接口与计费，无新增配置。
