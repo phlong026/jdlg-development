@@ -1,10 +1,10 @@
 {
   "date": "2026-11-16",
   "timezone": "Asia/Shanghai",
-  "source_commit": "f6422c35fd6255315c3bdb1571d736fa4c34220c",
+  "source_commit": "f5ac48615ee66e182bc90c0c0e1b2605a8125653",
   "miniprogram": {
-    "total": 1768,
-    "passed": 1768,
+    "total": 1769,
+    "passed": 1769,
     "failed": 0,
     "skipped": 0,
     "native_wxml_compiler": true,
@@ -32,7 +32,8 @@
       "go": "1.26.2",
       "node": "24.21.0",
       "initial_environment_failure": "Node executable missing from Go image; rerun with existing Linux Node mount passed all packages"
-    }
+    },
+    "verified_same_as_source_commit": "f6422c35fd6255315c3bdb1571d736fa4c34220c"
   },
   "admin": {
     "tests_passed": 776,
@@ -56,16 +57,17 @@
     "diff_check": "passed"
   },
   "rollback": {
-    "reverted_source_commits": 7,
+    "reverted_source_commits": 8,
+    "reverted_document_commits": 1,
     "restored_tree": "62f2dc8b7125fc7d45e10c67563ab4b7f1c141c3",
     "expected_tree": "62f2dc8b7125fc7d45e10c67563ab4b7f1c141c3",
     "matches_main_baseline": true,
-    "data_rollback": "New creator metadata requires preservation before rollback writes; no schema migration."
+    "data_rollback": "New creator metadata must be preserved before rollback writes."
   },
   "logs": {
     "mini-integrated-all.log": {
       "path": "/tmp/jdlg-six-groups-20261116/mini-integrated-all.log",
-      "sha256": "d4e036987afa08b3b16793ddb740ea4ba6c3fbd284357f98d6593e00b9fa1863"
+      "sha256": "cdd62f9e474fdc07bfbee35252be859f6ff7264974a3ff0cd284f7e72ceddd17"
     },
     "mini-static.log": {
       "path": "/tmp/jdlg-six-groups-20261116/mini-static.log",
@@ -110,6 +112,16 @@
     "rollback-check.json": {
       "path": "/tmp/jdlg-six-groups-20261116/rollback-check.json",
       "sha256": "d8a44e7b8d5aa81ba34fc92e50bdfd73b10c70252f36238705b92fe31f745d7d"
+    },
+    "rollback-final.json": {
+      "path": "/tmp/jdlg-six-groups-20261116/rollback-final.json",
+      "sha256": "a3b4dc559b23dc9b113dbbd780d266e028562b7addad1fb1d7a6cae034716b35"
     }
+  },
+  "native": {
+    "initial_checks_passed": 12,
+    "article_preview_additional_checks_passed": 1,
+    "screenshots": 17,
+    "physical_device": false
   }
 }

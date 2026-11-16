@@ -1,0 +1,27 @@
+{
+  "passed": true,
+  "native": true,
+  "scope": "article editor optional preview button only",
+  "real_local_http": true,
+  "visible_preview_native_tapped": true,
+  "visible_return_native_tapped": true,
+  "native_preview_kind": "article",
+  "version_before": 1,
+  "version_after": 1,
+  "revision_increased": true,
+  "status_after": "draft",
+  "request_audit": {
+    "save": 1,
+    "preview": 1,
+    "publish": 0
+  },
+  "automatic_publication": false,
+  "standard_storage_unchanged": true,
+  "screenshots": [
+    "14-article-editor-preview-button.png",
+    "15-article-preview-real-http.png",
+    "16-article-returned-editor.png"
+  ],
+  "visual_review": "直接查看3张原生截图：文章编辑页预览入口可见；预览正文和返回编辑按钮可见；返回后仍为草稿。",
+  "fixture_setup": "仅将复用的本地虚构作者样例草稿从plain转换为可编辑article_v2，未发布；旧plain样例按既有legacyReadOnly策略不显示编辑预览。"
+}

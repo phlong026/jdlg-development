@@ -38,5 +38,9 @@
   {
     "file": "service/tracking/project_notes.go",
     "sha256": "05fa2296cd1a3be343af1d06d9abbbdde1b9bd5941f68995ddcd3a514463df8b"
+  },
+  {
+    "file": "miniprogram/miniprogram/pages/contentedit/contentedit.wxml",
+    "sha256": "531754390d9a39f221192f57911574b495ccf22469e188bc3e72624db5cb1ae0"
   }
 ]
