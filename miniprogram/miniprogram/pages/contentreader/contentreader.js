@@ -41,7 +41,7 @@ function consentState() {
         return { resolved: false, accepted: false };
     }
 }
-function presentationOptions(window, galleryIndex, descriptionExpanded) { const safeBottom = window && window.safeArea && window.screenHeight ? Math.max(0, window.screenHeight - window.safeArea.bottom) : 0; return { prefix: 'reader', galleryIndex, descriptionExpanded, videoChromeHeight: (Number(window && window.statusBarHeight) || 20) + 44 + 76 + safeBottom }; }
+function presentationOptions(window, galleryIndex, descriptionExpanded) { const safeBottom = window && window.safeArea && window.screenHeight ? Math.max(0, window.screenHeight - window.safeArea.bottom) : 0; return { prefix: 'reader', galleryIndex, descriptionExpanded, fullWidthGallery: true, videoChromeHeight: (Number(window && window.statusBarHeight) || 20) + 44 + 76 + safeBottom }; }
 function nativeShareTitle(value, fallback) { return String(value || fallback || '自有内容').replace(/\s+/g, ' ').trim().slice(0, 80); }
 Page({
     ...noteActions.methods,

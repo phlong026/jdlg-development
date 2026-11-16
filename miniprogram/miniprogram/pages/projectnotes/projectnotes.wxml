@@ -30,8 +30,7 @@
     </block>
 
     <block wx:elif="{{pageView === 'detail' && selectedProject}}">
-      <view class="detail-summary-row"><text class="detail-status">{{projectStatusLabel}}</text><button class="detail-link" bindtap="openProjectSettings">项目资料 <text class="arrow small">›</text></button></view>
-      <button class="detail-customer-row" bindtap="openProjectSettings"><text>关联客户</text><view><text>{{selectedProject.customer_ref ? (customerName || '已关联') : '未关联'}}</text><text class="arrow small">›</text></view></button>
+      <view class="detail-summary-row"><text class="detail-status">{{projectStatusLabel}}</text><view class="detail-summary-actions"><button class="detail-link" bindtap="openProjectSettings">项目资料 <text class="arrow small">›</text></button><button class="detail-link" bindtap="openProjectSettings">{{selectedProject.customer_ref ? '已关联客户' : '未关联客户'}} <text class="arrow small">›</text></button></view></view>
       <view wx:if="{{projectSettingsOpen}}" class="card form-card">
         <view class="card-head"><text class="section-title">项目资料</text><button class="text-button" bindtap="closeProjectSettings">收起</button></view>
         <text class="field-label">项目名称</text><input value="{{projectEdit.name}}" data-field="name" bindinput="setProjectField" maxlength="100" placeholder="请输入项目名称" /><text class="field-label">项目地点</text><input value="{{projectEdit.location}}" data-field="location" bindinput="setProjectField" maxlength="200" placeholder="请输入项目地点" />

@@ -48,7 +48,7 @@ test('video footer replaces the duplicate copy button while non-video actions st
   assert.ok(footer.indexOf('复制文案') < footer.indexOf('更多'));
   assert.match(wxml, /class="note-interaction-dock"/);
   assert.match(wxml, /bindtap="openNoteMore"/);
-  assert.match(wxml, /class="note-toolbar-action" open-type="share"/);
+  assert.match(wxml, /class="note-menu-item" open-type="share"/);
   assert.doesNotMatch(wxml, /class="poster-action"/);
 
 });
