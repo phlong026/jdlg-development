@@ -501,6 +501,86 @@ test('backgrounding restores the original and unloading rejects every late strea
   assert.equal(h.page.data.postText, '原介绍');
 });
 
+test('background cancellation never reuses an old snapshot after manual edits', () => {
+  for (const presentation of ['gallery', 'video', 'article']) {
+    for (const outcome of ['failure', 'success-restore']) {
+      const h = loadPage('contentedit');
+      const streams = [];
+      h.aiStreamStub.startAIStream = options => { streams.push(options); return { abort() {} }; };
+      const media = presentation === 'gallery'
+        ? [{ kind: 'image', media_id: 'i1', caption: '' }]
+        : presentation === 'video' ? [{ kind: 'video', media_id: 'v1', caption: '' }] : [];
+      h.page.setData({ presentation, title: '庭院方案', postText: '第一版人工稿', blocks: media.concat({ kind: 'paragraph', text: '第一版人工稿' }) });
+      h.page.openAIWriting();
+      streams[0].onChunk('第一次 AI 半截');
+      h.page.onHide();
+      if (presentation === 'article') h.page.editBlock({ currentTarget: { dataset: { index: media.length } }, detail: { value: '第二版人工稿' } });
+      else h.page.editPostText({ detail: { value: '第二版人工稿' } });
+      h.page.openAIWriting();
+      streams[1].onChunk('第二次 AI 半截');
+      if (outcome === 'failure') streams[1].onError('网络异常');
+      else { streams[1].onDone('第二次 AI 完整稿'); h.page.restoreInlineAIOriginal(); }
+      assert.equal(h.page.data.blocks[media.length].text, '第二版人工稿', `${presentation}/${outcome} 不得恢复后台前旧稿`);
+      if (presentation !== 'article') assert.equal(h.page.data.postText, '第二版人工稿', `${presentation}/${outcome} 介绍状态应与正文块一致`);
+      assert.equal(h.page.data.blocks.length, media.length + 1, `${presentation}/${outcome} 不得残留 AI 半截块`);
+    }
+  }
+});
+
+test('backgrounding after a completed generation keeps its explicit restore action', () => {
+  const h = loadPage('contentedit');
+  let stream;
+  h.aiStreamStub.startAIStream = options => { stream = options; return { abort() {} }; };
+  h.page.setData({ presentation: 'gallery', title: '庭院', postText: '人工原稿', blocks: [{ kind: 'paragraph', text: '人工原稿' }] });
+  h.page.openAIWriting();
+  stream.onDone('AI 完整稿');
+  h.page.onHide();
+  assert.equal(h.page.data.aiInlineCanRestore, true);
+  h.page.restoreInlineAIOriginal();
+  assert.equal(h.page.data.postText, '人工原稿');
+});
+
+test('synchronous abort callbacks cannot double-restore title edits or background cancellation', () => {
+  for (const action of ['title', 'hide']) {
+    const h = loadPage('contentedit');
+    let stream, aborts = 0;
+    h.aiStreamStub.startAIStream = options => {
+      stream = options;
+      return { abort() { aborts += 1; stream.onError('同步取消'); } };
+    };
+    h.page.setData({ presentation: 'article', title: '原标题', blocks: [{ kind: 'heading', level: 2, text: '结构' }] });
+    h.page.openAIWriting();
+    stream.onChunk('AI 半截正文');
+    if (action === 'title') h.page.setField({ currentTarget: { dataset: { field: 'title' } }, detail: { value: '人工新标题' } });
+    else h.page.onHide();
+    assert.equal(aborts, 1, `${action} 只能取消一次`);
+    assert.equal(h.page.data.aiInlineConflict, false);
+    assert.equal(h.page.data.blocks.length, 1);
+    assert.equal(h.page.data.blocks[0].text, '结构');
+    if (action === 'title') assert.equal(h.page.data.title, '人工新标题');
+  }
+});
+
+test('synchronous abort callbacks stay stale across signature and identity cancellation', () => {
+  for (const boundary of ['signature', 'identity']) {
+    const h = loadPage('contentedit');
+    let stream, aborts = 0;
+    h.aiStreamStub.startAIStream = options => {
+      stream = options;
+      return { abort() { aborts += 1; stream.onError('同步取消'); } };
+    };
+    h.page.setData({ id: 'draft-one', revision: 1, owner_id: 'owner-a', presentation: 'gallery', title: '庭院', postText: '人工原稿', blocks: [{ kind: 'paragraph', text: '人工原稿' }] });
+    h.page.openAIWriting();
+    stream.onChunk('AI 半截');
+    if (boundary === 'signature') h.page.setData({ title: '外部更新标题' });
+    else h.page.setData({ owner_id: 'owner-b' });
+    stream.onDone('迟到结果');
+    assert.equal(aborts, 1, `${boundary} 只能取消一次`);
+    assert.equal(h.page.data.postText, '人工原稿');
+    assert.equal(h.page.data.aiInlineConflict, false);
+  }
+});
+
 test('empty social editors ask for a real topic and never pretend to inspect media', () => {
   const h = loadPage('contentedit');
   let calls = 0;

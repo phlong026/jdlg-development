@@ -213,7 +213,7 @@ Page({
     if (token && !this._loaded) this.load(this._epoch);
     else if (token && this._loaded) void this.resumeMediaPreviews(this._epoch);
   },
-  onHide() { this.invalidateInlineSocialAI({ restore: true, clearOriginal: false, notice: '' }); this.pauseLayoutVideos(); },
+  onHide() { this.invalidateInlineSocialAI({ restore: true, clearOriginal: !!this._inlineAIActive, notice: '' }); this.pauseLayoutVideos(); },
   onUnload() { this._unloaded = true; this.invalidateInlineSocialAI({ write: false, clearOriginal: true }); this._contentPublishActive = null; this._epoch = (this._epoch || 0) + 1; this.pauseLayoutVideos(); },
   current(epoch) { return epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
   goLogin() { wx.navigateTo({ url: '/pages/login/login' }); },
@@ -594,17 +594,18 @@ Page({
   },
   invalidateInlineSocialAI(options = {}) {
     const active = this._inlineAIActive;
-    if (this._inlineAITask && typeof this._inlineAITask.abort === 'function') { try { this._inlineAITask.abort(); } catch (_) { /* 请求已结束 */ } }
+    const task = this._inlineAITask;
     this._inlineAITask = null;
     this._inlineAIActive = null;
     this._inlineAIGeneration = (this._inlineAIGeneration || 0) + 1;
     if (options.restore && active) this.restoreInlineSocialOriginal(active.original);
     if (options.clearOriginal) this._inlineAIOriginal = null;
     if (options.write !== false && !this._unloaded) this.setData({ aiInlineStreaming: false, aiInlineError: '', aiInlineNotice: options.notice || '', aiInlineCanRestore: options.clearOriginal ? false : this.data.aiInlineCanRestore });
+    if (task && typeof task.abort === 'function') { try { task.abort(); } catch (_) { /* 请求已结束 */ } }
   },
   prepareInlineEditorMutation(options = {}) {
     if (this.data.aiInlineConflict) { this.blockInlineAIConflict(); return false; }
-    if (!this.data.aiInlineStreaming && !this.data.aiInlineCanRestore) return true;
+    if (!this.data.aiInlineStreaming && !this.data.aiInlineCanRestore) { this._inlineAIOriginal = null; return true; }
     const active = this._inlineAIActive;
     const recovered = !this.data.aiInlineStreaming || options.preserveGenerated || !active || this.restoreStaleInlineOriginal(active);
     this.invalidateInlineSocialAI({ clearOriginal: true, notice: '' });
@@ -647,11 +648,12 @@ Page({
     const current = () => this._inlineAIActive === launch && launch.generation === this._inlineAIGeneration && this.inlineSocialIdentityMatches(launch);
     const abandon = () => {
       if (this._inlineAIActive !== launch) return;
-      if (this._inlineAITask && typeof this._inlineAITask.abort === 'function') this._inlineAITask.abort();
+      const task = this._inlineAITask;
       const recovered = this.restoreStaleInlineOriginal(launch);
       this._inlineAITask = null; this._inlineAIActive = null; this._inlineAIOriginal = null; this._inlineAIGeneration += 1;
       if (!this._unloaded) this.setData({ aiInlineStreaming: false, aiInlineCanRestore: false, aiInlineConflict: !recovered,
         aiInlineError: recovered ? '' : '草稿已变化，请重新进入编辑页后再保存', aiInlineNotice: '' });
+      if (task && typeof task.abort === 'function') { try { task.abort(); } catch (_) { /* 请求已结束 */ } }
     };
     const restoreAfterFailure = message => {
       if (!current()) { abandon(); return; }
@@ -664,12 +666,13 @@ Page({
     const accept = text => {
       if (!current()) { abandon(); return false; }
       if (launch.expectedSignature !== this.draftSignature()) {
-        if (this._inlineAITask && typeof this._inlineAITask.abort === 'function') this._inlineAITask.abort();
+        const task = this._inlineAITask;
         this._inlineAITask = null; this._inlineAIActive = null; this._inlineAIGeneration += 1;
         const restored = !launch.generatedBlocksSignature || this.restoreInlineSocialOriginal(original);
         this._inlineAIOriginal = null;
         this.setData({ aiInlineStreaming: false, aiInlineCanRestore: false, aiInlineConflict: !restored,
           aiInlineError: restored ? '' : '草稿已变化，请重新进入编辑页后再保存', aiInlineNotice: restored ? '检测到编辑内容变化，已停止生成并保留你的修改' : '' });
+        if (task && typeof task.abort === 'function') { try { task.abort(); } catch (_) { /* 请求已结束 */ } }
         return false;
       }
       if (!this.applyInlineSocialText(text, launch)) { restoreAfterFailure('正文结构已变化，请重试'); return false; }
@@ -697,7 +700,7 @@ Page({
         onError: message => restoreAfterFailure(message),
       });
       if (this._inlineAIActive === launch) this._inlineAITask = task;
-      else if (task && typeof task.abort === 'function') task.abort();
+      else if (task && typeof task.abort === 'function') { try { task.abort(); } catch (_) { /* 请求已结束 */ } }
     } catch (error) { restoreAfterFailure(error && error.message || '生成失败，请重试'); }
   },
   async loadPrivatePaths(items, previews) {
