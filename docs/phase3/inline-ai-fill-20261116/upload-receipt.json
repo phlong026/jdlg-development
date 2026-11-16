@@ -1,0 +1,13 @@
+{
+  "tool": "official wechatide upload",
+  "version": "8.0.11",
+  "source_commit": "1f22a18ce9f22b8457b6c01c0ad5e71fdb4a1332",
+  "appid": "wx94fdc48861913ede",
+  "task_type": "confirmation_upload",
+  "status": "success",
+  "detail": "execution_success",
+  "completed_at_ms": 1794822190700,
+  "package_total_bytes": 3481975,
+  "receipt_sha256": "f48fe0e2e884c971ec4542f3d133aeb9b286e27a989c07dfec30fb45df70aaa3",
+  "experience_pointer_in_tool_response": false
+}

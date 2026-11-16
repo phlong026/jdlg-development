@@ -1,5 +1,5 @@
 {
-  "recorded_at": "2026-11-16T17:41:13.452094+08:00",
+  "recorded_at": "2026-11-16T18:06:00.898906+08:00",
   "pr": {
     "number": 54,
     "url": "https://github.com/phlong026/jdlg-development/pull/54",
@@ -33,11 +33,14 @@
     "tested_source_trees_equal": true,
     "upload_tool": "official wechatide upload",
     "upload_requested": true,
-    "uploaded": false,
-    "upload_status": "pending_user_confirmation",
-    "experience_version_status": "not independently verified",
+    "uploaded": true,
+    "upload_status": "success",
+    "experience_version_status": "not independently verified; user version-manager check requested",
     "submitted_for_review": false,
-    "formally_released": false
+    "formally_released": false,
+    "upload_detail": "execution_success",
+    "package_total_bytes": 3481975,
+    "upload_completed_at_ms": 1794822190700
   },
   "server": {
     "backend_source_unchanged": true,
@@ -54,9 +57,11 @@
   },
   "native_delta": {
     "completed": false,
-    "reason": "candidate project has no inherited mini-program login session",
+    "reason": "automated runtimes did not contain the reported logged-in session; normal fullMode window could not be reliably selected",
     "credentials_migrated": false,
     "supplier_called": false,
-    "business_content_written": false
+    "business_content_written": false,
+    "user_reported_login": true,
+    "observed_lite_window": true
   }
 }
