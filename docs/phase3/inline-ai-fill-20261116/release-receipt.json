@@ -1,0 +1,62 @@
+{
+  "recorded_at": "2026-11-16T17:41:13.452094+08:00",
+  "pr": {
+    "number": 54,
+    "url": "https://github.com/phlong026/jdlg-development/pull/54",
+    "state": "MERGED",
+    "head_commit": "4ce8949d4b4cdc19893a07eb1a2cdb8b07b7b3c0",
+    "merge_commit": "1f22a18ce9f22b8457b6c01c0ad5e71fdb4a1332",
+    "merged_at": "2026-11-16T09:37:44Z"
+  },
+  "checks": {
+    "mini_passed": 1807,
+    "mini_failed": 0,
+    "mini_skipped": 0,
+    "ci_executions_passed": 7,
+    "ci_unique_jobs": [
+      "Admin checks and build",
+      "CRM identity routing regressions",
+      "Template update contract",
+      "Tracking backend tests and race checks",
+      "Tracking mini-program and route policy checks"
+    ],
+    "review_findings_fixed": 2,
+    "remaining_review_findings": 0,
+    "rollback_exact_baseline_restored": true
+  },
+  "miniprogram": {
+    "appid": "wx94fdc48861913ede",
+    "version": "8.0.11",
+    "source_commit": "1f22a18ce9f22b8457b6c01c0ad5e71fdb4a1332",
+    "production_api": true,
+    "clean_merged_worktree": true,
+    "tested_source_trees_equal": true,
+    "upload_tool": "official wechatide upload",
+    "upload_requested": true,
+    "uploaded": false,
+    "upload_status": "pending_user_confirmation",
+    "experience_version_status": "not independently verified",
+    "submitted_for_review": false,
+    "formally_released": false
+  },
+  "server": {
+    "backend_source_unchanged": true,
+    "admin_source_unchanged": true,
+    "new_server_deployment_performed": false,
+    "compatible_existing_release": "8467e1cf5b6cda1cf4fd5a560f70f7f9a8f0c8f1",
+    "running_backend_pid": 1628402,
+    "running_backend_sha256": "b4b983a73993aa77300a9aed04161c24bbf08e116bed23891e0270d68941f66d",
+    "admin_index_sha256": "d4209649c3ec080860aa90953de0ea7d0645354c49d002b3e0127013a791274a",
+    "public_api_status": 401,
+    "public_admin_status": 200,
+    "process_restarted": false,
+    "database_migrations_executed": false
+  },
+  "native_delta": {
+    "completed": false,
+    "reason": "candidate project has no inherited mini-program login session",
+    "credentials_migrated": false,
+    "supplier_called": false,
+    "business_content_written": false
+  }
+}
