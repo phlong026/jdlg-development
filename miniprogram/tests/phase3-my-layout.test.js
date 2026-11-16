@@ -24,6 +24,7 @@ test('我的页按目标图组织账户、工作台、资料和服务', () => {
   assert.doesNotMatch(wxml, /待处理反馈|今日回访/);
   assert.doesNotMatch(wxml, /class="share-visits-entry"/);
   assert.match(scssForLayout(), /\.page \.workbench-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*1fr\)/s);
+  assert.doesNotMatch(scssForLayout(), /\.workbench-grid-3\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*1fr\)/s);
 });
 
 function scssForLayout() {
