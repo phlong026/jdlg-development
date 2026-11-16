@@ -1,0 +1,115 @@
+{
+  "date": "2026-11-16",
+  "timezone": "Asia/Shanghai",
+  "source_commit": "f6422c35fd6255315c3bdb1571d736fa4c34220c",
+  "miniprogram": {
+    "total": 1768,
+    "passed": 1768,
+    "failed": 0,
+    "skipped": 0,
+    "native_wxml_compiler": true,
+    "routes": 78,
+    "public_routes": 23,
+    "excluded_routes": 55,
+    "typecheck": {
+      "baseline_diagnostics": 188,
+      "candidate_diagnostics": 188,
+      "new": [],
+      "removed": []
+    }
+  },
+  "backend": {
+    "go_all": "passed CGO_ENABLED=0",
+    "go_vet": "passed CGO_ENABLED=0",
+    "linux_race": {
+      "passed_packages": [
+        "aivideostudio",
+        "contentimport",
+        "tracking",
+        "route",
+        "model"
+      ],
+      "go": "1.26.2",
+      "node": "24.21.0",
+      "initial_environment_failure": "Node executable missing from Go image; rerun with existing Linux Node mount passed all packages"
+    }
+  },
+  "admin": {
+    "tests_passed": 776,
+    "tests_failed": 0,
+    "typecheck_routes": "passed",
+    "production_build": "passed"
+  },
+  "release_tools": {
+    "python_tests_passed": 63,
+    "builder_policy_tests_passed": 1
+  },
+  "security": {
+    "mini_npm_audit": 0,
+    "admin_npm_audit": 0,
+    "credential_findings": [],
+    "go_vulnerability_scan": "not run; govulncheck unavailable, no dependency changes"
+  },
+  "static": {
+    "javascript_syntax_files": 20,
+    "gofmt": "passed",
+    "diff_check": "passed"
+  },
+  "rollback": {
+    "reverted_source_commits": 7,
+    "restored_tree": "62f2dc8b7125fc7d45e10c67563ab4b7f1c141c3",
+    "expected_tree": "62f2dc8b7125fc7d45e10c67563ab4b7f1c141c3",
+    "matches_main_baseline": true,
+    "data_rollback": "New creator metadata requires preservation before rollback writes; no schema migration."
+  },
+  "logs": {
+    "mini-integrated-all.log": {
+      "path": "/tmp/jdlg-six-groups-20261116/mini-integrated-all.log",
+      "sha256": "d4e036987afa08b3b16793ddb740ea4ba6c3fbd284357f98d6593e00b9fa1863"
+    },
+    "mini-static.log": {
+      "path": "/tmp/jdlg-six-groups-20261116/mini-static.log",
+      "sha256": "8e768a2653c8b6ed2b19f96a7296760c01d97c1bae6d79e3ea265e3c2ad05421"
+    },
+    "go-all.log": {
+      "path": "/tmp/jdlg-six-groups-20261116/go-all.log",
+      "sha256": "7203a3cefaf900ea1d252c37d8f6d1b82823f3407d1d20bf2127e1bc20f640ec"
+    },
+    "go-vet.log": {
+      "path": "/tmp/jdlg-six-groups-20261116/go-vet.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "admin-all.log": {
+      "path": "/tmp/jdlg-six-groups-20261116/admin-all.log",
+      "sha256": "d19a0928a9366fc73433e041f3ba0fc838cf401e5036ec6300fbf26d81e767f3"
+    },
+    "admin-build.log": {
+      "path": "/tmp/jdlg-six-groups-20261116/admin-build.log",
+      "sha256": "54368e1c230216db6291ff43e6bee5038e955ae01fa0b0370cdf6274d7653213"
+    },
+    "admin-audit.json": {
+      "path": "/tmp/jdlg-six-groups-20261116/admin-audit.json",
+      "sha256": "ce50bb6e49b2eb01456b4db23b9d44447b40eddbabbb29c647e4d22dd0994d01"
+    },
+    "mini-audit.json": {
+      "path": "/tmp/jdlg-six-groups-20261116/mini-audit.json",
+      "sha256": "0bc0889aff2be3c9d1e05eba402ac1a2fbc4ca1ac5bb6e0dfeb305981cf7ba66"
+    },
+    "linux-race-final.log": {
+      "path": "/tmp/jdlg-six-groups-20261116/linux-race-final.log",
+      "sha256": "0d17ff92d023c584f907c21620b28e6c6c50ef257c920e476dc44495431b86ec"
+    },
+    "release-tools-tests.log": {
+      "path": "/tmp/jdlg-six-groups-20261116/release-tools-tests.log",
+      "sha256": "d2462f6c2cfbdadd48f91ec15059115c34e5a1984ba9d19e64dbee76a80ee0a0"
+    },
+    "typecheck-baseline.json": {
+      "path": "/tmp/jdlg-six-groups-20261116/typecheck-baseline.json",
+      "sha256": "09851f53495e959dd28311a700b34d94c824b231d33bd58eac87a89114d64264"
+    },
+    "rollback-check.json": {
+      "path": "/tmp/jdlg-six-groups-20261116/rollback-check.json",
+      "sha256": "d8a44e7b8d5aa81ba34fc92e50bdfd73b10c70252f36238705b92fe31f745d7d"
+    }
+  }
+}

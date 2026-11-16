@@ -1,0 +1,42 @@
+[
+  {
+    "file": "miniprogram/miniprogram/pages/my/my.ts",
+    "sha256": "291abcee0538c020b86c37803ee61f8b535bfe367f0198917dbad620f9caf782"
+  },
+  {
+    "file": "miniprogram/miniprogram/pages/projectnotes/projectnotes-core.js",
+    "sha256": "a1a18f151a4ad4d4de922cea40f78b560f39dff462aa995f5b39219d9d1f1bcb"
+  },
+  {
+    "file": "miniprogram/miniprogram/pages/projectnotes/projectnotes.wxml",
+    "sha256": "f71f3498649e6933bebb815b0a3f5203fe56ed2f909f44b2eef5555f4e7909e2"
+  },
+  {
+    "file": "miniprogram/miniprogram/pages/projectnoteview/projectnoteview.js",
+    "sha256": "37dd6e3ca02d650d5b1cbd14c87d9b7c88b5eef5c88d1972ad160a435774764f"
+  },
+  {
+    "file": "miniprogram/miniprogram/pages/contentreader/contentreader.ts",
+    "sha256": "cddc7cd32828d8235c3663ad8dc0b2a87d074ee0acb0f598b6f8438585084913"
+  },
+  {
+    "file": "miniprogram/miniprogram/pages/contentedit/contentedit.ts",
+    "sha256": "c8874f35fcbe807018a0c30cc2b1cf862d4330dbcf7c023986024ad68445aaff"
+  },
+  {
+    "file": "miniprogram/miniprogram/utils/content-presentation.js",
+    "sha256": "8f2e0f5931a7a973d3b4e3cd97c15a0362fe1dc01cf8babb6b1826fb54bd8dd5"
+  },
+  {
+    "file": "service/route/content_author.go",
+    "sha256": "b25a702bf9aef95cff59c8c86e0f53e95f77270d43fd6e1177133fc9105c5ddc"
+  },
+  {
+    "file": "service/route/project_collections.go",
+    "sha256": "ea80fc34ab986c45b2448da651317ce755dc1af4c862829fe046d3b752177114"
+  },
+  {
+    "file": "service/tracking/project_notes.go",
+    "sha256": "05fa2296cd1a3be343af1d06d9abbbdde1b9bd5941f68995ddcd3a514463df8b"
+  }
+]

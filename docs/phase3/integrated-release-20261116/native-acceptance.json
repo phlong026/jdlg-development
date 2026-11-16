@@ -1,0 +1,126 @@
+{
+  "native": true,
+  "official_devtools": true,
+  "backend": "http://127.0.0.1:28182",
+  "native_backend": "https://127.0.0.1:28183",
+  "native_sandbox": "/tmp/jdlg-six-native-final-20261116",
+  "window": {
+    "width": 402,
+    "height": 874
+  },
+  "passed": true,
+  "results": [
+    {
+      "name": "isolated_storage",
+      "pass": true,
+      "adapterInstalled": true,
+      "methodsWrapped": true,
+      "standardTokenUnchanged": true,
+      "standardUserInfoUnchanged": true,
+      "localTokenMatches": true,
+      "localProfileMatches": true,
+      "localNicknameChinese": true,
+      "localDeviceMatches": true,
+      "namespaceOnly": true
+    },
+    {
+      "name": "four_entries",
+      "pass": true,
+      "labels": [
+        "我的项目",
+        "内容创作",
+        "AI 视频",
+        "客户跟踪"
+      ]
+    },
+    {
+      "name": "content_workbench",
+      "pass": true,
+      "items": 7
+    },
+    {
+      "name": "direct_gallery_editor",
+      "pass": true,
+      "native_compiled": true
+    },
+    {
+      "name": "author_single",
+      "pass": true,
+      "display_name": "设计师小林",
+      "native_dom": true,
+      "real_http": true
+    },
+    {
+      "name": "author_collection",
+      "pass": true,
+      "display_name": "设计师小林",
+      "native_dom": true,
+      "real_http": true
+    },
+    {
+      "name": "real_project_thumbnails",
+      "pass": true,
+      "projects": 3,
+      "loaded": 1,
+      "image": {
+        "width": 500,
+        "height": 750
+      }
+    },
+    {
+      "name": "note_video_return",
+      "pass": true,
+      "same_editor": true,
+      "unsaved_text_retained": true,
+      "native_video": true,
+      "play_state": [
+        null,
+        null,
+        null,
+        null
+      ]
+    },
+    {
+      "name": "note_ai_panel",
+      "pass": true,
+      "in_place": true,
+      "clear_on_hide": true,
+      "original_body_retained": true,
+      "provider_called": false,
+      "ai_text": "manual editable input only"
+    },
+    {
+      "name": "customer_tracking_materials",
+      "pass": true,
+      "real_http": true
+    },
+    {
+      "name": "private_revoke_real_http",
+      "pass": true,
+      "before_media": 3,
+      "content_cleared": true,
+      "actions_disabled": true,
+      "network_mocked": false
+    },
+    {
+      "name": "private_role_isolation",
+      "pass": true,
+      "protected_project_absent": true,
+      "notes_absent": true,
+      "ai_panel_closed": true
+    }
+  ],
+  "network": {
+    "allowed": 88,
+    "blocked": 0,
+    "blocked_methods": []
+  },
+  "limitations": [
+    "DevTools native runtime; physical phone keyboard/album/WeChat recipient selection not tested",
+    "No paid AI provider request; AI panel uses manual editable input",
+    "Late-response permission races are covered by repository behavioral VM tests, not claimed as native race reproduction",
+    "Local fixture DB required existing phase3_record_kind_widen_up.sql; no inference about production migration state",
+    "Sandbox origin/storage/network adapters only; no mocked business HTTP responses",
+    "automator video DOM playback properties were null; validated native video rendering and editor return, not playback-time advancement"
+  ]
+}
