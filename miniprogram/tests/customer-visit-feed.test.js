@@ -182,8 +182,7 @@ test('合集和缺少固定版本的内容不绑定管理预览，内容区域�
  page.openVisitContent({currentTarget:{dataset:{index:0}}});page.openVisitContent({currentTarget:{dataset:{index:1}}});
  assert.equal(navigation.length,0);
  const wxml=fs.readFileSync(path.join(root,'sharevisits.wxml'),'utf8');
- assert.match(wxml,/wx:if="{{item\.can_manage_preview}}"[\s\S]*catchtap="openVisitContent"/);
- assert.match(wxml,/wx:else class="visit-content"/);
+ assert.match(wxml,/catchtap="{{item\.can_manage_preview \? 'openVisitContent' : 'openVisitCustomer'}}"/);
 });
 
 test('封面解析失败只降级单卡，不阻塞访问列表',async()=>{

@@ -10,8 +10,19 @@ function displayTime(value) {
 }
 function duration(ms) { const seconds = Math.max(0, Math.round(Number(ms || 0) / 1000)); return seconds < 60 ? seconds + '秒' : Math.floor(seconds / 60) + '分' + (seconds % 60) + '秒'; }
 
+function compactTime(value) {
+  const date = new Date(value), now = new Date();
+  if (Number.isNaN(date.getTime())) return '--';
+  const day = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const visitDay = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  const days = Math.round((day - visitDay) / 86400000);
+  const two = number => String(number).padStart(2, '0');
+  const clock = two(date.getHours()) + ':' + two(date.getMinutes());
+  return (days === 0 ? '今天 ' : days === 1 ? '昨天 ' : two(date.getMonth() + 1) + '-' + two(date.getDate()) + ' ') + clock;
+}
+
 Page({
-  data: { mode: 'share', visitor: '', id: '', title: '分享访问详情', loading: true, loadingMore: false, error: '', denied: false, loginRequired: false, items: [], entries: [], next_cursor: '', as_of: '', metric_version: '', identified_count: 0, anonymous_count: 0, intent_level: '', visitor_name: '', customerViews: 0, customerContents: 0, customerDuration: '0秒', canConvertLead: false, leadBusy: false, leadID: 0, leadConverted: false, handoffText: '', conversionReason: '', projectActivities: [], visibleProjectActivities: [], projectActivitiesExpanded: false, projectActivityCount: 0, contentTitle: '' },
+  data: { mode: 'share', visitor: '', id: '', title: '分享访问详情', loading: true, loadingMore: false, error: '', denied: false, loginRequired: false, items: [], entries: [], next_cursor: '', as_of: '', metric_version: '', identified_count: 0, anonymous_count: 0, intent_level: '', visitor_name: '', customerViews: 0, customerContents: 0, customerDuration: '0秒', canConvertLead: false, leadBusy: false, leadID: 0, leadConverted: false, handoffText: '', conversionReason: '', projectActivities: [], visibleProjectActivities: [], projectActivitiesExpanded: false, projectActivityCount: 0, contentTitle: '', customerAvatar: '', customerIdentityLabel: '', visibleEntries: [], entriesExpanded: false, relatedProjects: [] },
   onLoad(options) {
     const visitorKey = routeValue(options.visitor);
     const id = routeValue(options.id || options.share_id);
@@ -32,17 +43,31 @@ Page({
       visitor_name: routeValue(options.name),
       contentTitle: routeValue(options.content_title),
     });
+    const account = String(wx.getStorageSync('token') || '');
+    this._contextAlive = true;
+    const channel = this.getOpenerEventChannel && this.getOpenerEventChannel();
+    if (channel && channel.on) channel.on('customerContext', context => {
+      if (!this._contextAlive || account !== String(wx.getStorageSync('token') || '') || !context || context.visitor_key !== this._visitor) return;
+      this._entryCoverContext = context;
+      const entries = this.data.entries.map(entry => this.withEntryCover(entry));
+      this.setData({ entries, visibleEntries: this.data.entriesExpanded ? entries : entries.slice(0, 2) });
+    });
   },
   onShow() {
     wx.hideShareMenu();
     const token = String(wx.getStorageSync('token') || '');
+    if (this._token && this._token !== token) this._entryCoverContext = null;
     this._token = token; this._epoch = (this._epoch || 0) + 1; this._morePending = false;
-    this.setData({ leadConverted: false, handoffText: '', conversionReason: '', projectActivities: [], projectActivityCount: 0, items: [], next_cursor: '', as_of: '', metric_version: '', identified_count: 0, anonymous_count: 0, error: '', denied: false, loginRequired: !token, loading: !!token, loadingMore: false });
+    this.setData({ customerAvatar: '', customerIdentityLabel: '', visibleEntries: [], entriesExpanded: false, relatedProjects: [], leadConverted: false, handoffText: '', conversionReason: '', projectActivities: [], projectActivityCount: 0, items: [], next_cursor: '', as_of: '', metric_version: '', identified_count: 0, anonymous_count: 0, error: '', denied: false, loginRequired: !token, loading: !!token, loadingMore: false });
     if (this._mode === 'customer' && !this._visitor) { this.setData({ loading: false, error: '缺少访客标识' }); return; }
     if (this._mode === 'share' && !this.data.id) { this.setData({ loading: false, error: '缺少分享记录标识' }); return; }
     if (token) this.load(true, this._epoch);
   },
-  onUnload() { this._epoch = (this._epoch || 0) + 1; },
+  onUnload() { this._contextAlive = false; this._entryCoverContext = null; this._epoch = (this._epoch || 0) + 1; },
+  withEntryCover(entry) {
+    const context = this._entryCoverContext;
+    return context && context.cover && context.content_id === entry.content_id && Number(context.content_version) === entry.content_version && context.route_key === entry.route_key ? { ...entry, cover: context.cover } : entry;
+  },
   current(epoch) { return epoch === this._epoch && this._token === String(wx.getStorageSync('token') || ''); },
   onPullDownRefresh() { const epoch = (this._epoch || 0) + 1; this._epoch = epoch; this._morePending = false; this._entryFilters = { ...(this._entryFilters || {}) }; delete this._entryFilters.as_of; delete this._entryFilters.share_cursor; this.setData({ as_of: '' }); return this.load(true, epoch).finally(() => wx.stopPullDownRefresh()); },
   async load(reset, suppliedEpoch) {
@@ -94,15 +119,21 @@ Page({
         content_id: entry.content_id || '',
         content_version: Number(entry.content_version || 0),
         can_manage_preview: entry.route_key === 'pages/contentreader/contentreader' && !!entry.content_id && Number(entry.content_version || 0) > 0,
-        occurred_text: displayTime(entry.occurred_at),
+        occurred_at: entry.occurred_at, occurred_text: displayTime(entry.occurred_at), occurred_short_text: compactTime(entry.occurred_at), cover: entry.cover && entry.cover.url || '', is_video: entry.type === 'video' || Number(entry.video_watch_ms || 0) > 0,
         title: entry.title && !String(entry.title).startsWith('pages/') ? entry.title : '分享内容',
         visible_text: duration(entry.visible_ms),
         watch_text: duration(entry.video_watch_ms),
         progress: Number(entry.progress_pct || 0),
-      }));
+      })).map(entry => this.withEntryCover(entry));
       const info = detail.visitor || detail;
+      const entries = reset ? rows : this.data.entries.concat(rows);
+      const projects = new Map();
+      for (const activity of detail.project_activities || []) {
+        if (activity.project_id && !projects.has(activity.project_id)) projects.set(activity.project_id, { project_id: activity.project_id, project_name: activity.project_name });
+      }
       this.setData({
-        entries: reset ? rows : this.data.entries.concat(rows),
+        entries, visibleEntries: this.data.entriesExpanded ? entries : entries.slice(0, 2),
+        customerAvatar: info.avatar_url || '', customerIdentityLabel: info.identity_state === 'identified' ? '已识别' : '匿名访客', relatedProjects: Array.from(projects.values()),
         next_cursor: detail.next_cursor || '',
         as_of: detail.as_of || this.data.as_of,
         visitor_name: info.nickname || this.data.visitor_name || '匿名访客',
@@ -113,8 +144,8 @@ Page({
         leadConverted: !!(detail.customer_handoff && detail.customer_handoff.converted),
         handoffText: this.handoffLabel(detail.customer_handoff),
         conversionReason: String(detail.conversion_reason || ''),
-        projectActivities: (detail.project_activities || []).map(item => ({ ...item, kindText: ({ note_open: '查看方案', note_feedback: '提交反馈', note_confirm: '确认方案', project_linked: '已关联项目' })[item.kind] || '项目动态', occurredText: displayTime(item.occurred_at) })),
-        visibleProjectActivities: (detail.project_activities || []).slice(0, 3).map(item => ({ ...item, kindText: ({ note_open: '查看方案', note_feedback: '提交反馈', note_confirm: '确认方案', project_linked: '已关联项目' })[item.kind] || '项目动态', occurredText: displayTime(item.occurred_at) })),
+        projectActivities: (detail.project_activities || []).map(item => ({ ...item, kindText: ({ note_open: '查看方案', note_feedback: '提交反馈', note_confirm: '确认方案', project_linked: '已关联项目' })[item.kind] || '项目动态', occurredText: displayTime(item.occurred_at), occurredShortText: compactTime(item.occurred_at) })),
+        visibleProjectActivities: (detail.project_activities || []).slice(0, 3).map(item => ({ ...item, kindText: ({ note_open: '查看方案', note_feedback: '提交反馈', note_confirm: '确认方案', project_linked: '已关联项目' })[item.kind] || '项目动态', occurredText: displayTime(item.occurred_at), occurredShortText: compactTime(item.occurred_at) })),
         projectActivitiesExpanded: false,
         projectActivitiesTruncated: detail.project_activities_truncated === true,
         intent_level: info.intent && info.intent.level ? info.intent.level : this.data.intent_level,
@@ -123,6 +154,27 @@ Page({
     } catch (error) {
       if (this.current(epoch)) this.setData({ error: error.message || '客户浏览明细加载失败', loading: false, loadingMore: false });
     } finally { if (this.current(epoch)) this.setData({ loading: false, loadingMore: false }); }
+  },
+  customerAvatarLoadError(event) {
+    if (this._token === String(wx.getStorageSync('token') || '') && event.currentTarget.dataset.avatar === this.data.customerAvatar) this.setData({ customerAvatar: '' });
+  },
+  entryCoverLoadError(event) {
+    if (!this._contextAlive || this._token !== String(wx.getStorageSync('token') || '')) return;
+    const { id, cover } = event.currentTarget.dataset;
+    const failed = this.data.entries.find(entry => entry.view_id === id && entry.cover === cover);
+    if (!failed) return;
+    const context = this._entryCoverContext;
+    if (context && context.cover === cover && context.content_id === failed.content_id && Number(context.content_version) === failed.content_version && String(context.route_key || '') === failed.route_key) this._entryCoverContext = null;
+    const fallback = entry => entry.view_id === id && entry.cover === cover ? { ...entry, cover: '' } : entry;
+    this.setData({ entries: this.data.entries.map(fallback), visibleEntries: this.data.visibleEntries.map(fallback) });
+  },
+  showCustomerIdentity() {
+    const intent = ({ high: '高意向', medium: '中意向', low: '低意向', unknown: '待判断' })[this.data.intent_level] || '待判断';
+    wx.showModal({ title: this.data.customerIdentityLabel, content: '系统意向：' + intent + '。意向仅作参考，需结合实际沟通判断。', showCancel: false });
+  },
+  toggleEntries() {
+    const expanded = !this.data.entriesExpanded;
+    this.setData({ entriesExpanded: expanded, visibleEntries: expanded ? this.data.entries : this.data.entries.slice(0, 2) });
   },
   async convertLead() {
     if (!this.data.canConvertLead || this.data.leadBusy || !this._visitor || this._token !== String(wx.getStorageSync('token') || '')) return;

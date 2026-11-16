@@ -69,7 +69,7 @@ test('三Tab结构与键集齐备（wxml 契约）',()=>{
  assert.match(wxml,/activeTab === 'customers'/);
  assert.match(wxml,/activeTab === 'materials'/);
  assert.match(wxml,/activeTab === 'shares'/);
- assert.match(wxml,/item\.intent_level/);
+ assert.match(wxml,/range="{{intentOptions}}"/);
  assert.match(wxml,/查看人数/);
  assert.match(wxml,/去重/);
  assert.match(wxml,/item\.status_text/); // 分享Tab 保留原卡片字段
