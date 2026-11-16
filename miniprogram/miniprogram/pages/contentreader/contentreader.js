@@ -270,6 +270,8 @@ Page({
         wx.previewImage({ urls, current: media.url, showmenu: false });
     },
     retryMedia() { this.setData({ mediaErrors: {} }); this.loadContent(); },
+    presentationAuthorAvatarError(event) { const failedAvatar = String(event && event.currentTarget && event.currentTarget.dataset && event.currentTarget.dataset.avatar || ''), author = this.data.presentationView && this.data.presentationView.author; if (!failedAvatar || !author || author.avatar !== failedAvatar)
+        return; this.setData({ 'presentationView.author.avatar': '' }); },
     mediaError(event) { this.setData({ ['mediaErrors.' + event.currentTarget.dataset.errorKey]: '图片加载失败，请重试。' }); },
     copySource() {
         const url = this.data.content && this.data.content.source_url;

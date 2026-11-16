@@ -78,6 +78,15 @@ function sourceMedia(content, media, document) {
   return ordered;
 }
 
+function contentAuthor(content) {
+  const source = content && content.author;
+  if (!source || typeof source !== 'object' || Array.isArray(source)) return null;
+  const displayName = String(source.display_name || '').trim();
+  if (!displayName) return null;
+  const avatar = String(source.avatar || '').trim();
+  return { displayName, avatar: /^https:\/\//.test(avatar) ? avatar : '' };
+}
+
 function mediaFrame(asset, index, frameWidth, windowHeight, prefix, caption, maxHeightOverride) {
   const intrinsicWidth = Math.max(1, Number(asset.width) || (asset.kind === 'video' ? 16 : 3));
   const intrinsicHeight = Math.max(1, Number(asset.height) || (asset.kind === 'video' ? 9 : 4));
@@ -178,6 +187,7 @@ function buildContentPresentation(content, media, windowInfo, options = {}) {
   return {
     kind,
     title: String(safeContent.title || ''),
+    author: contentAuthor(safeContent),
     // Import guidance belongs to the editor, not the published attribution.
     sourceNote: sourceNote === '链接导入的可编辑草稿，请在发布前核对正文、排版和媒体。' ? '' : sourceNote,
     publishedAt: String(safeContent.published_at || ''),

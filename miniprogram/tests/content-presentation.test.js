@@ -147,6 +147,16 @@ test('article view preserves original mixed layout and excludes an unrelated cov
   assert.deepEqual(buildContentPresentation(sharedCover, [image('image-a')], { windowWidth: 390, windowHeight: 844 }).media.map(item => item.media_id), ['image-a'], '被设为封面的正文图仍属于正文');
 });
 
+test('presentation shows only the server author projection without mutating content', () => {
+  const content = { ...article([{ kind: 'image', media_id: 'image-a' }]), author: { display_name: '  李设计师  ', avatar: 'https://cdn.example.com/avatar.png' } };
+  const before = JSON.stringify(content);
+  const view = buildContentPresentation(content, [image('image-a')], { windowWidth: 390, windowHeight: 844 });
+  assert.deepEqual(view.author, { displayName: '李设计师', avatar: 'https://cdn.example.com/avatar.png' });
+  assert.equal(JSON.stringify(content), before);
+  assert.equal(buildContentPresentation({ ...content, author: { display_name: '' } }, [image('image-a')], { windowWidth: 390, windowHeight: 844 }).author, null);
+  assert.deepEqual(buildContentPresentation({ ...content, author: { display_name: '真实作者', avatar: 'file:///private/avatar.png' } }, [image('image-a')], { windowWidth: 390, windowHeight: 844 }).author, { displayName: '真实作者', avatar: '' });
+});
+
 test('shared presentation template keeps swiper, native video controls, tracking hooks and profile gate placement', () => {
   const template = fs.readFileSync(path.join(root, 'components/content-presentation/content-presentation.wxml'), 'utf8');
   assert.match(template, /<template name="content-presentation">/);
@@ -164,12 +174,20 @@ test('shared presentation template keeps swiper, native video controls, tracking
   assert.match(template, /bindtap="toggleContentDescription"/);
   assert.match(template, /<block wx:if="\{\{view\.kind === 'article'\}\}">/);
   assert.match(template, /data-tracking="\{\{tracking\}\}"/);
+  assert.match(template, /class="presentation-author"/);
+  assert.match(template, /\{\{view\.author\.displayName\}\}/);
+  assert.match(template, /binderror="presentationAuthorAvatarError"/);
 
   const reader = fs.readFileSync(path.join(root, 'pages/contentreader/contentreader.wxml'), 'utf8');
   assert.match(reader.split(/\r?\n/)[0], /^<block wx:if=/);
   assert.match(reader, /<block wx:if="{{__profileAccessMounted}}">/);
   assert.ok(reader.includes(template.trim()), 'reader ships the canonical template definition');
   assert.match(reader, /<template is="content-presentation" data="\{\{view: presentationView, tracking: !managementPreview, mediaErrors: mediaErrors, videoStarted: videoStarted\}\}"\/>/);
+  for (const page of ['contentreader', 'contentedit']) {
+    const source = fs.readFileSync(path.join(root, `pages/${page}/${page}.ts`), 'utf8');
+    assert.match(source, /presentationAuthorAvatarError\(event(?::\s*WechatMiniprogram\.CustomEvent)?\)/);
+    assert.match(source, /author\.avatar !== failedAvatar/);
+  }
 });
 
  test('video keeps legacy full captions without duplicating body copy', () => {

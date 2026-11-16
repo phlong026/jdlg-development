@@ -113,7 +113,7 @@ func registerProjectCollectionHandlers(group *gin.RouterGroup, svc *tracking.Ser
 // Public collection reads follow the same rule as published content reads:
 // the immutable published version is readable without a management login, and
 // current collection/source revocation is still enforced on every request.
-func registerPublicProjectCollectionHandlers(group *gin.RouterGroup, svc *tracking.Service) {
+func registerPublicProjectCollectionHandlers(group *gin.RouterGroup, svc *tracking.Service, profiles projectNoteProfileResolver) {
 	collections := group.Group("/project-collections", func(c *gin.Context) {
 		c.Header("Cache-Control", "no-store")
 		c.Next()
@@ -137,6 +137,9 @@ func registerPublicProjectCollectionHandlers(group *gin.RouterGroup, svc *tracki
 			return
 		}
 		out, err := svc.ReadPublishedProjectCollectionItemContent(c.Request.Context(), c.Param("id"), version, position)
+		if err == nil {
+			out, err = presentContentAuthor(c.Request.Context(), out, profiles)
+		}
 		trackingResponse(c, out, err)
 	})
 	serveItemMedia := func(c *gin.Context) {

@@ -1067,6 +1067,12 @@ Page({
     const urls = visibleMedia.map(item => item.url).filter(Boolean);
     if (current && urls.length) wx.previewImage({ current, urls });
   },
+  presentationAuthorAvatarError(event) {
+    const failedAvatar = String(event && event.currentTarget && event.currentTarget.dataset.avatar || '');
+    const author = this.data.presentationView && this.data.presentationView.author;
+    if (!failedAvatar || !author || author.avatar !== failedAvatar) return;
+    this.setData({ 'presentationView.author.avatar': '' });
+  },
   mediaError(event) {
     const key = String(event.currentTarget.dataset.errorKey || event.currentTarget.dataset.mediaId || '');
     if (key) this.setData({ presentationMediaErrors: { ...this.data.presentationMediaErrors, [key]: '媒体加载失败' } });
