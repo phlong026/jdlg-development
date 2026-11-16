@@ -2617,6 +2617,108 @@ test('reopened drafts hydrate thumbnails without dirtying the form', async () =>
   assert.deepEqual(Array.from(page.noteDraft().media_ids), ['img1', 'vid1'], '保存载荷仍是 media_id');
 });
 
+test('note video preview has an explicit return action and keeps the unsaved editor intact', async () => {
+  let paused = 0;
+  const page = pageHarness('projectnotes', {}, { createVideoContext: () => ({ pause() { paused++; } }) });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p' }, noteTitle: '未保存标题', noteBody: '未保存正文', noteMedia: [{ media_id: 'v1', kind: 'video', local_path: '/tmp/v.mp4' }] });
+  page.ensureDraftInstance();
+  page._noteFormBaseline = page.noteFormSignature();
+  page.setData({ noteBody: '未保存正文（已修改）', noteDirty: true });
+  const signature = page.noteFormSignature();
+  const media = JSON.stringify(page.data.noteMedia);
+  page.openNoteVideo({ currentTarget: { dataset: { id: 'v1' } } });
+  assert.equal(page.data.noteVideoPreview.src, '/tmp/v.mp4');
+  await page.handleBack();
+  assert.equal(page.data.noteVideoPreview, null);
+  assert.equal(page.data.pageView, 'editor');
+  assert.equal(page.data.noteTitle, '未保存标题');
+  assert.equal(page.data.noteBody, '未保存正文（已修改）');
+  assert.equal(JSON.stringify(page.data.noteMedia), media);
+  assert.equal(page.data.noteDirty, true);
+  assert.equal(page.noteFormSignature(), signature);
+  assert.equal(page.hasUnsavedChanges(), true);
+  assert.equal(paused, 1);
+  const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
+  assert.match(template, /bindtap="closeNoteVideoPreview"[^>]*>[^<]*返回编辑/);
+  assert.match(template, /show-fullscreen-btn="\{\{false\}\}"/);
+});
+
+test('protected clearing and unload invalidate private video playback and late errors', () => {
+  let actor = 101, paused = 0;
+  const page = pageHarness('projectnotes', {}, {
+    getStorageSync: key => key === 'token' ? 'session-token' : key === 'userInfo' ? { id: actor } : '',
+    createVideoContext: () => ({ pause() { paused++; } }),
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p' }, noteTitle: '草稿', noteBody: '正文', noteDirty: true, noteMedia: [{ media_id: 'v1', kind: 'video', local_path: '/tmp/v.mp4' }] });
+  page.openNoteVideo({ currentTarget: { dataset: { id: 'v1' } } });
+  const beforeClear = page.data.noteVideoPreview;
+  page.clearProtected();
+  assert.equal(page.data.noteVideoPreview, null);
+  assert.equal(page._noteVideoPreviewLaunch, null);
+  assert.equal(paused, 1);
+
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p' }, noteTitle: '新草稿', noteBody: '新正文', noteDirty: true, noteMedia: [{ media_id: 'v1', kind: 'video', local_path: '/tmp/v.mp4' }] });
+  page.ensureDraftInstance(true);
+  page.noteVideoPreviewError({ currentTarget: { dataset: { id: 'v1', src: beforeClear.src, generation: beforeClear.generation } } });
+  assert.equal(page.data.noteMedia[0].local_path, '/tmp/v.mp4', '保护性清空前的错误不得清除重载草稿');
+
+  page.openNoteVideo({ currentTarget: { dataset: { id: 'v1' } } });
+  const beforeActorChange = page.data.noteVideoPreview;
+  actor = 202;
+  page.ensureDraftInstance(true);
+  page.noteVideoPreviewError({ currentTarget: { dataset: { id: 'v1', src: beforeActorChange.src, generation: beforeActorChange.generation } } });
+  assert.equal(page.data.noteMedia[0].local_path, '/tmp/v.mp4', '同 token 换 actor 后旧错误不得改写新账号草稿');
+
+  page.openNoteVideo({ currentTarget: { dataset: { id: 'v1' } } });
+  page.onUnload();
+  assert.equal(page.data.noteVideoPreview, null);
+  assert.equal(page._noteVideoPreviewLaunch, null);
+  assert.equal(paused, 2, '卸载前必须暂停当前私密视频');
+});
+
+test('a video error from a replaced draft instance cannot clear the reloaded draft', () => {
+  const page = pageHarness('projectnotes');
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p' }, note: { note_id: 'n1', revision: 1 }, noteMedia: [{ media_id: 'v1', kind: 'video', local_path: '/tmp/v.mp4' }] });
+  page.openNoteVideo({ currentTarget: { dataset: { id: 'v1' } } });
+  const old = page.data.noteVideoPreview;
+  page.ensureDraftInstance(true);
+  page.noteVideoPreviewError({ currentTarget: { dataset: { id: 'v1', src: old.src, generation: old.generation } } });
+  assert.equal(page.data.noteMedia[0].local_path, '/tmp/v.mp4');
+  assert.equal(page.data.noteVideoPreview.generation, old.generation, '草稿实例替换后旧事件不得关闭当前播放层');
+});
+
+test('late video errors and backgrounding cannot affect a new private preview or erase the draft', () => {
+  const page = pageHarness('projectnotes');
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  page.setData({ pageView: 'editor', selectedProject: { project_id: 'p' }, noteTitle: '未保存', noteBody: '保留草稿', noteMedia: [{ media_id: 'v1', kind: 'video', local_path: '/tmp/v.mp4' }] });
+  page.openNoteVideo({ currentTarget: { dataset: { id: 'v1' } } });
+  const old = page.data.noteVideoPreview;
+  page.closeNoteVideoPreview();
+  page.openNoteVideo({ currentTarget: { dataset: { id: 'v1' } } });
+  const fresh = page.data.noteVideoPreview;
+  page.noteVideoPreviewError({ currentTarget: { dataset: { id: 'v1', src: old.src, generation: old.generation } } });
+  assert.equal(page.data.noteVideoPreview.generation, fresh.generation);
+  assert.equal(page.data.noteMedia[0].local_path, '/tmp/v.mp4');
+  page.onHide();
+  assert.equal(page.data.noteVideoPreview, null);
+  assert.equal(page.data.noteTitle, '未保存');
+  assert.equal(page.data.noteBody, '保留草稿');
+});
+
+test('note AI assistance places copy inside the result and only two actions below it', () => {
+  const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
+  const panel = template.slice(template.indexOf('class="ai-panel"'));
+  assert.doesNotMatch(panel, /只使用当前项目|生成结果会在这里出现|复制全文<\/button>/);
+  assert.match(panel, /class="ai-result-copy"[^>]*bindtap="copyNoteAI"/);
+  assert.match(panel, /mini-icon name="copy"/);
+  const actions = panel.match(/<view class="ai-panel-actions">([\s\S]*?)<\/view>/)[1];
+  assert.equal((actions.match(/<button/g) || []).length, 2);
+  assert.ok(panel.indexOf('ai-result-box') < panel.indexOf('ai-panel-actions'));
+});
+
 // 批次 2 / T2.3：视频保留选择器缩略图并可进入原生播放。
 test('videos keep their picker thumbnail and can be previewed in the editor', async () => {
   const previews = [];
@@ -2628,9 +2730,8 @@ test('videos keep their picker thumbnail and can be previewed in the editor', as
   await page.uploadNoteMedia([{ tempFilePath: '/tmp/v.mp4', fileType: 'video', size: 1024, thumbTempFilePath: '/tmp/v.jpg' }]);
   assert.equal(page.data.noteMedia[0].thumb_path, '/tmp/v.jpg', '视频缩略图作为封面');
   page.openNoteVideo({ currentTarget: { dataset: { id: 'v1' } } });
-  assert.equal(previews.length, 1);
-  assert.equal(previews[0].sources[0].type, 'video');
-  assert.equal(previews[0].sources[0].url, '/tmp/v.mp4');
+  assert.equal(previews.length, 0, '不再进入缺少返回入口的系统预览');
+  assert.equal(page.data.noteVideoPreview.src, '/tmp/v.mp4');
 });
 
 test('the media list exposes fallbacks, retries and video playback wiring', () => {
@@ -2719,6 +2820,7 @@ test('a failed video preview falls back to a retryable placeholder', () => {
   page._visible = true; page._token = 'session-token'; page._epoch = 1;
   page.setData({ selectedProject: { project_id: 'p' }, noteMedia: [{ media_id: 'v1', kind: 'video', local_path: '/tmp/v.mp4' }] });
   page.openNoteVideo({ currentTarget: { dataset: { id: 'v1' } } });
+  page.noteVideoPreviewError({ currentTarget: { dataset: { id: 'v1', src: '/tmp/v.mp4', generation: page.data.noteVideoPreview.generation } } });
   assert.equal(page.data.noteMedia[0].local_path, '', '失败后回到占位');
   assert.match(page.data.noteMedia[0].preview_error, /视频加载失败/);
 });
@@ -3461,6 +3563,180 @@ test('project list, detail, create and more sheet follow the approved compact hi
   assert.match(detailView, /class="management-sheet-mask"/);
   assert.match(detailView, />历史版本</);
   assert.match(detailView, />导出方案</);
+});
+
+test('project list downloads only six fixed-version covers with two workers', async () => {
+  let active = 0, maxActive = 0;
+  const downloads = [];
+  const page = pageHarness('projectnotes', {
+    downloadProjectNoteMedia: async (projectID, mediaID) => {
+      downloads.push([projectID, mediaID]); active += 1; maxActive = Math.max(maxActive, active);
+      await new Promise(resolve => setTimeout(resolve, 4));
+      active -= 1; return '/tmp/' + mediaID + '.jpg';
+    },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._projectListGeneration = 3;
+  page.setData({ pageView: 'list', projects: Array.from({ length: 8 }, (_, index) => ({
+    project_id: 'project-' + index, name: '项目 ' + index, search_visible: true,
+    preview_media: { media_id: 'cover-' + index, kind: 'image', width: 800, height: 600 },
+    preview_media_id: 'cover-' + index, preview_path: '', preview_loading: false, preview_error: '',
+  })) });
+  await page.hydrateProjectListPreviews(1, 3);
+  assert.deepEqual(downloads, Array.from({ length: 6 }, (_, index) => ['project-' + index, 'cover-' + index]));
+  assert.equal(maxActive, 2);
+  assert.equal(page.data.projects[0].preview_path, '/tmp/cover-0.jpg');
+  assert.equal(page.data.projects[5].preview_path, '/tmp/cover-5.jpg');
+  assert.equal(page.data.projects[6].preview_path, '');
+});
+
+for (const status of [401, 403]) {
+  test(`project list cover ${status} clears private state before a slow peer can return`, async () => {
+    const downloads = [];
+    let deny, finish;
+    const page = pageHarness('projectnotes', {
+      downloadProjectNoteMedia: (_projectID, mediaID) => {
+        downloads.push(mediaID);
+        if (mediaID === 'denied') return new Promise((_, reject) => { deny = reject; });
+        if (mediaID === 'slow') return new Promise(resolve => { finish = resolve; });
+        return Promise.resolve('/tmp/not-requested.jpg');
+      },
+    });
+    page._visible = true; page._loaded = true; page._token = 'session-token'; page._epoch = 1; page._projectListGeneration = 1;
+    page.setData({ pageView: 'list', projects: ['denied', 'slow', 'queued'].map(id => ({
+      project_id: 'project-' + id, name: '私密项目', preview_media_id: id, preview_path: '',
+    })) });
+    const pending = page.hydrateProjectListPreviews(1, 1);
+    deny(Object.assign(new Error('项目访问权限已失效'), { statusCode: status }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const afterFailure = { count: page.data.projects.length, loginRequired: page.data.loginRequired, projectLoadFailed: page.data.projectLoadFailed };
+    finish('/tmp/late-private-cover.jpg');
+    await pending;
+    assert.equal(afterFailure.count, 0, '权限失败须立即清空，不等待慢素材');
+    assert.equal(afterFailure.loginRequired, status === 401);
+    assert.equal(afterFailure.projectLoadFailed, status === 403);
+    assert.equal(page._loaded, false);
+    assert.equal(page.data.projects.length, 0, '迟到封面不得恢复私密项目');
+    assert.deepEqual(downloads, ['denied', 'slow'], '权限失败后不再下载排队封面');
+  });
+
+  test(`project list cover ${status} invalidates an already requested private project detail`, async () => {
+    let deny, finish;
+    const page = pageHarness('projectnotes', {
+      downloadProjectNoteMedia: () => new Promise((_, reject) => { deny = reject; }),
+      getProjectNoteProject: () => new Promise(resolve => { finish = resolve; }),
+    });
+    page._visible = true; page._loaded = true; page._token = 'session-token'; page._epoch = 1; page._projectListGeneration = 1;
+    page.setData({ pageView: 'list', projects: [{ project_id: 'project-one', name: '私密项目', preview_media_id: 'cover-one' }] });
+    const cover = page.hydrateProjectListPreviews(1, 1);
+    const detail = page.openProject('project-one', 1);
+    deny(Object.assign(new Error('项目访问权限已失效'), { statusCode: status }));
+    await cover;
+    const afterFailure = { selectedProject: page.data.selectedProject, loginRequired: page.data.loginRequired, projectLoadFailed: page.data.projectLoadFailed };
+    finish({
+      project: { project_id: 'project-one', name: '迟到的私密项目', owner_id: 'owner-a' },
+      notes: [{ note_id: 'note-one', revision: 1, title: '迟到的笔记', body: '不应恢复的私密正文', body_format: 'plain' }],
+    });
+    await detail;
+    assert.equal(afterFailure.selectedProject, null);
+    assert.equal(afterFailure.loginRequired, status === 401);
+    assert.equal(afterFailure.projectLoadFailed, status === 403);
+    assert.equal(page.data.selectedProject, null, '权限终态后在途详情不得重新打开项目');
+    assert.equal(page.data.notes.length, 0);
+    assert.equal(page.data.noteBody, '', '权限终态后在途详情不得恢复私密正文');
+    assert.equal(page.data.pageView, 'list');
+    assert.equal(page._loaded, false);
+  });
+}
+
+test('a missing project cover does not revoke an otherwise accessible project list', async () => {
+  const page = pageHarness('projectnotes', {
+    downloadProjectNoteMedia: async (_projectID, mediaID) => {
+      if (mediaID === 'missing') throw Object.assign(new Error('私人项目媒体不存在'), { statusCode: 404 });
+      return '/tmp/valid-cover.jpg';
+    },
+  });
+  page._visible = true; page._loaded = true; page._token = 'session-token'; page._epoch = 1; page._projectListGeneration = 1;
+  page.setData({ pageView: 'list', projects: ['missing', 'valid'].map(id => ({ project_id: 'project-' + id, preview_media_id: id, preview_path: '' })) });
+  await page.hydrateProjectListPreviews(1, 1);
+  assert.equal(page._loaded, true);
+  assert.equal(page.data.projects.length, 2);
+  assert.equal(page.data.loginRequired, false);
+  assert.match(page.data.projects[0].preview_error, /暂时无法显示/);
+  assert.equal(page.data.projects[1].preview_path, '/tmp/valid-cover.jpg');
+});
+
+test('first onShow hydrates six project covers once with at most two actual downloads', async () => {
+  const downloads = [];
+  let active = 0, maxActive = 0;
+  const page = pageHarness('projectnotes', {
+    listProjectNoteProjects: async () => ({ items: Array.from({ length: 6 }, (_, index) => ({
+      project_id: 'project-' + index, name: '项目', owner_id: 'owner-a', preview_media: { kind: 'image', media_id: 'cover-' + index },
+    })) }),
+    workbenchContext: async () => ({ owners: ['owner-a'], owner_choices: [{ owner_id: 'owner-a', display_name: '本人' }] }),
+    downloadProjectNoteMedia: async (_projectID, mediaID) => {
+      downloads.push(mediaID); active++; maxActive = Math.max(maxActive, active);
+      await new Promise(resolve => setTimeout(resolve, 4));
+      active--; return '/tmp/' + mediaID + '.jpg';
+    },
+  });
+  await page.onShow();
+  await page._projectListPreviewPromise;
+  assert.equal(maxActive, 2, '首屏加载与恢复流程不能各启动一组下载');
+  assert.deepEqual(downloads, Array.from({ length: 6 }, (_, index) => 'cover-' + index));
+  assert.equal(page.data.projects.every(item => item.preview_path && !item.preview_loading), true);
+});
+
+test('project list load maps the optional backend preview DTO and starts protected hydration', async () => {
+  const downloads = [];
+  const page = pageHarness('projectnotes', {
+    listProjectNoteProjects: async () => ({ items: [{ project_id: 'project-one', name: '林宅', owner_id: 'owner-a', preview_media: { media_id: 'cover-one', kind: 'image', width: 1200, height: 800 } }] }),
+    workbenchContext: async () => ({ owners: ['owner-a'], owner_choices: [{ owner_id: 'owner-a', display_name: '当前账号' }] }),
+    downloadProjectNoteMedia: async (projectID, mediaID) => { downloads.push([projectID, mediaID]); return '/tmp/cover-one.jpg'; },
+  });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1;
+  await page.loadProjects(1);
+  await page._projectListPreviewPromise;
+  assert.deepEqual(downloads, [['project-one', 'cover-one']]);
+  assert.equal(page.data.projects[0].preview_media_id, 'cover-one');
+  assert.equal(page.data.projects[0].preview_path, '/tmp/cover-one.jpg');
+});
+
+test('project list cover callbacks cannot cross actor, list generation or page boundaries', async () => {
+  for (const boundary of ['actor', 'generation', 'page']) {
+    let actor = 101, finish;
+    const page = pageHarness('projectnotes', {
+      downloadProjectNoteMedia: () => new Promise(resolve => { finish = resolve; }),
+    }, { getStorageSync: key => key === 'token' ? 'session-token' : key === 'userInfo' ? { id: actor } : '' });
+    page._visible = true; page._token = 'session-token'; page._epoch = 1; page._projectListGeneration = 1;
+    page.setData({ pageView: 'list', projects: [{ project_id: 'old-project', preview_media_id: 'old-cover', preview_path: '', preview_loading: false, preview_error: '' }] });
+    const pending = page.hydrateProjectListPreviews(1, 1);
+    if (boundary === 'actor') actor = 202;
+    if (boundary === 'generation') {
+      page._projectListGeneration = 2;
+      page.setData({ projects: [{ project_id: 'new-project', preview_media_id: 'new-cover', preview_path: '', preview_loading: false, preview_error: '' }] });
+    }
+    if (boundary === 'page') page.setData({ pageView: 'detail', selectedProject: { project_id: 'other-project' } });
+    finish('/tmp/stale.jpg'); await pending;
+    assert.equal(page.data.projects[0].preview_path, '', boundary + ' boundary accepted stale cover');
+  }
+});
+
+test('project list keeps a failed real cover as a single-row placeholder', async () => {
+  const page = pageHarness('projectnotes', { downloadProjectNoteMedia: async () => { throw new Error('下载失败'); } });
+  page._visible = true; page._token = 'session-token'; page._epoch = 1; page._projectListGeneration = 1;
+  page.setData({ pageView: 'list', projects: [{ project_id: 'project-one', preview_media_id: 'cover-one', preview_path: '', preview_loading: false, preview_error: '' }] });
+  await page.hydrateProjectListPreviews(1, 1);
+  assert.equal(page.data.projects[0].preview_path, '');
+  assert.match(page.data.projects[0].preview_error, /暂时无法显示/);
+});
+
+test('project list cover markup renders only downloaded protected images', () => {
+  const template = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxml'), 'utf8');
+  const listView = template.slice(template.indexOf("<block wx:if=\"{{pageView === 'list'}}\">"), template.indexOf("<block wx:elif=\"{{pageView === 'create'}}\">"));
+  assert.match(listView, /<image wx:if="\{\{item\.preview_path\}\}"[^>]+mode="aspectFill"[^>]+binderror="projectListPreviewLoadError"/);
+  assert.match(listView, /data-project-id="\{\{item\.project_id\}\}"/);
+  assert.match(listView, /data-media-id="\{\{item\.preview_media_id\}\}"/);
+  assert.match(listView, /<mini-icon wx:else name="file"/);
 });
 
 test('project detail downloads only six real image thumbnails with two workers', async () => {

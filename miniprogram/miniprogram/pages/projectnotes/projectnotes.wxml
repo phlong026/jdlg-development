@@ -15,7 +15,7 @@
       <view class="list-header"><text class="count">{{projectVisibleCount}} 个项目</text></view>
       <view wx:if="{{!projects.length}}" class="empty-card"><text class="empty-title">还没有项目</text></view>
       <view wx:elif="{{!projectVisibleCount}}" class="empty-card"><text class="empty-title">未找到匹配项目</text><text class="project-meta">换个名称或地点试试</text></view>
-      <view wx:else class="project-list"><button wx:for="{{projects}}" wx:key="project_id" wx:if="{{item.search_visible}}" class="project-row" data-id="{{item.project_id}}" bindtap="selectProject" bindlongpress="openProjectDeleteMenu"><view class="project-list-cover"><mini-icon name="file" size="56rpx" color="#a28a70" /></view><view class="project-list-copy"><text class="project-name">{{item.name}}</text><text wx:if="{{item.stage_label}}" class="project-meta project-stage">{{item.stage_label}}</text><text class="project-meta">{{item.location || item.style || '项目资料待完善'}}</text></view><text class="arrow">›</text></button></view><view class="list-dock"><button class="primary" bindtap="openProjectCreation" disabled="{{busy}}">＋ 新建项目</button></view>
+      <view wx:else class="project-list"><button wx:for="{{projects}}" wx:key="project_id" wx:if="{{item.search_visible}}" class="project-row" data-id="{{item.project_id}}" bindtap="selectProject" bindlongpress="openProjectDeleteMenu"><view class="project-list-cover"><image wx:if="{{item.preview_path}}" src="{{item.preview_path}}" mode="aspectFill" data-project-id="{{item.project_id}}" data-media-id="{{item.preview_media_id}}" data-path="{{item.preview_path}}" binderror="projectListPreviewLoadError" /><mini-icon wx:else name="file" size="56rpx" color="#a28a70" /></view><view class="project-list-copy"><text class="project-name">{{item.name}}</text><text wx:if="{{item.stage_label}}" class="project-meta project-stage">{{item.stage_label}}</text><text class="project-meta">{{item.location || item.style || '项目资料待完善'}}</text></view><text class="arrow">›</text></button></view><view class="list-dock"><button class="primary" bindtap="openProjectCreation" disabled="{{busy}}">＋ 新建项目</button></view>
     </block>
 
     <block wx:elif="{{pageView === 'create'}}">
@@ -110,13 +110,16 @@
 </block>
 <view wx:if="{{aiPanelOpen && __profileAccessReady}}" class="ai-panel-mask" catchtap="closeNoteAI">
   <view class="ai-panel" catchtap="stopPropagation">
-    <view class="ai-panel-head"><text class="section-title">AI 辅助</text><text class="text-button" bindtap="closeNoteAI">关闭</text></view>
-    <text class="project-meta">只使用当前项目与笔记中已有的事实，不会虚构项目信息；结果可编辑后插入光标处。</text>
-    <textarea class="ai-panel-input" value="{{aiPanelPrompt}}" bindinput="setNoteAIPrompt" maxlength="200" placeholder="可选：补充本次写作要求，例如按空间分段、更简洁" />
-    <view class="ai-panel-actions"><button class="primary" bindtap="startNoteAI" loading="{{aiPanelStreaming}}" disabled="{{aiPanelStreaming}}">生成</button><button class="secondary" bindtap="insertNoteAI" disabled="{{!aiPanelText}}">插入到光标处</button><button class="text-button" bindtap="copyNoteAI" disabled="{{!aiPanelText}}">复制全文</button></view>
+    <view class="ai-panel-head"><text class="section-title">AI辅助</text><text class="text-button" bindtap="closeNoteAI">关闭</text></view>
+    <textarea class="ai-panel-input" value="{{aiPanelPrompt}}" bindinput="setNoteAIPrompt" maxlength="200" placeholder="补充要求（选填）" />
     <text wx:if="{{aiPanelError}}" class="ai-panel-error">{{aiPanelError}}</text>
-    <text wx:if="{{aiPanelNotice}}" class="project-meta">{{aiPanelNotice}}</text>
-    <textarea class="ai-panel-result" value="{{aiPanelText}}" bindinput="setNoteAIText" maxlength="8000" auto-height placeholder="生成结果会在这里出现，可先手工修改再插入。" />
+    <text wx:if="{{aiPanelNotice && aiPanelNotice !== '已生成，可编辑后插入或复制。' && aiPanelNotice !== '正在生成…'}}" class="project-meta">{{aiPanelNotice}}</text>
+    <view class="ai-result-box"><textarea class="ai-panel-result" value="{{aiPanelText}}" bindinput="setNoteAIText" maxlength="8000" /><button class="ai-result-copy" bindtap="copyNoteAI" disabled="{{!aiPanelText}}" aria-label="复制全文"><mini-icon name="copy" size="34rpx" color="#80572f" /></button></view>
+    <view class="ai-panel-actions"><button class="primary" bindtap="startNoteAI" loading="{{aiPanelStreaming}}" disabled="{{aiPanelStreaming}}">{{aiPanelStreaming ? '生成中' : '生成'}}</button><button class="secondary" bindtap="insertNoteAI" disabled="{{!aiPanelText || aiPanelStreaming}}">插入到光标处</button></view>
   </view>
+</view>
+<view wx:if="{{noteVideoPreview && __profileAccessReady}}" class="note-video-preview">
+  <view class="note-video-preview-head"><button bindtap="closeNoteVideoPreview" aria-label="返回编辑">‹ 返回编辑</button></view>
+  <video id="noteEditorVideoPreview" class="note-video-preview-player" src="{{noteVideoPreview.src}}" poster="{{noteVideoPreview.poster}}" controls autoplay show-fullscreen-btn="{{false}}" object-fit="contain" data-id="{{noteVideoPreview.media_id}}" data-src="{{noteVideoPreview.src}}" data-generation="{{noteVideoPreview.generation}}" binderror="noteVideoPreviewError" />
 </view>
 <login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

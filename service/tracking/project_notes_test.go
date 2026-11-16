@@ -2,11 +2,186 @@ package tracking
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
 	"time"
 )
+
+type projectNoteListCountingStore struct {
+	*memoryStore
+	lists map[string]int
+	gets  map[string]int
+}
+
+type projectNoteListCountingRepo struct {
+	Repository
+	store *projectNoteListCountingStore
+}
+
+func (r projectNoteListCountingRepo) List(kind string) ([]Record, error) {
+	r.store.lists[kind]++
+	return r.Repository.List(kind)
+}
+
+func (r projectNoteListCountingRepo) Get(kind, id string) (Record, error) {
+	r.store.gets[kind]++
+	return r.Repository.Get(kind, id)
+}
+
+func (s *projectNoteListCountingStore) ReadTransaction(ctx context.Context, tenant string, fn func(Repository) error) error {
+	return s.memoryStore.ReadTransaction(ctx, tenant, func(r Repository) error {
+		return fn(projectNoteListCountingRepo{Repository: r, store: s})
+	})
+}
+
+func seedProjectNoteMediaRecord(t *testing.T, s *Service, project ProjectNoteProject, asset Asset) {
+	t.Helper()
+	err := s.Store.Transaction(context.Background(), s.Config.Tenant, func(r Repository) error {
+		media := ProjectNoteMedia{ProjectID: project.ID, Owner: project.Owner, Asset: asset, CreatedAt: s.Now()}
+		return r.Insert(projectNoteRecord(projectNoteMediaKind, asset.ID, project.Owner, s.Now(), media, projectNoteActorKey(project.DesignerID), project.ID, asset.ID, ""))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func freezeProjectNoteWithMedia(t *testing.T, s *Service, scope Scope, project ProjectNoteProject, title, coverID string, mediaIDs []string) ProjectNoteVersion {
+	t.Helper()
+	note, err := s.ProjectNoteCreateNote(context.Background(), scope, project.ID, ProjectNoteDraft{Title: title, Body: "已固定方案", BodyFormat: "plain", CoverID: coverID, MediaIDs: mediaIDs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	version, err := s.ProjectNoteFreezeVersion(context.Background(), scope, note.ID, note.Revision)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return version
+}
+
+func TestProjectNoteProjectListBatchesSafePreviewMediaFromCurrentVersions(t *testing.T) {
+	s, designer, _ := projectNoteFixture(t)
+	ctx := context.Background()
+
+	withCover, err := s.ProjectNoteCreateProject(ctx, designer, ProjectNoteProjectInput{Name: "有封面", Owner: "owner-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cover := Asset{ID: "cover-image-0001", Kind: "image", URL: projectNoteMediaURL(withCover.ID, "cover-image-0001"), Width: 1600, Height: 1200, MIME: "image/jpeg", Title: "不应暴露"}
+	fallback := Asset{ID: "body-image-00001", Kind: "image", URL: projectNoteMediaURL(withCover.ID, "body-image-00001"), Width: 900, Height: 1200, MIME: "image/jpeg"}
+	seedProjectNoteMediaRecord(t, s, withCover, cover)
+	seedProjectNoteMediaRecord(t, s, withCover, fallback)
+	versionWithCover := freezeProjectNoteWithMedia(t, s, designer, withCover, "封面优先", cover.ID, []string{fallback.ID})
+
+	withoutCover, err := s.ProjectNoteCreateProject(ctx, designer, ProjectNoteProjectInput{Name: "回退首图", Owner: "owner-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	firstImage := Asset{ID: "first-image-0001", Kind: "image", URL: projectNoteMediaURL(withoutCover.ID, "first-image-0001"), Width: 800, Height: 600, MIME: "image/png"}
+	seedProjectNoteMediaRecord(t, s, withoutCover, firstImage)
+	freezeProjectNoteWithMedia(t, s, designer, withoutCover, "回退图", "", []string{firstImage.ID})
+
+	videoOnly, err := s.ProjectNoteCreateProject(ctx, designer, ProjectNoteProjectInput{Name: "仅视频", Owner: "owner-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	video := Asset{ID: "video-media-0001", Kind: "video", URL: projectNoteMediaURL(videoOnly.ID, "video-media-0001"), Width: 1920, Height: 1080, MIME: "video/mp4"}
+	seedProjectNoteMediaRecord(t, s, videoOnly, video)
+	freezeProjectNoteWithMedia(t, s, designer, videoOnly, "视频方案", "", []string{video.ID})
+
+	unfrozen, err := s.ProjectNoteCreateProject(ctx, designer, ProjectNoteProjectInput{Name: "未固定", Owner: "owner-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreignPointer, err := s.ProjectNoteCreateProject(ctx, designer, ProjectNoteProjectInput{Name: "错指版本", Owner: "owner-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = s.Store.Transaction(ctx, s.Config.Tenant, func(r Repository) error {
+		foreignPointer.CurrentVersionID = versionWithCover.ID
+		return r.Put(projectNoteRecord(projectNoteProjectKind, foreignPointer.ID, foreignPointer.Owner, foreignPointer.UpdatedAt, foreignPointer, projectNoteActorKey(foreignPointer.DesignerID), "", foreignPointer.ID, ""))
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	counting := &projectNoteListCountingStore{memoryStore: s.Store.(*memoryStore), lists: map[string]int{}, gets: map[string]int{}}
+	s.Store = counting
+	page, err := s.ProjectNoteListProjects(ctx, designer, 30, "", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	byID := map[string]ProjectNoteProject{}
+	for _, project := range page.Items {
+		byID[project.ID] = project
+	}
+	if got := byID[withCover.ID].PreviewMedia; got == nil || got.ID != cover.ID || got.Kind != "image" || got.Width != cover.Width || got.Height != cover.Height {
+		t.Fatalf("cover preview = %#v", got)
+	}
+	if got := byID[withoutCover.ID].PreviewMedia; got == nil || got.ID != firstImage.ID {
+		t.Fatalf("fallback preview = %#v", got)
+	}
+	if byID[unfrozen.ID].PreviewMedia != nil || byID[videoOnly.ID].PreviewMedia != nil || byID[foreignPointer.ID].PreviewMedia != nil {
+		t.Fatalf("invalid preview leaked: unfrozen=%#v video=%#v foreign=%#v", byID[unfrozen.ID].PreviewMedia, byID[videoOnly.ID].PreviewMedia, byID[foreignPointer.ID].PreviewMedia)
+	}
+	if counting.lists[projectNoteVersionKind] != 1 || counting.gets[projectNoteVersionKind] != 0 {
+		t.Fatalf("version enrichment queries: lists=%d gets=%d", counting.lists[projectNoteVersionKind], counting.gets[projectNoteVersionKind])
+	}
+	if counting.gets[projectNoteProjectKind] != 0 {
+		t.Fatalf("preview enrichment must not point-read projects: gets=%d", counting.gets[projectNoteProjectKind])
+	}
+	encoded, err := json.Marshal(page)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), `"url"`) || strings.Contains(string(encoded), `"mime"`) || strings.Contains(string(encoded), `"title":"不应暴露"`) {
+		t.Fatalf("preview exposed private asset fields: %s", encoded)
+	}
+}
+
+func TestProjectNoteProjectListRejectsMalformedCurrentVersionRows(t *testing.T) {
+	for _, test := range []struct {
+		name    string
+		version ProjectNoteVersion
+		corrupt bool
+	}{
+		{name: "invalid json", corrupt: true},
+		{name: "payload id mismatch", version: ProjectNoteVersion{ID: "different-version-01"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			s, designer, _ := projectNoteFixture(t)
+			ctx := context.Background()
+			project, err := s.ProjectNoteCreateProject(ctx, designer, ProjectNoteProjectInput{Name: "损坏固定版本", Owner: "owner-a"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			versionID := "current-version-0001"
+			version := test.version
+			version.ProjectID = project.ID
+			if version.ID == "" {
+				version.ID = versionID
+			}
+			err = s.Store.Transaction(ctx, s.Config.Tenant, func(r Repository) error {
+				project.CurrentVersionID = versionID
+				if putErr := r.Put(projectNoteRecord(projectNoteProjectKind, project.ID, project.Owner, project.UpdatedAt, project, projectNoteActorKey(project.DesignerID), "", project.ID, "")); putErr != nil {
+					return putErr
+				}
+				record := projectNoteRecord(projectNoteVersionKind, versionID, project.Owner, s.Now(), version, "", project.ID, "", "")
+				if test.corrupt {
+					record.Payload = []byte("{not-json")
+				}
+				return r.Insert(record)
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err = s.ProjectNoteListProjects(ctx, designer, 30, "", ""); !errors.Is(err, ErrUnavailable) {
+				t.Fatalf("malformed current version error = %v, want ErrUnavailable", err)
+			}
+		})
+	}
+}
 
 func projectNoteFixture(t *testing.T) (*Service, Scope, Scope) {
 	t.Helper()

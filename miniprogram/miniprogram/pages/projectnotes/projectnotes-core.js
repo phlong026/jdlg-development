@@ -16,7 +16,7 @@ const blankProtected = () => ({
   projects: [], owners: [], ownerChoices: [], ownerIndex: 0, ownerID: '', projectName: '', crmID: '', selectedProject: null,
   members: [], activeMembers: [], joinRequests: [], memberInvitations: [], requestsLoading: false, confirmerChoices: [], confirmerIndex: 0, confirmerAccount: '',
   memberInvitation: null, memberInvitationPath: '',
-  note: null, noteTitle: '', noteBody: '', noteDirty: false, noteBodyFocused: false, bodyReadOnly: false, noteMedia: [], frozenVersion: null, activeShare: null,
+  note: null, noteTitle: '', noteBody: '', noteDirty: false, noteBodyFocused: false, bodyReadOnly: false, noteMedia: [], noteVideoPreview: null, frozenVersion: null, activeShare: null,
   feedbacks: [], confirmations: [], feedbackID: '', feedbackReply: '', truncationNotice: '', historyNotice: '',
   historyMode: false, versionView: null, versionBlocks: [], versionMedia: [],
   editorMode: 'edit', previewLoading: false, previewError: '', previewBodyFormat: 'plain', previewBody: '', previewBlocks: [], previewMedia: [], keyboardHeight: 0,
@@ -64,6 +64,8 @@ const forgetShareToken = shareID => {
 const assetOf = item => item && item.asset ? item.asset : item;
 const NOTE_ROW_PREVIEW_LIMIT = 6;
 const NOTE_ROW_PREVIEW_WORKERS = 2;
+const PROJECT_LIST_PREVIEW_LIMIT = 6;
+const PROJECT_LIST_PREVIEW_WORKERS = 2;
 const noteRowPreviewAsset = note => {
   const assets = (note && note.media || []).map(assetOf).filter(Boolean);
   const coverID = String(note && note.cover_media_id || '');
@@ -214,8 +216,10 @@ Page({
       this.setData({ notice: '分享链接已复制，发给客户即可。' });
     }
     if (this.data.pageView === 'editor') this.acceptPendingMedia();
-    const afterRecheck = () => {
-      this.flushPickerFeedback(); this.resumeNoteMediaPreviews(); this.resumeNoteRowPreviews();
+    const afterRecheck = (resumeProjects = true) => {
+      this.flushPickerFeedback();
+      if (resumeProjects) this.resumeProjectListPreviews();
+      this.resumeNoteMediaPreviews(); this.resumeNoteRowPreviews();
       if (this.data.pageView === 'version' || this.data.pageView === 'members') {
         if (this.data.requestsLoading) this._joinRequestsRetry = true; else this.loadJoinRequests();
       }
@@ -224,9 +228,12 @@ Page({
       this._writingLaunch = null;
       return Promise.resolve(this.revalidateProjectAccess()).then(afterRecheck);
     }
-    return Promise.resolve(this._loaded ? this.revalidateProjectAccess() : this.loadProjects(this._epoch)).then(afterRecheck);
+    if (this._loaded) return Promise.resolve(this.revalidateProjectAccess()).then(afterRecheck);
+    // 首次加载已启动封面下载；只在已有列表回到前台时恢复，避免重复请求。
+    return Promise.resolve(this.loadProjects(this._epoch)).then(() => afterRecheck(false));
   },
   onHide() {
+    this.closeNoteVideoPreview();
     this._visible = false; this._epoch = (this._epoch || 0) + 1;
     // 登录守卫锁定/切后台都走这里：AI 面板属于私密内容，必须立即失效并清空。
     this._aiPanelRequest = (this._aiPanelRequest || 0) + 1;
@@ -264,8 +271,9 @@ Page({
   },
   clearProtected() {
     // 保护性清空递增失效代际：在途上传/回调据此判断自己是否已作废，不得重建已清空的受保护状态。
+    this.closeNoteVideoPreview();
     this._protectedGeneration = (this._protectedGeneration || 0) + 1;
-    this._noteFormBaseline = null; this._projectFormBaseline = null; this._loadedFormState = null; this.resetDraftInstance(); this._noteMediaFailures = null; this._noteMediaPending = null; this._noteMediaUpload = null; this._pendingPickerFeedback = null; this._hydrateResumePending = false; this._noteRowPreviewRequest = (this._noteRowPreviewRequest || 0) + 1; this._noteRowPreviewContext = null; this._noteRowPreviewPromise = null; this._sendAttempt = null; this._aiPanelRequest = (this._aiPanelRequest || 0) + 1; this._aiPanelLaunch = null; this.abortNoteAI();
+    this._noteFormBaseline = null; this._projectFormBaseline = null; this._loadedFormState = null; this.resetDraftInstance(); this._noteMediaFailures = null; this._noteMediaPending = null; this._noteMediaUpload = null; this._pendingPickerFeedback = null; this._hydrateResumePending = false; this._projectListGeneration = (this._projectListGeneration || 0) + 1; this._projectListPreviewRequest = (this._projectListPreviewRequest || 0) + 1; this._projectListPreviewContext = null; this._projectListPreviewPromise = null; this._noteRowPreviewRequest = (this._noteRowPreviewRequest || 0) + 1; this._noteRowPreviewContext = null; this._noteRowPreviewPromise = null; this._sendAttempt = null; this._aiPanelRequest = (this._aiPanelRequest || 0) + 1; this._aiPanelLaunch = null; this.abortNoteAI();
     this.setData(Object.assign(blankProtected(), { loading: false, loginRequired: false, accessRecheckRequired: false, error: '', notice: '', busy: false }));
   },
 
@@ -293,6 +301,7 @@ Page({
   },
 
   async handleBack() {
+    if (this.data.noteVideoPreview) { this.closeNoteVideoPreview(); return; }
     if (this.data.busy) return;
     if (this.data.pageView === 'list') { wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/my/my' }) }); return; }
     if (this.data.pageView === 'create') {
@@ -404,7 +413,11 @@ Page({
       for (const item of page.items || []) {
         if (seen.has(item.project_id)) continue;
         seen.add(item.project_id);
-        items.push(Object.assign({}, item, { stage_label: stageLabels[item.stage] || '' }));
+        const preview = item.preview_media && item.preview_media.kind === 'image' ? item.preview_media : null;
+        items.push(Object.assign({}, item, {
+          stage_label: stageLabels[item.stage] || '',
+          preview_media_id: preview ? mediaID(preview) : '', preview_path: '', preview_loading: false, preview_error: '',
+        }));
       }
       const next = String(page.next_cursor || '');
       if (!next || next === cursor) break;
@@ -414,6 +427,7 @@ Page({
   },
   async loadProjects(suppliedEpoch) {
     const epoch = suppliedEpoch || (this._epoch = (this._epoch || 0) + 1);
+    const listGeneration = this._projectListGeneration = (this._projectListGeneration || 0) + 1;
     this.setData(Object.assign(blankProtected(), { loading: true, loginRequired: false, error: '', notice: '' }));
     try {
       const [projects, context] = await Promise.all([this.fetchAllProjects(), api.workbenchContext()]);
@@ -426,6 +440,7 @@ Page({
       });
       this._loaded = true;
       this.setData(Object.assign({ owners, ownerChoices, ownerID: owners[0] || '', ownerIndex: 0, loading: false }, filteredProjectState(projects, '')));
+      this._projectListPreviewPromise = this.hydrateProjectListPreviews(epoch, listGeneration);
       const selectedID = this._targetProjectID || this._selectedProjectID;
       if (selectedID) { this._targetProjectID = ''; if (this._targetNoteID) { this._selectedNoteID = this._targetNoteID; this._targetNoteID = ''; } if (this._targetView) { this._nextPageView = this._targetView; this._targetView = ''; } await this.openProject(selectedID, epoch); }
       else if (this._targetCustomerRef) await this.preselectProjectCustomer(epoch);
@@ -435,6 +450,71 @@ Page({
       this.clearProtected();
       this.setData({ loading: false, projectLoadFailed: true, loginRequired: error.statusCode === 401, error: error.statusCode === 403 ? (error.message || '暂无私人项目管理权限，请联系管理员。') : '私人项目暂不可用，请稍后重试。' });
     }
+  },
+
+  async hydrateProjectListPreviews(epoch, listGeneration) {
+    const launch = {
+      epoch, listGeneration, token: this._token, account: draftAccount(),
+      generation: this._protectedGeneration || 0, request: (this._projectListPreviewRequest || 0) + 1,
+    };
+    this._projectListPreviewRequest = launch.request;
+    this._projectListPreviewContext = launch;
+    const current = () => this.current(launch.epoch)
+      && this._projectListPreviewRequest === launch.request
+      && this._projectListGeneration === launch.listGeneration
+      && this._token === launch.token && draftAccount() === launch.account
+      && (this._protectedGeneration || 0) === launch.generation
+      && this.data.pageView === 'list';
+    if (!current()) return;
+    const targets = (this.data.projects || []).slice(0, PROJECT_LIST_PREVIEW_LIMIT)
+      .filter(item => item.preview_media_id && !item.preview_error && (!item.preview_path || !localFileUsable(item.preview_path)));
+    if (!targets.length) return;
+    const targetIDs = new Set(targets.map(item => item.project_id));
+    this.setData({ projects: (this.data.projects || []).map(item => targetIDs.has(item.project_id)
+      ? Object.assign({}, item, { preview_path: localFileUsable(item.preview_path) ? item.preview_path : '', preview_loading: true, preview_error: '' }) : item) });
+    let cursor = 0;
+    const update = (target, patch) => {
+      if (!current()) return;
+      this.setData({ projects: (this.data.projects || []).map(item => item.project_id === target.project_id && item.preview_media_id === target.preview_media_id
+        ? Object.assign({}, item, patch) : item) });
+    };
+    const consume = async () => {
+      while (cursor < targets.length && current()) {
+        const target = targets[cursor++];
+        try {
+          const path = await api.downloadProjectNoteMedia(target.project_id, target.preview_media_id);
+          update(target, { preview_path: path, preview_loading: false, preview_error: '' });
+        } catch (error) {
+          if (!current()) return;
+          const status = Number(error && error.statusCode);
+          if (status === 401 || status === 403) {
+            this.handleNoteMediaAccessFailure(status);
+            return;
+          }
+          update(target, { preview_path: '', preview_loading: false, preview_error: '缩略图暂时无法显示' });
+        }
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(PROJECT_LIST_PREVIEW_WORKERS, targets.length) }, () => consume()));
+  },
+  resumeProjectListPreviews() {
+    if (this.data.pageView !== 'list') return;
+    const resumable = new Set((this.data.projects || []).slice(0, PROJECT_LIST_PREVIEW_LIMIT).filter(item => item.preview_media_id).map(item => item.project_id));
+    this.setData({ projects: (this.data.projects || []).map(item => resumable.has(item.project_id) && (item.preview_loading || item.preview_error)
+      ? Object.assign({}, item, { preview_loading: false, preview_error: '' }) : item) });
+    this._projectListPreviewPromise = this.hydrateProjectListPreviews(this._epoch, this._projectListGeneration);
+    return this._projectListPreviewPromise;
+  },
+  projectListPreviewLoadError(event) {
+    const dataset = event.currentTarget.dataset || {};
+    const projectID = String(dataset.projectId || ''), failedMediaID = String(dataset.mediaId || ''), failedPath = String(dataset.path || '');
+    const context = this._projectListPreviewContext;
+    if (!context || context.epoch !== this._epoch || !this.current(context.epoch) || context.request !== this._projectListPreviewRequest
+      || context.listGeneration !== this._projectListGeneration || context.token !== this._token || context.account !== draftAccount()
+      || context.generation !== (this._protectedGeneration || 0) || this.data.pageView !== 'list') return;
+    this.setData({ projects: (this.data.projects || []).map(item => item.project_id === projectID
+      && item.preview_media_id === failedMediaID && item.preview_path === failedPath
+      ? Object.assign({}, item, { preview_path: '', preview_loading: false, preview_error: '缩略图暂时无法显示' }) : item) });
   },
 
   setProjectName(event) { this.setData({ projectName: value(event) }); },
@@ -718,14 +798,36 @@ Page({
     const id = String(event.currentTarget.dataset.id || '');
     this.setData({ noteMedia: (this.data.noteMedia || []).map(entry => mediaID(entry) === id ? Object.assign({}, entry, { local_path: '', preview_error: '素材暂时无法显示', preview_loading: false }) : entry) });
   },
-  // T2.3：编辑态点击视频进入原生播放；不可用时明确提示。
+  // 在编辑页内播放，始终保留返回入口和未保存内容。
   openNoteVideo(event) {
     const id = String(event.currentTarget.dataset.id || '');
     const item = (this.data.noteMedia || []).find(entry => mediaID(entry) === id);
-    if (!item || !item.local_path) return;
-    const failed = () => this.setData({ noteMedia: (this.data.noteMedia || []).map(entry => mediaID(entry) === id ? Object.assign({}, entry, { local_path: '', preview_error: '视频加载失败', preview_loading: false }) : entry) });
-    if (typeof wx.previewMedia === 'function') { wx.previewMedia({ sources: [{ url: item.local_path, type: 'video' }], current: 0, fail: failed }); return; }
-    failed();
+    if (!item || item.kind !== 'video' || !item.local_path || !this.current(this._epoch)) return;
+    const instanceID = this.ensureDraftInstance();
+    const generation = this._noteVideoPreviewGeneration = (this._noteVideoPreviewGeneration || 0) + 1;
+    this._noteVideoPreviewLaunch = {
+      token: this._token, account: draftAccount(), epoch: this._epoch,
+      protectedGeneration: this._protectedGeneration || 0, instanceID,
+      projectID: this.data.selectedProject && this.data.selectedProject.project_id,
+      mediaID: id, src: item.local_path, generation,
+    };
+    this.setData({ noteVideoPreview: { media_id: id, src: item.local_path, poster: item.thumb_path || '', generation } });
+  },
+  closeNoteVideoPreview() {
+    if (this.data.noteVideoPreview && typeof wx.createVideoContext === 'function') wx.createVideoContext('noteEditorVideoPreview', this).pause();
+    this._noteVideoPreviewGeneration = (this._noteVideoPreviewGeneration || 0) + 1;
+    this._noteVideoPreviewLaunch = null;
+    if (this.data.noteVideoPreview) this.setData({ noteVideoPreview: null });
+  },
+  noteVideoPreviewError(event) {
+    const launch = this._noteVideoPreviewLaunch;
+    const dataset = event && event.currentTarget && event.currentTarget.dataset;
+    if (!launch || !dataset || Number(dataset.generation) !== launch.generation || dataset.id !== launch.mediaID || dataset.src !== launch.src
+      || !this.current(launch.epoch) || launch.token !== this._token || launch.account !== draftAccount()
+      || launch.protectedGeneration !== (this._protectedGeneration || 0) || launch.instanceID !== this.currentDraftInstanceID()
+      || launch.projectID !== (this.data.selectedProject && this.data.selectedProject.project_id)) return;
+    this.closeNoteVideoPreview();
+    this.setData({ noteMedia: (this.data.noteMedia || []).map(entry => mediaID(entry) === launch.mediaID && entry.local_path === launch.src ? Object.assign({}, entry, { local_path: '', preview_error: '视频加载失败', preview_loading: false }) : entry) });
   },
   openImage(event) {
     const id = String(event.currentTarget.dataset.id || '');
@@ -1815,8 +1917,9 @@ Page({
     }
     if (accountValid) this.publishMediaFailures();
   },
-  // 上传接口返回权限终态（401/403/404）时与重验失败同口径：失效批次、清空受保护内容。
+  // 权限终态同时废弃在途详情与媒体响应，避免清空后被旧请求恢复私密内容。
   handleNoteMediaAccessFailure(status) {
+    this._epoch = (this._epoch || 0) + 1;
     this._loaded = false;
     this.clearProtected();
     this.setData({ loginRequired: status === 401, projectLoadFailed: status !== 401, error: status === 401 ? '' : '项目访问权限已变更，请重新加载或联系管理员。' });
