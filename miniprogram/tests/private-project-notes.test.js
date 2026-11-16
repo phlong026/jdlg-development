@@ -3557,7 +3557,14 @@ test('project list, detail, create and more sheet follow the approved compact hi
   assert.match(createView, /class="create-dock"/);
   assert.match(detailView, /class="detail-summary-row"/);
   assert.match(detailView, />项目资料</);
-  assert.match(detailView, /class="detail-customer-row"/);
+  assert.match(detailView, /class="detail-summary-actions"/);
+  assert.match(detailView, /已关联客户/);
+  assert.match(detailView, /未关联客户/);
+  assert.equal((detailView.match(/bindtap="openProjectSettings"/g) || []).length, 2);
+  assert.doesNotMatch(detailView, /class="detail-customer-row"/);
+  const styles = fs.readFileSync(path.join(root, 'pages/projectnotes/projectnotes.wxss'), 'utf8');
+  assert.match(styles, /\.detail-summary-actions\{[^}]*display:flex[^}]*justify-content:flex-end[^}]*gap:22rpx[^}]*margin-left:auto/);
+  assert.match(styles, /\.page \.detail-summary-actions \.detail-link\{[^}]*width:auto!important[^}]*min-width:0[^}]*flex:none[^}]*white-space:nowrap[^}]*margin:0!important/);
   assert.match(detailView, />分享资料</);
   assert.match(detailView, />客户反馈</);
   assert.match(detailView, /class="management-sheet-mask"/);

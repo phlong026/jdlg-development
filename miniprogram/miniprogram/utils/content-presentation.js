@@ -1,5 +1,6 @@
 'use strict';
 const { renderArticleDocument } = require('./article-document');
+const { formatNoteTime } = require('./note-time');
 
 const PRESENTATIONS = new Set(['article', 'gallery', 'video']);
 const STRUCTURED_TEXT = new Set(['heading', 'quote', 'list']);
@@ -152,7 +153,8 @@ function buildContentPresentation(content, media, windowInfo, options = {}) {
   const document = articleDocument(safeContent);
   const availableMedia = sourceMedia(safeContent, media, document);
   const kind = inferContentPresentation({ ...safeContent, media: availableMedia });
-  const frameWidth = Math.max(240, Math.round(Number(windowInfo && windowInfo.windowWidth || 375) - 36));
+  const inset = kind === 'gallery' && options.fullWidthGallery === true ? 0 : 36;
+  const frameWidth = Math.max(240, Math.round(Number(windowInfo && windowInfo.windowWidth || 375) - inset));
   const windowHeight = Math.max(240, Number(windowInfo && windowInfo.windowHeight || 667));
   const prefix = String(options.prefix || 'content-presentation').replace(/[^A-Za-z0-9_-]/g, '-') || 'content-presentation';
   const videoLayout = document && document.video_layout === 'douyin' ? 'douyin' : 'channels';
@@ -190,7 +192,7 @@ function buildContentPresentation(content, media, windowInfo, options = {}) {
     author: contentAuthor(safeContent),
     // Import guidance belongs to the editor, not the published attribution.
     sourceNote: sourceNote === '链接导入的可编辑草稿，请在发布前核对正文、排版和媒体。' ? '' : sourceNote,
-    publishedAt: String(safeContent.published_at || ''),
+    publishedAt: formatNoteTime(safeContent.published_at),
     bodyText,
     bodyExpandable: kind === 'video' && bodyText.length > 110,
     descriptionExpanded: options.descriptionExpanded === true,

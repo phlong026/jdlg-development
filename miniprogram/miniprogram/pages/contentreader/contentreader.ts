@@ -25,7 +25,7 @@ function consentState(){
  if(tracking.consentChoice)return tracking.consentChoice();
  try{const choice=wx.getStorageSync('share_tracking_consent_choice_v1');return{resolved:!!(choice&&choice.explicit===true),accepted:!!(choice&&choice.explicit===true&&choice.accepted===true)};}catch(_){return{resolved:false,accepted:false};}
 }
-function presentationOptions(window,galleryIndex,descriptionExpanded){const safeBottom=window&&window.safeArea&&window.screenHeight?Math.max(0,window.screenHeight-window.safeArea.bottom):0;return{prefix:'reader',galleryIndex,descriptionExpanded,videoChromeHeight:(Number(window&&window.statusBarHeight)||20)+44+76+safeBottom};}
+function presentationOptions(window,galleryIndex,descriptionExpanded){const safeBottom=window&&window.safeArea&&window.screenHeight?Math.max(0,window.screenHeight-window.safeArea.bottom):0;return{prefix:'reader',galleryIndex,descriptionExpanded,fullWidthGallery:true,videoChromeHeight:(Number(window&&window.statusBarHeight)||20)+44+76+safeBottom};}
 function nativeShareTitle(value,fallback){return String(value||fallback||'自有内容').replace(/\s+/g,' ').trim().slice(0,80);}
 Page({
  ...noteActions.methods,
