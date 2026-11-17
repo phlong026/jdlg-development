@@ -18,7 +18,7 @@ function render(file, data) {
 function text(tree) { return typeof tree === 'string' ? tree : (tree?.children || []).map(text).join('\n'); }
 
 test('native WXML compilation accepts the complete renovation pages and shared components', options, () => {
-  for (const file of ['pages/renovationbudget/index', 'pages/renovationbudget/result', 'pages/aicost/aicost', 'pages/aicostshare/aicostshare', 'components/quote-type-switch/index']) {
+  for (const file of ['pages/renovationbudget/index', 'pages/renovationbudget/result', 'pages/aicost/aicost', 'pages/aicostshare/aicostshare', 'components/quote-type-switch/index', 'components/renovation-measurement-editor/index']) {
     execFileSync(compiler, [`miniprogram/${file}.wxml`], { cwd: root, stdio: 'pipe' });
   }
 });
@@ -28,21 +28,24 @@ test('compiled report displays numeric totals, hides edit controls in public mod
   vm.runInNewContext(fs.readFileSync(path.join(root, 'miniprogram/components/renovation-report/index.js'), 'utf8'), {
     Component(value) { definition = value; },
   });
-  const estimate = pricing.estimateRenovation(pricing.createDefaultRenovationInput());
+  const estimate = pricing.estimateRenovation({ ...pricing.createDefaultRenovationInput(), rooms: { bedroom: 1, living: 0, kitchen: 0, bathroom: 0, balcony: 0 },
+    measurement: { version: 1, mode: 'measured', floors: [{ index: 0, height: 3, spaces: [{ id: '0.bedroom.0', type: 'bedroom', name: '卧室1', length: 4, width: 3, height: null,
+      doorWidth: 0.9, doorArea: 1.8, windowWidth: 1.5, windowArea: 2.25, curtainBoxLength: 1.5, tvBackgroundArea: null, cabinetLength: null }] }] } });
   const component = { ...definition.methods, data: { ...definition.data, readonly: true, detailsExpanded: false,
-    report: { renovation: estimate, estimatedUnitCost: '978.14元/㎡', costBreakdown: [], basicInfo: [{ label: '所在地区', value: '福建 / 泉州' }] } },
+    report: { renovation: { ...estimate, quantityBasis: 'mixed' }, estimatedUnitCost: `${estimate.unitAmount}元/㎡`, costBreakdown: [], basicInfo: [{ label: '所在地区', value: '福建 / 泉州' }] } },
     setData(values) { Object.assign(this.data, values); } };
   component.refresh();
   const file = 'miniprogram/components/renovation-report/index.wxml';
   const overview = text(render(file, component.data));
-  assert.match(overview, /9\.78/);
+  assert.ok(overview.includes((estimate.totalAmount / 10000).toFixed(2)));
   assert.match(overview, /福建 \/ 泉州/);
+  assert.match(overview, /含估算项/);
   assert.doesNotMatch(overview, /修改参数|附加费用|工程量/);
   component.data.detailsExpanded = true;
   component.refresh();
   const detail = text(render(file, component.data));
   assert.match(detail, /顶面墙固/);
-  assert.match(detail, /30㎡/);
-  assert.match(detail, /¥288/);
+  assert.match(detail, /12㎡/);
+  assert.match(detail, /¥115/);
   assert.doesNotMatch(detail, /装修参考总价/);
 });

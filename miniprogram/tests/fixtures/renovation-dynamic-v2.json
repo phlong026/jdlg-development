@@ -1,0 +1,2115 @@
+[
+  {
+    "name": "实测12㎡",
+    "input": {
+      "province": "福建",
+      "city": "泉州",
+      "area": 100,
+      "width": 10,
+      "depth": 10,
+      "floorCount": 1,
+      "height": 3,
+      "houseType": "new",
+      "standard": "standard",
+      "style": "现代简约",
+      "rooms": {
+        "bedroom": 1,
+        "living": 0,
+        "kitchen": 0,
+        "bathroom": 0,
+        "balcony": 0
+      },
+      "measurement": {
+        "version": 1,
+        "mode": "measured",
+        "floors": [
+          {
+            "index": 0,
+            "height": 3,
+            "spaces": [
+              {
+                "id": "0.bedroom.0",
+                "type": "bedroom",
+                "name": "卧室1",
+                "length": 4,
+                "width": 3,
+                "height": null,
+                "doorWidth": 0.9,
+                "doorArea": 1.8,
+                "windowWidth": 1.5,
+                "windowArea": 2.25,
+                "curtainBoxLength": 1.5,
+                "tvBackgroundArea": null,
+                "cabinetLength": null
+              }
+            ]
+          }
+        ]
+      }
+    },
+    "selections": {
+      "excludedItems": [],
+      "quantities": {},
+      "fees": {
+        "management": true,
+        "design": true,
+        "tax": false
+      }
+    },
+    "report": {
+      "version": 5,
+      "estimatedTotalCost": "1.14万元",
+      "estimatedUnitCost": "953.75元/㎡",
+      "totalLabel": "装修参考总价",
+      "unitLabel": "参考单价",
+      "basicInfo": [
+        {
+          "label": "所在地区",
+          "value": "福建 / 泉州",
+          "fullWidth": true
+        },
+        {
+          "label": "装修面积",
+          "value": "12㎡"
+        },
+        {
+          "label": "房屋状态",
+          "value": "新房"
+        },
+        {
+          "label": "楼层数",
+          "value": "1层"
+        },
+        {
+          "label": "层高",
+          "value": "3m"
+        },
+        {
+          "label": "面宽",
+          "value": "10m"
+        },
+        {
+          "label": "进深",
+          "value": "10m"
+        },
+        {
+          "label": "户型",
+          "value": "1室0厅0厨0卫0阳台"
+        },
+        {
+          "label": "室内风格",
+          "value": "现代简约"
+        },
+        {
+          "label": "装修标准",
+          "value": "标准型"
+        }
+      ],
+      "costBreakdown": [
+        {
+          "name": "主材费",
+          "amount": 3676,
+          "amountText": "3,676元",
+          "percent": 32.12,
+          "note": "工程费",
+          "estimable": true
+        },
+        {
+          "name": "辅材费",
+          "amount": 1871,
+          "amountText": "1,871元",
+          "percent": 16.35,
+          "note": "工程费",
+          "estimable": true
+        },
+        {
+          "name": "人工费",
+          "amount": 4492,
+          "amountText": "4,492元",
+          "percent": 39.25,
+          "note": "工程费",
+          "estimable": true
+        },
+        {
+          "name": "管理费",
+          "amount": 1004,
+          "amountText": "1,004元",
+          "percent": 8.77,
+          "note": "附加费",
+          "estimable": true
+        },
+        {
+          "name": "设计费",
+          "amount": 402,
+          "amountText": "402元",
+          "percent": 3.51,
+          "note": "附加费",
+          "estimable": true
+        },
+        {
+          "name": "税费",
+          "amount": 0,
+          "amountText": "未计入",
+          "percent": 0,
+          "note": "附加费",
+          "estimable": true
+        }
+      ],
+      "dynamicNotes": [],
+      "quoteType": "renovation",
+      "renovation": {
+        "pricingVersion": "renovation-dynamic-v2",
+        "quantityBasis": "measured",
+        "totalAmount": 11445,
+        "spaces": [
+          {
+            "id": "bedroom",
+            "name": "卧室",
+            "count": 1,
+            "amount": 7245,
+            "groups": [
+              {
+                "id": "ceiling",
+                "name": "天花板",
+                "amount": 1243,
+                "items": [
+                  {
+                    "id": "bedroom.ceiling.primer",
+                    "name": "顶面墙固",
+                    "unit": "㎡",
+                    "quantity": 12,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 9.6,
+                    "amount": 115,
+                    "included": true
+                  },
+                  {
+                    "id": "bedroom.ceiling.putty",
+                    "name": "顶面腻子",
+                    "unit": "㎡",
+                    "quantity": 12,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 28,
+                    "amount": 336,
+                    "included": true
+                  },
+                  {
+                    "id": "bedroom.ceiling.latex",
+                    "name": "顶面乳胶漆",
+                    "unit": "㎡",
+                    "quantity": 12,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 17.6,
+                    "amount": 211,
+                    "included": true
+                  },
+                  {
+                    "id": "bedroom.ceiling.gypsum_line",
+                    "name": "顶面石膏线",
+                    "unit": "m",
+                    "quantity": 14,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 28,
+                    "amount": 392,
+                    "included": true
+                  },
+                  {
+                    "id": "bedroom.ceiling.curtain_box",
+                    "name": "窗帘盒",
+                    "unit": "m",
+                    "quantity": 1.5,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 126,
+                    "amount": 189,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "wall",
+                "name": "墙面",
+                "amount": 1791,
+                "items": [
+                  {
+                    "id": "bedroom.wall.primer",
+                    "name": "墙面墙固",
+                    "unit": "㎡",
+                    "quantity": 37.95,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 9.6,
+                    "amount": 364,
+                    "included": true
+                  },
+                  {
+                    "id": "bedroom.wall.putty",
+                    "name": "墙面腻子",
+                    "unit": "㎡",
+                    "quantity": 37.95,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 28,
+                    "amount": 1063,
+                    "included": true
+                  },
+                  {
+                    "id": "bedroom.wall.mesh",
+                    "name": "墙面挂网",
+                    "unit": "㎡",
+                    "quantity": 37.95,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 9.6,
+                    "amount": 364,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "floor",
+                "name": "地面",
+                "amount": 3011,
+                "items": [
+                  {
+                    "id": "bedroom.floor.seam",
+                    "name": "地砖美缝",
+                    "unit": "㎡",
+                    "quantity": 12,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 24,
+                    "amount": 288,
+                    "included": true
+                  },
+                  {
+                    "id": "bedroom.floor.tile",
+                    "name": "地砖铺贴",
+                    "unit": "㎡",
+                    "quantity": 12,
+                    "materialUnitPrice": 112,
+                    "laborAuxUnitPrice": 80,
+                    "amount": 2304,
+                    "included": true
+                  },
+                  {
+                    "id": "bedroom.floor.skirting",
+                    "name": "踢脚线",
+                    "unit": "m",
+                    "quantity": 13.1,
+                    "materialUnitPrice": 8,
+                    "laborAuxUnitPrice": 24,
+                    "amount": 419,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "door",
+                "name": "室内门",
+                "amount": 1200,
+                "items": [
+                  {
+                    "id": "bedroom.door.bedroom_door",
+                    "name": "卧室门",
+                    "unit": "套",
+                    "quantity": 1,
+                    "materialUnitPrice": 1200,
+                    "laborAuxUnitPrice": 0,
+                    "amount": 1200,
+                    "included": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "living",
+            "name": "客餐厅",
+            "count": 0,
+            "amount": 0,
+            "groups": [
+              {
+                "id": "ceiling",
+                "name": "天花板",
+                "amount": 0,
+                "items": [
+                  {
+                    "id": "living.ceiling.primer",
+                    "name": "顶面墙固",
+                    "unit": "㎡",
+                    "quantity": 0,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 9.6,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "living.ceiling.putty",
+                    "name": "顶面腻子",
+                    "unit": "㎡",
+                    "quantity": 0,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 28,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "living.ceiling.latex",
+                    "name": "顶面乳胶漆",
+                    "unit": "㎡",
+                    "quantity": 0,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 17.6,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "living.ceiling.gypsum_line",
+                    "name": "顶面石膏线",
+                    "unit": "m",
+                    "quantity": 0,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 20,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "living.ceiling.curtain_box",
+                    "name": "窗帘盒",
+                    "unit": "m",
+                    "quantity": 0,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 126,
+                    "amount": 0,
+                    "included": false
+                  }
+                ]
+              },
+              {
+                "id": "wall",
+                "name": "墙面",
+                "amount": 0,
+                "items": [
+                  {
+                    "id": "living.wall.primer",
+                    "name": "墙面墙固",
+                    "unit": "㎡",
+                    "quantity": 0,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 9.6,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "living.wall.putty",
+                    "name": "墙面腻子",
+                    "unit": "㎡",
+                    "quantity": 0,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 28,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "living.wall.latex",
+                    "name": "墙面乳胶漆",
+                    "unit": "㎡",
+                    "quantity": 0,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 17.6,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "living.wall.tv_background",
+                    "name": "电视背景墙",
+                    "unit": "㎡",
+                    "quantity": 0,
+                    "materialUnitPrice": 400,
+                    "laborAuxUnitPrice": 80,
+                    "amount": 0,
+                    "included": false
+                  }
+                ]
+              },
+              {
+                "id": "floor",
+                "name": "地面",
+                "amount": 0,
+                "items": [
+                  {
+                    "id": "living.floor.tile",
+                    "name": "地砖铺贴",
+                    "unit": "㎡",
+                    "quantity": 0,
+                    "materialUnitPrice": 96,
+                    "laborAuxUnitPrice": 80,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "living.floor.seam",
+                    "name": "地砖美缝",
+                    "unit": "㎡",
+                    "quantity": 0,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 24,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "living.floor.skirting",
+                    "name": "踢脚线",
+                    "unit": "m",
+                    "quantity": 0,
+                    "materialUnitPrice": 8,
+                    "laborAuxUnitPrice": 24,
+                    "amount": 0,
+                    "included": false
+                  }
+                ]
+              },
+              {
+                "id": "threshold",
+                "name": "门槛石",
+                "amount": 0,
+                "items": [
+                  {
+                    "id": "living.threshold.stone",
+                    "name": "客餐厅门槛石",
+                    "unit": "块",
+                    "quantity": 0,
+                    "materialUnitPrice": 56,
+                    "laborAuxUnitPrice": 56,
+                    "amount": 0,
+                    "included": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "kitchen",
+            "name": "厨房",
+            "count": 0,
+            "amount": 0,
+            "groups": [
+              {
+                "id": "ceiling",
+                "name": "天花板",
+                "amount": 0,
+                "items": [
+                  {
+                    "id": "kitchen.ceiling.aluminum",
+                    "name": "铝扣板吊顶",
+                    "unit": "㎡",
+                    "quantity": 0,
+                    "materialUnitPrice": 112,
+                    "laborAuxUnitPrice": 16,
+                    "amount": 0,
+                    "included": false
+                  }
+                ]
+              },
+              {
+                "id": "wall",
+                "name": "墙面",
+                "amount": 0,
+                "items": [
+                  {
+                    "id": "kitchen.wall.tile",
+                    "name": "墙砖铺贴",
+                    "unit": "㎡",
+                    "quantity": 0,
+                    "materialUnitPrice": 72,
+                    "laborAuxUnitPrice": 80,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "kitchen.wall.pipe_wrap",
+                    "name": "厨房包管",
+                    "unit": "项",
+                    "quantity": 0,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 400,
+                    "amount": 0,
+                    "included": false
+                  }
+                ]
+              },
+              {
+                "id": "floor",
+                "name": "地面",
+                "amount": 0,
+                "items": [
+                  {
+                    "id": "kitchen.floor.leak",
+                    "name": "地面防漏处理",
+                    "unit": "㎡",
+                    "quantity": 0,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 52,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "kitchen.floor.tile",
+                    "name": "地砖铺贴",
+                    "unit": "㎡",
+                    "quantity": 0,
+                    "materialUnitPrice": 56,
+                    "laborAuxUnitPrice": 80,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "kitchen.floor.threshold",
+                    "name": "厨房门槛石",
+                    "unit": "块",
+                    "quantity": 0,
+                    "materialUnitPrice": 40,
+                    "laborAuxUnitPrice": 56,
+                    "amount": 0,
+                    "included": false
+                  }
+                ]
+              },
+              {
+                "id": "kitchenware",
+                "name": "厨具",
+                "amount": 0,
+                "items": [
+                  {
+                    "id": "kitchen.utensils.cabinet",
+                    "name": "橱柜",
+                    "unit": "m",
+                    "quantity": 0,
+                    "materialUnitPrice": 1600,
+                    "laborAuxUnitPrice": 0,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "kitchen.utensils.sink",
+                    "name": "水槽龙头",
+                    "unit": "套",
+                    "quantity": 0,
+                    "materialUnitPrice": 400,
+                    "laborAuxUnitPrice": 0,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "kitchen.utensils.hardware",
+                    "name": "五金安装",
+                    "unit": "项",
+                    "quantity": 1.2000000000000002,
+                    "materialUnitPrice": 80,
+                    "laborAuxUnitPrice": 4,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "kitchen.utensils.hood_stove",
+                    "name": "烟机灶具",
+                    "unit": "套",
+                    "quantity": 0,
+                    "materialUnitPrice": 2400,
+                    "laborAuxUnitPrice": 0,
+                    "amount": 0,
+                    "included": false
+                  }
+                ]
+              },
+              {
+                "id": "door",
+                "name": "室内门",
+                "amount": 0,
+                "items": [
+                  {
+                    "id": "kitchen.door.threshold",
+                    "name": "厨房门槛石",
+                    "unit": "块",
+                    "quantity": 0,
+                    "materialUnitPrice": 56,
+                    "laborAuxUnitPrice": 56,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "kitchen.door.sliding",
+                    "name": "厨房推拉门",
+                    "unit": "套",
+                    "quantity": 0,
+                    "materialUnitPrice": 1440,
+                    "laborAuxUnitPrice": 0,
+                    "amount": 0,
+                    "included": false
+                  }
+                ]
+              },
+              {
+                "id": "lighting",
+                "name": "灯具",
+                "amount": 0,
+                "items": [
+                  {
+                    "id": "kitchen.light.main",
+                    "name": "厨房灯",
+                    "unit": "套",
+                    "quantity": 0,
+                    "materialUnitPrice": 80,
+                    "laborAuxUnitPrice": 40,
+                    "amount": 0,
+                    "included": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "bathroom",
+            "name": "卫生间",
+            "count": 0,
+            "amount": 0,
+            "groups": [
+              {
+                "id": "ceiling",
+                "name": "天花板",
+                "amount": 0,
+                "items": [
+                  {
+                    "id": "bathroom.ceiling.aluminum",
+                    "name": "铝扣板吊顶",
+                    "unit": "㎡",
+                    "quantity": 0,
+                    "materialUnitPrice": 112,
+                    "laborAuxUnitPrice": 16,
+                    "amount": 0,
+                    "included": false
+                  }
+                ]
+              },
+              {
+                "id": "wall",
+                "name": "墙面",
+                "amount": 0,
+                "items": [
+                  {
+                    "id": "bathroom.wall.waterproof",
+                    "name": "墙面防水",
+                    "unit": "㎡",
+                    "quantity": 0,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 52,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "bathroom.wall.pipe",
+                    "name": "上下水管",
+                    "unit": "项",
+                    "quantity": 0,
+                    "materialUnitPrice": 56,
+                    "laborAuxUnitPrice": 0,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "bathroom.wall.vertical_pipe",
+                    "name": "立管包管",
+                    "unit": "项",
+                    "quantity": 0,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 280,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "bathroom.wall.tile",
+                    "name": "墙砖铺贴",
+                    "unit": "㎡",
+                    "quantity": 0,
+                    "materialUnitPrice": 64,
+                    "laborAuxUnitPrice": 80,
+                    "amount": 0,
+                    "included": false
+                  }
+                ]
+              },
+              {
+                "id": "floor",
+                "name": "地面",
+                "amount": 0,
+                "items": [
+                  {
+                    "id": "bathroom.floor.tile",
+                    "name": "地砖铺贴",
+                    "unit": "㎡",
+                    "quantity": 0,
+                    "materialUnitPrice": 56,
+                    "laborAuxUnitPrice": 80,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "bathroom.floor.sunken",
+                    "name": "下沉式沉箱处理",
+                    "unit": "㎡",
+                    "quantity": 0,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 224,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "bathroom.floor.threshold",
+                    "name": "卫生间门槛石",
+                    "unit": "块",
+                    "quantity": 0,
+                    "materialUnitPrice": 40,
+                    "laborAuxUnitPrice": 56,
+                    "amount": 0,
+                    "included": false
+                  }
+                ]
+              },
+              {
+                "id": "sanitary",
+                "name": "卫浴用具",
+                "amount": 0,
+                "items": [
+                  {
+                    "id": "bathroom.fixtures.toilet",
+                    "name": "马桶",
+                    "unit": "套",
+                    "quantity": 0,
+                    "materialUnitPrice": 800,
+                    "laborAuxUnitPrice": 160,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "bathroom.fixtures.basin",
+                    "name": "洗手盆",
+                    "unit": "套",
+                    "quantity": 0,
+                    "materialUnitPrice": 1280,
+                    "laborAuxUnitPrice": 40,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "bathroom.fixtures.shower",
+                    "name": "花洒",
+                    "unit": "套",
+                    "quantity": 0,
+                    "materialUnitPrice": 680,
+                    "laborAuxUnitPrice": 0,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "bathroom.fixtures.heater",
+                    "name": "风暖浴霸",
+                    "unit": "个",
+                    "quantity": 0,
+                    "materialUnitPrice": 800,
+                    "laborAuxUnitPrice": 0,
+                    "amount": 0,
+                    "included": false
+                  }
+                ]
+              },
+              {
+                "id": "door",
+                "name": "室内门",
+                "amount": 0,
+                "items": [
+                  {
+                    "id": "bathroom.door.threshold",
+                    "name": "卫生间门槛石",
+                    "unit": "块",
+                    "quantity": 0,
+                    "materialUnitPrice": 56,
+                    "laborAuxUnitPrice": 56,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "bathroom.door.aluminum",
+                    "name": "铝合金门",
+                    "unit": "套",
+                    "quantity": 0,
+                    "materialUnitPrice": 880,
+                    "laborAuxUnitPrice": 0,
+                    "amount": 0,
+                    "included": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "balcony",
+            "name": "阳台",
+            "count": 0,
+            "amount": 0,
+            "groups": [
+              {
+                "id": "ceiling",
+                "name": "天花板",
+                "amount": 0,
+                "items": [
+                  {
+                    "id": "balcony.ceiling.primer",
+                    "name": "顶面墙固",
+                    "unit": "㎡",
+                    "quantity": 0,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 9.6,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "balcony.ceiling.putty",
+                    "name": "顶面腻子",
+                    "unit": "㎡",
+                    "quantity": 0,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 28,
+                    "amount": 0,
+                    "included": false
+                  },
+                  {
+                    "id": "balcony.ceiling.latex",
+                    "name": "顶面乳胶漆",
+                    "unit": "㎡",
+                    "quantity": 0,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 17.6,
+                    "amount": 0,
+                    "included": false
+                  }
+                ]
+              },
+              {
+                "id": "wall",
+                "name": "墙面",
+                "amount": 0,
+                "items": [
+                  {
+                    "id": "balcony.wall.vertical_pipe",
+                    "name": "阳台立管",
+                    "unit": "项",
+                    "quantity": 0,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 280,
+                    "amount": 0,
+                    "included": false
+                  }
+                ]
+              },
+              {
+                "id": "floor",
+                "name": "地面",
+                "amount": 0,
+                "items": [
+                  {
+                    "id": "balcony.floor.tile",
+                    "name": "地砖铺贴",
+                    "unit": "㎡",
+                    "quantity": 0,
+                    "materialUnitPrice": 56,
+                    "laborAuxUnitPrice": 80,
+                    "amount": 0,
+                    "included": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "common",
+            "name": "全屋公共",
+            "count": 1,
+            "amount": 2794,
+            "groups": [
+              {
+                "id": "utilities",
+                "name": "水电改造",
+                "amount": 2394,
+                "items": [
+                  {
+                    "id": "common.utilities.switch_wiring",
+                    "name": "开关插座布线",
+                    "unit": "位",
+                    "quantity": 7.199999999999999,
+                    "materialUnitPrice": 38.5,
+                    "laborAuxUnitPrice": 35.75,
+                    "amount": 535,
+                    "included": true
+                  },
+                  {
+                    "id": "common.utilities.network_tv",
+                    "name": "网络电视点位",
+                    "unit": "位",
+                    "quantity": 1,
+                    "materialUnitPrice": 77,
+                    "laborAuxUnitPrice": 71.5,
+                    "amount": 149,
+                    "included": true
+                  },
+                  {
+                    "id": "common.utilities.switch_install",
+                    "name": "开关插座安装",
+                    "unit": "位",
+                    "quantity": 7.199999999999999,
+                    "materialUnitPrice": 16.5,
+                    "laborAuxUnitPrice": 5.5,
+                    "amount": 158,
+                    "included": true
+                  },
+                  {
+                    "id": "common.utilities.electric_box",
+                    "name": "电箱",
+                    "unit": "个",
+                    "quantity": 2,
+                    "materialUnitPrice": 165,
+                    "laborAuxUnitPrice": 220,
+                    "amount": 770,
+                    "included": true
+                  },
+                  {
+                    "id": "common.utilities.water_pipe",
+                    "name": "给水管",
+                    "unit": "m",
+                    "quantity": 4.800000000000001,
+                    "materialUnitPrice": 23.65,
+                    "laborAuxUnitPrice": 24.75,
+                    "amount": 232,
+                    "included": true
+                  },
+                  {
+                    "id": "common.utilities.channel_repair",
+                    "name": "开槽修复",
+                    "unit": "项",
+                    "quantity": 1,
+                    "materialUnitPrice": 110,
+                    "laborAuxUnitPrice": 440,
+                    "amount": 550,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "handling",
+                "name": "搬运清洁",
+                "amount": 288,
+                "items": [
+                  {
+                    "id": "common.cleaning.handling",
+                    "name": "材料搬运",
+                    "unit": "㎡",
+                    "quantity": 12,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 8,
+                    "amount": 96,
+                    "included": true
+                  },
+                  {
+                    "id": "common.cleaning.daily",
+                    "name": "日常保洁",
+                    "unit": "㎡",
+                    "quantity": 12,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 6.4,
+                    "amount": 77,
+                    "included": true
+                  },
+                  {
+                    "id": "common.cleaning.garbage",
+                    "name": "垃圾清运",
+                    "unit": "㎡",
+                    "quantity": 12,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 9.6,
+                    "amount": 115,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "demolition",
+                "name": "拆改与保护",
+                "amount": 112,
+                "items": [
+                  {
+                    "id": "common.protection.corner",
+                    "name": "阴阳角处理",
+                    "unit": "㎡",
+                    "quantity": 12,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 4.8,
+                    "amount": 58,
+                    "included": true
+                  },
+                  {
+                    "id": "common.protection.finished",
+                    "name": "成品保护",
+                    "unit": "㎡",
+                    "quantity": 12,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 4.48,
+                    "amount": 54,
+                    "included": true
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "name": "估算200㎡双层",
+    "input": {
+      "province": "福建",
+      "city": "泉州",
+      "area": 200,
+      "width": 10,
+      "depth": 10,
+      "floorCount": 2,
+      "height": 3.5,
+      "houseType": "new",
+      "standard": "standard",
+      "style": "现代简约",
+      "rooms": {
+        "bedroom": 3,
+        "living": 2,
+        "kitchen": 1,
+        "bathroom": 2,
+        "balcony": 1
+      }
+    },
+    "selections": {
+      "excludedItems": [],
+      "quantities": {},
+      "fees": {
+        "management": true,
+        "design": true,
+        "tax": false
+      }
+    },
+    "report": {
+      "version": 5,
+      "estimatedTotalCost": "21.32万元",
+      "estimatedUnitCost": "1065.94元/㎡",
+      "totalLabel": "装修参考总价",
+      "unitLabel": "参考单价",
+      "basicInfo": [
+        {
+          "label": "所在地区",
+          "value": "福建 / 泉州",
+          "fullWidth": true
+        },
+        {
+          "label": "装修面积",
+          "value": "200㎡"
+        },
+        {
+          "label": "房屋状态",
+          "value": "新房"
+        },
+        {
+          "label": "楼层数",
+          "value": "2层"
+        },
+        {
+          "label": "层高",
+          "value": "3.5m"
+        },
+        {
+          "label": "面宽",
+          "value": "10m"
+        },
+        {
+          "label": "进深",
+          "value": "10m"
+        },
+        {
+          "label": "户型",
+          "value": "3室2厅1厨2卫1阳台"
+        },
+        {
+          "label": "室内风格",
+          "value": "现代简约"
+        },
+        {
+          "label": "装修标准",
+          "value": "标准型"
+        }
+      ],
+      "costBreakdown": [
+        {
+          "name": "主材费",
+          "amount": 91091,
+          "amountText": "91,091元",
+          "percent": 42.73,
+          "note": "工程费",
+          "estimable": true
+        },
+        {
+          "name": "辅材费",
+          "amount": 28202,
+          "amountText": "28,202元",
+          "percent": 13.23,
+          "note": "工程费",
+          "estimable": true
+        },
+        {
+          "name": "人工费",
+          "amount": 67714,
+          "amountText": "67,714元",
+          "percent": 31.76,
+          "note": "工程费",
+          "estimable": true
+        },
+        {
+          "name": "管理费",
+          "amount": 18701,
+          "amountText": "18,701元",
+          "percent": 8.77,
+          "note": "附加费",
+          "estimable": true
+        },
+        {
+          "name": "设计费",
+          "amount": 7480,
+          "amountText": "7,480元",
+          "percent": 3.51,
+          "note": "附加费",
+          "estimable": true
+        },
+        {
+          "name": "税费",
+          "amount": 0,
+          "amountText": "未计入",
+          "percent": 0,
+          "note": "附加费",
+          "estimable": true
+        }
+      ],
+      "dynamicNotes": [],
+      "quoteType": "renovation",
+      "renovation": {
+        "pricingVersion": "renovation-dynamic-v2",
+        "quantityBasis": "estimated",
+        "totalAmount": 213188,
+        "spaces": [
+          {
+            "id": "bedroom",
+            "name": "卧室",
+            "count": 3,
+            "amount": 35675,
+            "groups": [
+              {
+                "id": "ceiling",
+                "name": "天花板",
+                "amount": 6185,
+                "items": [
+                  {
+                    "id": "bedroom.ceiling.primer",
+                    "name": "顶面墙固",
+                    "unit": "㎡",
+                    "quantity": 70.303031,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 9.6,
+                    "amount": 675,
+                    "included": true
+                  },
+                  {
+                    "id": "bedroom.ceiling.putty",
+                    "name": "顶面腻子",
+                    "unit": "㎡",
+                    "quantity": 70.303031,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 28,
+                    "amount": 1968,
+                    "included": true
+                  },
+                  {
+                    "id": "bedroom.ceiling.latex",
+                    "name": "顶面乳胶漆",
+                    "unit": "㎡",
+                    "quantity": 70.303031,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 17.6,
+                    "amount": 1237,
+                    "included": true
+                  },
+                  {
+                    "id": "bedroom.ceiling.gypsum_line",
+                    "name": "顶面石膏线",
+                    "unit": "m",
+                    "quantity": 58.023861,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 28,
+                    "amount": 1625,
+                    "included": true
+                  },
+                  {
+                    "id": "bedroom.ceiling.curtain_box",
+                    "name": "窗帘盒",
+                    "unit": "m",
+                    "quantity": 5.4,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 126,
+                    "amount": 680,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "wall",
+                "name": "墙面",
+                "amount": 8935,
+                "items": [
+                  {
+                    "id": "bedroom.wall.primer",
+                    "name": "墙面墙固",
+                    "unit": "㎡",
+                    "quantity": 189.313514,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 9.6,
+                    "amount": 1817,
+                    "included": true
+                  },
+                  {
+                    "id": "bedroom.wall.putty",
+                    "name": "墙面腻子",
+                    "unit": "㎡",
+                    "quantity": 189.313514,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 28,
+                    "amount": 5301,
+                    "included": true
+                  },
+                  {
+                    "id": "bedroom.wall.mesh",
+                    "name": "墙面挂网",
+                    "unit": "㎡",
+                    "quantity": 189.313514,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 9.6,
+                    "amount": 1817,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "floor",
+                "name": "地面",
+                "amount": 16955,
+                "items": [
+                  {
+                    "id": "bedroom.floor.seam",
+                    "name": "地砖美缝",
+                    "unit": "㎡",
+                    "quantity": 70.303031,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 24,
+                    "amount": 1687,
+                    "included": true
+                  },
+                  {
+                    "id": "bedroom.floor.tile",
+                    "name": "地砖铺贴",
+                    "unit": "㎡",
+                    "quantity": 70.303031,
+                    "materialUnitPrice": 112,
+                    "laborAuxUnitPrice": 80,
+                    "amount": 13498,
+                    "included": true
+                  },
+                  {
+                    "id": "bedroom.floor.skirting",
+                    "name": "踢脚线",
+                    "unit": "m",
+                    "quantity": 55.323861,
+                    "materialUnitPrice": 8,
+                    "laborAuxUnitPrice": 24,
+                    "amount": 1770,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "door",
+                "name": "室内门",
+                "amount": 3600,
+                "items": [
+                  {
+                    "id": "bedroom.door.bedroom_door",
+                    "name": "卧室门",
+                    "unit": "套",
+                    "quantity": 3,
+                    "materialUnitPrice": 1200,
+                    "laborAuxUnitPrice": 0,
+                    "amount": 3600,
+                    "included": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "living",
+            "name": "客餐厅",
+            "count": 2,
+            "amount": 54520,
+            "groups": [
+              {
+                "id": "ceiling",
+                "name": "天花板",
+                "amount": 5931,
+                "items": [
+                  {
+                    "id": "living.ceiling.primer",
+                    "name": "顶面墙固",
+                    "unit": "㎡",
+                    "quantity": 80.80808,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 9.6,
+                    "amount": 776,
+                    "included": true
+                  },
+                  {
+                    "id": "living.ceiling.putty",
+                    "name": "顶面腻子",
+                    "unit": "㎡",
+                    "quantity": 80.80808,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 28,
+                    "amount": 2263,
+                    "included": true
+                  },
+                  {
+                    "id": "living.ceiling.latex",
+                    "name": "顶面乳胶漆",
+                    "unit": "㎡",
+                    "quantity": 80.80808,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 17.6,
+                    "amount": 1422,
+                    "included": true
+                  },
+                  {
+                    "id": "living.ceiling.gypsum_line",
+                    "name": "顶面石膏线",
+                    "unit": "m",
+                    "quantity": 50.787574,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 20,
+                    "amount": 1016,
+                    "included": true
+                  },
+                  {
+                    "id": "living.ceiling.curtain_box",
+                    "name": "窗帘盒",
+                    "unit": "m",
+                    "quantity": 3.6,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 126,
+                    "amount": 454,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "wall",
+                "name": "墙面",
+                "amount": 30636,
+                "items": [
+                  {
+                    "id": "living.wall.primer",
+                    "name": "墙面墙固",
+                    "unit": "㎡",
+                    "quantity": 168.576509,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 9.6,
+                    "amount": 1618,
+                    "included": true
+                  },
+                  {
+                    "id": "living.wall.putty",
+                    "name": "墙面腻子",
+                    "unit": "㎡",
+                    "quantity": 168.576509,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 28,
+                    "amount": 4720,
+                    "included": true
+                  },
+                  {
+                    "id": "living.wall.latex",
+                    "name": "墙面乳胶漆",
+                    "unit": "㎡",
+                    "quantity": 168.576509,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 17.6,
+                    "amount": 2967,
+                    "included": true
+                  },
+                  {
+                    "id": "living.wall.tv_background",
+                    "name": "电视背景墙",
+                    "unit": "㎡",
+                    "quantity": 44.439127,
+                    "materialUnitPrice": 400,
+                    "laborAuxUnitPrice": 80,
+                    "amount": 21331,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "floor",
+                "name": "地面",
+                "amount": 17729,
+                "items": [
+                  {
+                    "id": "living.floor.tile",
+                    "name": "地砖铺贴",
+                    "unit": "㎡",
+                    "quantity": 80.80808,
+                    "materialUnitPrice": 96,
+                    "laborAuxUnitPrice": 80,
+                    "amount": 14222,
+                    "included": true
+                  },
+                  {
+                    "id": "living.floor.seam",
+                    "name": "地砖美缝",
+                    "unit": "㎡",
+                    "quantity": 80.80808,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 24,
+                    "amount": 1939,
+                    "included": true
+                  },
+                  {
+                    "id": "living.floor.skirting",
+                    "name": "踢脚线",
+                    "unit": "m",
+                    "quantity": 48.987574,
+                    "materialUnitPrice": 8,
+                    "laborAuxUnitPrice": 24,
+                    "amount": 1568,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "threshold",
+                "name": "门槛石",
+                "amount": 224,
+                "items": [
+                  {
+                    "id": "living.threshold.stone",
+                    "name": "客餐厅门槛石",
+                    "unit": "块",
+                    "quantity": 2,
+                    "materialUnitPrice": 56,
+                    "laborAuxUnitPrice": 56,
+                    "amount": 224,
+                    "included": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "kitchen",
+            "name": "厨房",
+            "count": 1,
+            "amount": 32686,
+            "groups": [
+              {
+                "id": "ceiling",
+                "name": "天花板",
+                "amount": 2276,
+                "items": [
+                  {
+                    "id": "kitchen.ceiling.aluminum",
+                    "name": "铝扣板吊顶",
+                    "unit": "㎡",
+                    "quantity": 17.777778,
+                    "materialUnitPrice": 112,
+                    "laborAuxUnitPrice": 16,
+                    "amount": 2276,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "wall",
+                "name": "墙面",
+                "amount": 8768,
+                "items": [
+                  {
+                    "id": "kitchen.wall.tile",
+                    "name": "墙砖铺贴",
+                    "unit": "㎡",
+                    "quantity": 54.609361,
+                    "materialUnitPrice": 72,
+                    "laborAuxUnitPrice": 80,
+                    "amount": 8301,
+                    "included": true
+                  },
+                  {
+                    "id": "kitchen.wall.pipe_wrap",
+                    "name": "厨房包管",
+                    "unit": "项",
+                    "quantity": 1.166667,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 400,
+                    "amount": 467,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "floor",
+                "name": "地面",
+                "amount": 3438,
+                "items": [
+                  {
+                    "id": "kitchen.floor.leak",
+                    "name": "地面防漏处理",
+                    "unit": "㎡",
+                    "quantity": 17.777778,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 52,
+                    "amount": 924,
+                    "included": true
+                  },
+                  {
+                    "id": "kitchen.floor.tile",
+                    "name": "地砖铺贴",
+                    "unit": "㎡",
+                    "quantity": 17.777778,
+                    "materialUnitPrice": 56,
+                    "laborAuxUnitPrice": 80,
+                    "amount": 2418,
+                    "included": true
+                  },
+                  {
+                    "id": "kitchen.floor.threshold",
+                    "name": "厨房门槛石",
+                    "unit": "块",
+                    "quantity": 1,
+                    "materialUnitPrice": 40,
+                    "laborAuxUnitPrice": 56,
+                    "amount": 96,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "kitchenware",
+                "name": "厨具",
+                "amount": 16532,
+                "items": [
+                  {
+                    "id": "kitchen.utensils.cabinet",
+                    "name": "橱柜",
+                    "unit": "m",
+                    "quantity": 7.53274,
+                    "materialUnitPrice": 1600,
+                    "laborAuxUnitPrice": 0,
+                    "amount": 12052,
+                    "included": true
+                  },
+                  {
+                    "id": "kitchen.utensils.sink",
+                    "name": "水槽龙头",
+                    "unit": "套",
+                    "quantity": 1,
+                    "materialUnitPrice": 400,
+                    "laborAuxUnitPrice": 0,
+                    "amount": 400,
+                    "included": true
+                  },
+                  {
+                    "id": "kitchen.utensils.hardware",
+                    "name": "五金安装",
+                    "unit": "项",
+                    "quantity": 20,
+                    "materialUnitPrice": 80,
+                    "laborAuxUnitPrice": 4,
+                    "amount": 1680,
+                    "included": true
+                  },
+                  {
+                    "id": "kitchen.utensils.hood_stove",
+                    "name": "烟机灶具",
+                    "unit": "套",
+                    "quantity": 1,
+                    "materialUnitPrice": 2400,
+                    "laborAuxUnitPrice": 0,
+                    "amount": 2400,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "door",
+                "name": "室内门",
+                "amount": 1552,
+                "items": [
+                  {
+                    "id": "kitchen.door.threshold",
+                    "name": "厨房门槛石",
+                    "unit": "块",
+                    "quantity": 1,
+                    "materialUnitPrice": 56,
+                    "laborAuxUnitPrice": 56,
+                    "amount": 112,
+                    "included": true
+                  },
+                  {
+                    "id": "kitchen.door.sliding",
+                    "name": "厨房推拉门",
+                    "unit": "套",
+                    "quantity": 1,
+                    "materialUnitPrice": 1440,
+                    "laborAuxUnitPrice": 0,
+                    "amount": 1440,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "lighting",
+                "name": "灯具",
+                "amount": 120,
+                "items": [
+                  {
+                    "id": "kitchen.light.main",
+                    "name": "厨房灯",
+                    "unit": "套",
+                    "quantity": 1,
+                    "materialUnitPrice": 80,
+                    "laborAuxUnitPrice": 40,
+                    "amount": 120,
+                    "included": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "bathroom",
+            "name": "卫生间",
+            "count": 2,
+            "amount": 36252,
+            "groups": [
+              {
+                "id": "ceiling",
+                "name": "天花板",
+                "amount": 2586,
+                "items": [
+                  {
+                    "id": "bathroom.ceiling.aluminum",
+                    "name": "铝扣板吊顶",
+                    "unit": "㎡",
+                    "quantity": 20.20202,
+                    "materialUnitPrice": 112,
+                    "laborAuxUnitPrice": 16,
+                    "amount": 2586,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "wall",
+                "name": "墙面",
+                "amount": 16698,
+                "items": [
+                  {
+                    "id": "bathroom.wall.waterproof",
+                    "name": "墙面防水",
+                    "unit": "㎡",
+                    "quantity": 81.289186,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 52,
+                    "amount": 4227,
+                    "included": true
+                  },
+                  {
+                    "id": "bathroom.wall.pipe",
+                    "name": "上下水管",
+                    "unit": "项",
+                    "quantity": 2,
+                    "materialUnitPrice": 56,
+                    "laborAuxUnitPrice": 0,
+                    "amount": 112,
+                    "included": true
+                  },
+                  {
+                    "id": "bathroom.wall.vertical_pipe",
+                    "name": "立管包管",
+                    "unit": "项",
+                    "quantity": 2.333334,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 280,
+                    "amount": 653,
+                    "included": true
+                  },
+                  {
+                    "id": "bathroom.wall.tile",
+                    "name": "墙砖铺贴",
+                    "unit": "㎡",
+                    "quantity": 81.289186,
+                    "materialUnitPrice": 64,
+                    "laborAuxUnitPrice": 80,
+                    "amount": 11706,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "floor",
+                "name": "地面",
+                "amount": 7464,
+                "items": [
+                  {
+                    "id": "bathroom.floor.tile",
+                    "name": "地砖铺贴",
+                    "unit": "㎡",
+                    "quantity": 20.20202,
+                    "materialUnitPrice": 56,
+                    "laborAuxUnitPrice": 80,
+                    "amount": 2747,
+                    "included": true
+                  },
+                  {
+                    "id": "bathroom.floor.sunken",
+                    "name": "下沉式沉箱处理",
+                    "unit": "㎡",
+                    "quantity": 20.20202,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 224,
+                    "amount": 4525,
+                    "included": true
+                  },
+                  {
+                    "id": "bathroom.floor.threshold",
+                    "name": "卫生间门槛石",
+                    "unit": "块",
+                    "quantity": 2,
+                    "materialUnitPrice": 40,
+                    "laborAuxUnitPrice": 56,
+                    "amount": 192,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "sanitary",
+                "name": "卫浴用具",
+                "amount": 7520,
+                "items": [
+                  {
+                    "id": "bathroom.fixtures.toilet",
+                    "name": "马桶",
+                    "unit": "套",
+                    "quantity": 2,
+                    "materialUnitPrice": 800,
+                    "laborAuxUnitPrice": 160,
+                    "amount": 1920,
+                    "included": true
+                  },
+                  {
+                    "id": "bathroom.fixtures.basin",
+                    "name": "洗手盆",
+                    "unit": "套",
+                    "quantity": 2,
+                    "materialUnitPrice": 1280,
+                    "laborAuxUnitPrice": 40,
+                    "amount": 2640,
+                    "included": true
+                  },
+                  {
+                    "id": "bathroom.fixtures.shower",
+                    "name": "花洒",
+                    "unit": "套",
+                    "quantity": 2,
+                    "materialUnitPrice": 680,
+                    "laborAuxUnitPrice": 0,
+                    "amount": 1360,
+                    "included": true
+                  },
+                  {
+                    "id": "bathroom.fixtures.heater",
+                    "name": "风暖浴霸",
+                    "unit": "个",
+                    "quantity": 2,
+                    "materialUnitPrice": 800,
+                    "laborAuxUnitPrice": 0,
+                    "amount": 1600,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "door",
+                "name": "室内门",
+                "amount": 1984,
+                "items": [
+                  {
+                    "id": "bathroom.door.threshold",
+                    "name": "卫生间门槛石",
+                    "unit": "块",
+                    "quantity": 2,
+                    "materialUnitPrice": 56,
+                    "laborAuxUnitPrice": 56,
+                    "amount": 224,
+                    "included": true
+                  },
+                  {
+                    "id": "bathroom.door.aluminum",
+                    "name": "铝合金门",
+                    "unit": "套",
+                    "quantity": 2,
+                    "materialUnitPrice": 880,
+                    "laborAuxUnitPrice": 0,
+                    "amount": 1760,
+                    "included": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "balcony",
+            "name": "阳台",
+            "count": 1,
+            "amount": 2413,
+            "groups": [
+              {
+                "id": "ceiling",
+                "name": "天花板",
+                "amount": 602,
+                "items": [
+                  {
+                    "id": "balcony.ceiling.primer",
+                    "name": "顶面墙固",
+                    "unit": "㎡",
+                    "quantity": 10.909091,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 9.6,
+                    "amount": 105,
+                    "included": true
+                  },
+                  {
+                    "id": "balcony.ceiling.putty",
+                    "name": "顶面腻子",
+                    "unit": "㎡",
+                    "quantity": 10.909091,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 28,
+                    "amount": 305,
+                    "included": true
+                  },
+                  {
+                    "id": "balcony.ceiling.latex",
+                    "name": "顶面乳胶漆",
+                    "unit": "㎡",
+                    "quantity": 10.909091,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 17.6,
+                    "amount": 192,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "wall",
+                "name": "墙面",
+                "amount": 327,
+                "items": [
+                  {
+                    "id": "balcony.wall.vertical_pipe",
+                    "name": "阳台立管",
+                    "unit": "项",
+                    "quantity": 1.166667,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 280,
+                    "amount": 327,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "floor",
+                "name": "地面",
+                "amount": 1484,
+                "items": [
+                  {
+                    "id": "balcony.floor.tile",
+                    "name": "地砖铺贴",
+                    "unit": "㎡",
+                    "quantity": 10.909091,
+                    "materialUnitPrice": 56,
+                    "laborAuxUnitPrice": 80,
+                    "amount": 1484,
+                    "included": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "common",
+            "name": "全屋公共",
+            "count": 1,
+            "amount": 25461,
+            "groups": [
+              {
+                "id": "utilities",
+                "name": "水电改造",
+                "amount": 18805,
+                "items": [
+                  {
+                    "id": "common.utilities.switch_wiring",
+                    "name": "开关插座布线",
+                    "unit": "位",
+                    "quantity": 120,
+                    "materialUnitPrice": 38.5,
+                    "laborAuxUnitPrice": 35.75,
+                    "amount": 8910,
+                    "included": true
+                  },
+                  {
+                    "id": "common.utilities.network_tv",
+                    "name": "网络电视点位",
+                    "unit": "位",
+                    "quantity": 5,
+                    "materialUnitPrice": 77,
+                    "laborAuxUnitPrice": 71.5,
+                    "amount": 743,
+                    "included": true
+                  },
+                  {
+                    "id": "common.utilities.switch_install",
+                    "name": "开关插座安装",
+                    "unit": "位",
+                    "quantity": 120,
+                    "materialUnitPrice": 16.5,
+                    "laborAuxUnitPrice": 5.5,
+                    "amount": 2640,
+                    "included": true
+                  },
+                  {
+                    "id": "common.utilities.electric_box",
+                    "name": "电箱",
+                    "unit": "个",
+                    "quantity": 4,
+                    "materialUnitPrice": 165,
+                    "laborAuxUnitPrice": 220,
+                    "amount": 1540,
+                    "included": true
+                  },
+                  {
+                    "id": "common.utilities.water_pipe",
+                    "name": "给水管",
+                    "unit": "m",
+                    "quantity": 80,
+                    "materialUnitPrice": 23.65,
+                    "laborAuxUnitPrice": 24.75,
+                    "amount": 3872,
+                    "included": true
+                  },
+                  {
+                    "id": "common.utilities.channel_repair",
+                    "name": "开槽修复",
+                    "unit": "项",
+                    "quantity": 2,
+                    "materialUnitPrice": 110,
+                    "laborAuxUnitPrice": 440,
+                    "amount": 1100,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "handling",
+                "name": "搬运清洁",
+                "amount": 4800,
+                "items": [
+                  {
+                    "id": "common.cleaning.handling",
+                    "name": "材料搬运",
+                    "unit": "㎡",
+                    "quantity": 200,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 8,
+                    "amount": 1600,
+                    "included": true
+                  },
+                  {
+                    "id": "common.cleaning.daily",
+                    "name": "日常保洁",
+                    "unit": "㎡",
+                    "quantity": 200,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 6.4,
+                    "amount": 1280,
+                    "included": true
+                  },
+                  {
+                    "id": "common.cleaning.garbage",
+                    "name": "垃圾清运",
+                    "unit": "㎡",
+                    "quantity": 200,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 9.6,
+                    "amount": 1920,
+                    "included": true
+                  }
+                ]
+              },
+              {
+                "id": "demolition",
+                "name": "拆改与保护",
+                "amount": 1856,
+                "items": [
+                  {
+                    "id": "common.protection.corner",
+                    "name": "阴阳角处理",
+                    "unit": "㎡",
+                    "quantity": 200,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 4.8,
+                    "amount": 960,
+                    "included": true
+                  },
+                  {
+                    "id": "common.protection.finished",
+                    "name": "成品保护",
+                    "unit": "㎡",
+                    "quantity": 200,
+                    "materialUnitPrice": 0,
+                    "laborAuxUnitPrice": 4.48,
+                    "amount": 896,
+                    "included": true
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  }
+]

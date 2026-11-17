@@ -3,6 +3,7 @@
     <view class="eyebrow">装修参考总价</view>
     <view class="total"><text>{{totalWan}}</text><text>万元</text></view>
     <view class="total-meta">{{totalAmountText}} · {{unitText}}</view>
+    <view class="quantity-basis" wx:if="{{basisText}}">{{basisText}}</view>
     <view class="chart-row">
       <view class="ring" style="{{ringStyle}}"><view class="ring-hole"><text>工程费</text><text>{{engineeringText}}</text></view></view>
       <view class="legend"><view><view class="dot gold"></view><text>主材</text><text>{{materialText}}</text></view><view><view class="dot green"></view><text>辅材</text><text>{{auxiliaryText}}</text></view><view><view class="dot blue"></view><text>人工</text><text>{{laborText}}</text></view></view>

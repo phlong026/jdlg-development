@@ -109,6 +109,26 @@ test('renovation create signs the independent v5 path and strips non-contract ne
   assert.equal('private' in h.requests[0].data.renovation.spaces[0].groups[0].items[0], false);
 });
 
+test('public renovation snapshots preserve their pricing version for both reference and dynamic quantities', () => {
+  const h = loadClient([]);
+  for (const version of ['renovation-reference-v1', 'renovation-dynamic-v2']) {
+    const source = JSON.parse(JSON.stringify(renovationReport));
+    source.renovation.pricingVersion = version;
+    if (version === 'renovation-dynamic-v2') source.renovation.quantityBasis = 'mixed';
+    assert.equal(h.api.isCostEstimateShareResult(source), true, version);
+    const snapshot = h.api.sanitizeCostEstimateShareResult(source);
+    assert.equal(snapshot.renovation.pricingVersion, version);
+    assert.equal(snapshot.renovation.quantityBasis, version === 'renovation-dynamic-v2' ? 'mixed' : undefined);
+    assert.equal(snapshot.renovation.spaces[0].groups[0].items[0].quantity, 1);
+  }
+  const unknown = JSON.parse(JSON.stringify(renovationReport));
+  unknown.renovation.pricingVersion = 'unknown-dynamic-v99';
+  assert.equal(h.api.isCostEstimateShareResult(unknown), false);
+  const noBasis = JSON.parse(JSON.stringify(renovationReport));
+  noBasis.renovation.pricingVersion = 'renovation-dynamic-v2';
+  assert.equal(h.api.isCostEstimateShareResult(noBasis), false);
+});
+
 test('renovation rejects a tree-balanced item amount that does not equal rounded quantity times unit prices', () => {
   const h = loadClient([]);
   const forged = JSON.parse(JSON.stringify(renovationReport));

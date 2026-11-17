@@ -7,6 +7,7 @@ const ts = require('./report-runtime')('typescript');
 const pricing = require('../miniprogram/utils/renovation-pricing');
 const utils = path.join(__dirname, '../miniprogram/utils');
 const plain = value => JSON.parse(JSON.stringify(value));
+const legacyRecord = require('./fixtures/renovation-reference-v1.json');
 
 function load() {
   const client = { exports: {}, require: () => ({}) };
@@ -60,7 +61,7 @@ test('private cache is isolated by the current account and never writes the buil
   const selections = { excludedItems: [], quantities: {}, fees: { management: true, design: true, tax: false } };
   const record = h.api.writeRenovationReport(estimate, selections);
   assert.equal(record.userID, 7);
-  assert.equal(h.api.readRenovationReport().report.renovation.totalAmount, 97814);
+  assert.equal(h.api.readRenovationReport().report.renovation.totalAmount, estimate.totalAmount);
   assert.equal(h.storage.has('aicostEstimateResult:7'), false);
   selections.excludedItems.push('later-edit');
   assert.deepEqual(plain(h.api.readRenovationReport().selections.excludedItems), []);
@@ -71,6 +72,55 @@ test('private cache is isolated by the current account and never writes the buil
   h.storage.set('userInfo', { id: 7, token: 'stale-token' });
   assert.equal(h.api.getBudgetAccountId(), 0);
   assert.throws(() => h.api.writeRenovationReport(estimate, selections), /登录/);
+});
+
+test('new dynamic reports keep private measurement provenance while old v1 reports retain their frozen prices', () => {
+  const h = load();
+  h.storage.set('renovationBudgetResult:7', plain(legacyRecord));
+  const before = JSON.stringify(h.storage.get('renovationBudgetResult:7'));
+  const old = h.api.readRenovationReport();
+  assert.equal(old.report.renovation.pricingVersion, 'renovation-reference-v1');
+  assert.equal(old.report.renovation.totalAmount, 97814);
+  assert.equal(JSON.stringify(h.storage.get('renovationBudgetResult:7')), before);
+  const estimate = pricing.estimateRenovation(old.input, old.selections);
+  const saved = h.api.writeRenovationReport(estimate, old.selections);
+  assert.equal(saved.version, 2);
+  assert.equal(saved.report.renovation.pricingVersion, 'renovation-dynamic-v2');
+  assert.deepEqual(plain(saved.quantityBasis), plain(estimate.geometrySummary));
+  assert.equal('measurement' in saved.report.renovation, false);
+  assert.equal('geometrySummary' in saved.report.renovation, false);
+  assert.equal(h.validator(saved.report), true);
+});
+
+test('real dynamic engine and adapter reproduce the snapshots consumed by the Go contract tests', () => {
+  const h = load();
+  const cases = require('./fixtures/renovation-dynamic-v2.json');
+  for (const fixture of cases) {
+    const estimate = pricing.estimateRenovation(fixture.input, fixture.selections);
+    const snapshot = h.api.estimateToSnapshot(estimate);
+    assert.deepEqual(plain(snapshot), fixture.report, fixture.name);
+    assert.equal(h.validator(snapshot), true);
+    assert.equal(Buffer.byteLength(JSON.stringify(snapshot)) < 64 * 1024, true);
+    if (fixture.name === '实测12㎡') {
+      assert.equal(estimate.input.area, 12);
+      assert.equal(estimate.engineeringAmount, 10039);
+      assert.equal(estimate.totalAmount, 11445);
+    }
+  }
+});
+
+test('public height information follows actual floor or room overrides without exposing raw room dimensions', () => {
+  const h = load();
+  const input = plain(require('./fixtures/renovation-dynamic-v2.json')[0].input);
+  input.measurement.floors[0].height = 4;
+  let report = h.api.estimateToSnapshot(pricing.estimateRenovation(input));
+  assert.equal(report.basicInfo.find(item => item.label === '层高').value, '4m');
+  const second = plain(input.measurement.floors[0]); second.index = 1;
+  second.spaces[0].id = '1.bedroom.0'; second.height = 3;
+  input.measurement.floors.push(second);
+  report = h.api.estimateToSnapshot(pricing.estimateRenovation(input));
+  assert.equal(report.basicInfo.find(item => item.label === '层高').value, '分层/空间设置');
+  assert.equal('measurement' in report.renovation, false);
 });
 
 test('storage failures surface before opening a result and corrupt snapshots are rejected', () => {

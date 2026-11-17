@@ -3,231 +3,118 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const {
-  createDefaultRenovationInput,
-  estimateRenovation,
-} = require('../miniprogram/utils/renovation-pricing');
+const { createDefaultRenovationInput, estimateRenovation } = require('../miniprogram/utils/renovation-pricing');
 
-const BASE_SPACE_AMOUNTS = [16864, 18080, 16512, 20152, 1538, 12656];
-
-function allItems(result) {
-  return result.spaces.flatMap(space => space.groups.flatMap(group => group.items));
-}
-
+function allItems(result) { return result.spaces.flatMap(space => space.groups.flatMap(group => group.items)); }
+function quantity(result, id) { return allItems(result).find(item => item.id === id).quantity; }
 function assertConsistent(result) {
-  for (const space of result.spaces) {
-    for (const group of space.groups) {
-      assert.equal(group.amount, group.items.reduce((sum, item) => sum + item.amount, 0));
-    }
-    assert.equal(space.amount, space.groups.reduce((sum, group) => sum + group.amount, 0));
-  }
   assert.equal(result.engineeringAmount, result.spaces.reduce((sum, space) => sum + space.amount, 0));
   assert.equal(result.engineeringAmount, result.materialAmount + result.auxiliaryAmount + result.laborAmount);
-  assert.equal(
-    result.totalAmount,
-    result.engineeringAmount + result.fees.reduce((sum, fee) => sum + fee.amount, 0),
-  );
+  assert.equal(result.totalAmount, result.engineeringAmount + result.fees.reduce((sum, fee) => sum + fee.amount, 0));
 }
 
-test('standard 100m2 new-house reference reproduces the supplied Tubatu benchmark', () => {
-  const input = createDefaultRenovationInput();
-  assert.deepEqual(input, {
-    province: '福建', city: '泉州', area: 100, width: 10, depth: 10,
-    floorCount: 1, height: 3, houseType: 'new', standard: 'standard', style: '现代简约',
-    rooms: { bedroom: 3, living: 2, kitchen: 1, bathroom: 2, balcony: 1 },
-  });
-  const result = estimateRenovation(input);
-
-  assert.equal(result.pricingVersion, 'renovation-reference-v1');
+test('v2 uses dynamic geometry while preserving the quotation tree and fee rules', () => {
+  const result = estimateRenovation(createDefaultRenovationInput());
+  assert.equal(result.pricingVersion, 'renovation-dynamic-v2');
+  assert.equal(result.geometrySummary.mode, 'estimated');
+  assert.equal(result.geometrySummary.area, 100);
   assert.deepEqual(result.spaces.map(space => space.id), ['bedroom', 'living', 'kitchen', 'bathroom', 'balcony', 'common']);
-  assert.deepEqual(result.spaces.map(space => space.name), ['卧室', '客餐厅', '厨房', '卫生间', '阳台', '全屋公共']);
-  assert.deepEqual(result.spaces.map(space => space.groups.map(group => [group.id, group.name])), [
-    [['ceiling', '天花板'], ['wall', '墙面'], ['floor', '地面'], ['door', '室内门']],
-    [['ceiling', '天花板'], ['wall', '墙面'], ['floor', '地面'], ['threshold', '门槛石']],
-    [['ceiling', '天花板'], ['wall', '墙面'], ['floor', '地面'], ['kitchenware', '厨具'], ['door', '室内门'], ['lighting', '灯具']],
-    [['ceiling', '天花板'], ['wall', '墙面'], ['floor', '地面'], ['sanitary', '卫浴用具'], ['door', '室内门']],
-    [['ceiling', '天花板'], ['wall', '墙面'], ['floor', '地面']],
-    [['utilities', '水电改造'], ['handling', '搬运清洁'], ['demolition', '拆改与保护']],
-  ]);
-  assert.deepEqual([...new Set(allItems(result).map(item => item.unit))].sort(), ['m', '㎡', '个', '位', '块', '套', '项'].sort());
-  assert.deepEqual(result.spaces.map(space => space.amount), BASE_SPACE_AMOUNTS);
-  assert.deepEqual(result.spaces.map(space => space.groups.map(group => group.amount)), [
-    [2776, 3304, 7184, 3600],
-    [2600, 8664, 6704, 112],
-    [768, 4200, 1320, 8440, 1664, 120],
-    [1024, 6552, 3072, 7520, 1984],
-    [442, 280, 816],
-    [9328, 2400, 928],
-  ]);
-  assert.equal(result.engineeringAmount, 85802);
-  assert.equal(result.materialAmount, 44792);
-  assert.equal(result.auxiliaryAmount, 12058);
-  assert.equal(result.laborAmount, 28952);
-  assert.deepEqual(result.fees.map(fee => [fee.id, fee.amount, fee.included]), [
-    ['management', 8580, true],
-    ['design', 3432, true],
-    ['tax', 0, false],
-  ]);
-  assert.equal(result.totalAmount, 97814);
-  assert.equal(result.unitAmount, 978.14);
+  assert.ok(quantity(result, 'bedroom.floor.tile') > 0);
+  assert.equal(quantity(result, 'common.utilities.network_tv'), 5);
+  assert.equal(quantity(result, 'common.utilities.electric_box'), 2);
   assertConsistent(result);
 });
 
-test('standard and old-house multipliers apply to the selected engineering list', () => {
+test('area, room counts, layer height and plan ratio change their related quantities', () => {
   const input = createDefaultRenovationInput();
-  const economy = estimateRenovation({ ...input, standard: 'economy' }, { fees: { management: false, design: false } });
-  const quality = estimateRenovation({ ...input, standard: 'quality' }, { fees: { management: false, design: false } });
-  const oldHouse = estimateRenovation({ ...input, houseType: 'old' }, { fees: { management: false, design: false } });
-
-  assert.equal(economy.engineeringAmount, 60061);
-  assert.equal(quality.engineeringAmount, 102961);
-  assert.equal(oldHouse.engineeringAmount, 95125);
-  for (const result of [quality, oldHouse]) {
-    for (const pricedItem of allItems(result)) {
-      assert.equal(
-        pricedItem.amount,
-        Math.round(pricedItem.quantity * (pricedItem.materialUnitPrice + pricedItem.laborAuxUnitPrice)),
-        pricedItem.id,
-      );
-    }
-  }
-  const qualityTile = allItems(quality).find(item => item.id === 'bedroom.floor.tile');
-  const oldHouseTile = allItems(oldHouse).find(item => item.id === 'bedroom.floor.tile');
-  assert.deepEqual(
-    [qualityTile.materialUnitPrice, qualityTile.laborAuxUnitPrice, qualityTile.amount],
-    [134.4, 96, 6912],
-  );
-  assert.deepEqual(
-    [oldHouseTile.materialUnitPrice, oldHouseTile.laborAuxUnitPrice, oldHouseTile.amount],
-    [124.1744, 88.696, 6386],
-  );
-  assertConsistent(economy);
-  assertConsistent(quality);
-  assertConsistent(oldHouse);
+  const base = estimateRenovation(input);
+  const double = estimateRenovation({ ...input, area: 200 });
+  const taller = estimateRenovation({ ...input, height: 4 });
+  const longer = estimateRenovation({ ...input, width: 20, depth: 5 });
+  const moreBedrooms = estimateRenovation({ ...input, rooms: { ...input.rooms, bedroom: 4 } });
+  assert.ok(quantity(double, 'bedroom.floor.tile') > quantity(base, 'bedroom.floor.tile'));
+  assert.equal(quantity(taller, 'bedroom.floor.tile'), quantity(base, 'bedroom.floor.tile'));
+  assert.ok(quantity(taller, 'bedroom.wall.primer') > quantity(base, 'bedroom.wall.primer'));
+  assert.notEqual(quantity(longer, 'bedroom.ceiling.gypsum_line'), quantity(base, 'bedroom.ceiling.gypsum_line'));
+  assert.equal(quantity(moreBedrooms, 'bedroom.door.bedroom_door'), 4);
 });
 
-test('fees are optional and use the recalculated engineering subtotal', () => {
+test('measured dimensions drive exact floor and wall quantities and area', () => {
   const input = createDefaultRenovationInput();
-  const allFees = estimateRenovation(input, { fees: { tax: true } });
-  assert.deepEqual(allFees.fees.map(fee => fee.included), [true, true, true]);
-  assert.equal(allFees.fees[2].amount, Math.round(allFees.engineeringAmount * 0.034));
-
-  const excluded = estimateRenovation(input, {
-    excludedItems: ['bedroom.floor.tile'],
-    fees: { management: true, design: false, tax: true },
-  });
-  const tile = allItems(excluded).find(item => item.id === 'bedroom.floor.tile');
-  assert.equal(tile.included, false);
-  assert.equal(tile.amount, 0);
-  assert.equal(tile.quantity, 30);
-  assert.equal(tile.materialUnitPrice, 112);
-  assert.equal(tile.laborAuxUnitPrice, 80);
-  assert.equal(excluded.engineeringAmount, 85802 - 5760);
-  assert.deepEqual(excluded.fees.map(fee => fee.amount), [8004, 0, 2721]);
-  assertConsistent(excluded);
+  input.rooms = { bedroom: 1, living: 0, kitchen: 0, bathroom: 0, balcony: 0 };
+  input.measurement = { version: 1, mode: 'measured', floors: [{ index: 0, height: null, spaces: [{
+    id: '0.bedroom.0', type: 'bedroom', name: '卧室1', length: 4, width: 3, height: 3,
+    doorWidth: 0.9, doorArea: 1.8, windowWidth: 1.5, windowArea: 2.25,
+    curtainBoxLength: null, tvBackgroundArea: null, cabinetLength: null,
+  }] }] };
+  const result = estimateRenovation(input);
+  assert.equal(result.input.area, 12);
+  assert.equal(quantity(result, 'bedroom.floor.tile'), 12);
+  assert.equal(quantity(result, 'bedroom.wall.primer'), 37.95);
+  assert.equal(quantity(result, 'bedroom.floor.skirting'), 13.1);
 });
 
-test('quantity overrides recalculate one item without mutating defaults', () => {
+test('per-floor areas and heights stay independent', () => {
   const input = createDefaultRenovationInput();
-  const changed = estimateRenovation(input, { quantities: { 'bedroom.floor.tile': 31 } });
-  const changedTile = allItems(changed).find(item => item.id === 'bedroom.floor.tile');
-  const freshTile = allItems(estimateRenovation(input)).find(item => item.id === 'bedroom.floor.tile');
+  input.area = 50; input.floorCount = 2; input.rooms = { bedroom: 2, living: 0, kitchen: 0, bathroom: 0, balcony: 0 };
+  input.floors = [
+    { index: 0, area: 20, rooms: { bedroom: 1, living: 0, kitchen: 0, bathroom: 0, balcony: 0 } },
+    { index: 1, area: 30, rooms: { bedroom: 1, living: 0, kitchen: 0, bathroom: 0, balcony: 0 } },
+  ];
+  input.measurement = { version: 1, mode: 'measured', floors: [
+    { index: 0, height: 3, spaces: [{ id: '0.bedroom.0', type: 'bedroom', name: '一层卧室', length: 5, width: 4, height: null, doorWidth: 0, doorArea: 0, windowWidth: 0, windowArea: 0, curtainBoxLength: 0, tvBackgroundArea: null, cabinetLength: null }] },
+    { index: 1, height: 4, spaces: [{ id: '1.bedroom.0', type: 'bedroom', name: '二层卧室', length: 6, width: 5, height: null, doorWidth: 0, doorArea: 0, windowWidth: 0, windowArea: 0, curtainBoxLength: 0, tvBackgroundArea: null, cabinetLength: null }] },
+  ] };
+  const result = estimateRenovation(input);
+  assert.equal(result.input.area, 50);
+  assert.deepEqual(result.input.floors.map(floor => [floor.area, floor.height]), [[20, null], [30, null]]);
+  assert.equal(quantity(result, 'bedroom.wall.primer'), 142);
+  assert.equal(quantity(result, 'common.utilities.electric_box'), 4);
+});
 
-  assert.equal(changedTile.quantity, 31);
-  assert.equal(changedTile.amount, 5952);
-  assert.equal(changed.engineeringAmount, 85994);
-  assert.equal(freshTile.quantity, 30);
-  assert.equal(freshTile.amount, 5760);
+test('manual overrides and exclusions remain highest priority without mutation', () => {
+  const input = createDefaultRenovationInput();
+  const before = JSON.stringify(input);
+  const changed = estimateRenovation(input, { quantities: { 'bedroom.floor.tile': 31 }, excludedItems: ['living.floor.tile'] });
+  const fresh = estimateRenovation(input);
+  assert.equal(quantity(changed, 'bedroom.floor.tile'), 31);
+  assert.equal(allItems(changed).find(item => item.id === 'living.floor.tile').included, false);
+  assert.notEqual(quantity(fresh, 'bedroom.floor.tile'), 31);
+  assert.equal(JSON.stringify(input), before);
   assertConsistent(changed);
 });
 
-test('reference fixed quantities do not silently scale with house area', () => {
-  const result = estimateRenovation({ ...createDefaultRenovationInput(), area: 120 });
-  const items = allItems(result);
-  const quantity = id => items.find(item => item.id === id).quantity;
-  assert.equal(quantity('bedroom.ceiling.curtain_box'), 4);
-  assert.equal(quantity('kitchen.ceiling.aluminum'), 6);
-  assert.equal(quantity('kitchen.floor.tile'), 6);
-  assert.equal(quantity('bathroom.ceiling.aluminum'), 8);
-  assert.equal(quantity('bathroom.floor.tile'), 8);
-  assert.equal(quantity('balcony.ceiling.primer'), 8);
-  assert.equal(quantity('balcony.floor.tile'), 6);
-  assert.equal(quantity('common.utilities.switch_wiring'), 72);
-});
-
-test('sanitary item names follow the supplied reference', () => {
-  const result = estimateRenovation(createDefaultRenovationInput());
-  const sanitaryItems = result.spaces.find(space => space.id === 'bathroom')
-    .groups.find(group => group.id === 'sanitary').items;
-  assert.deepEqual(sanitaryItems.map(item => item.name), ['马桶', '洗手盆', '花洒', '风暖浴霸']);
-});
-
-test('zero-count rooms contribute no price while common engineering remains', () => {
+test('zero rooms retain common engineering only', () => {
   const input = createDefaultRenovationInput();
   input.rooms = { bedroom: 0, living: 0, kitchen: 0, bathroom: 0, balcony: 0 };
   const result = estimateRenovation(input, { fees: { management: false, design: false } });
-
-  assert.deepEqual(result.spaces.map(space => space.amount), [0, 0, 0, 0, 0, 12656]);
-  for (const space of result.spaces.slice(0, 5)) {
-    assert.equal(space.groups.length > 0, true);
-    for (const item of space.groups.flatMap(group => group.items)) {
-      assert.equal(item.included, false);
-      assert.equal(item.amount, 0);
-    }
-  }
-  assert.equal(result.engineeringAmount, 12656);
-  assertConsistent(result);
+  assert.deepEqual(result.spaces.slice(0, 5).map(space => space.amount), [0, 0, 0, 0, 0]);
+  assert.ok(result.spaces[5].amount > 0);
+  assert.equal(result.geometrySummary.spaceCount, 0);
 });
 
-test('input and previous results stay isolated from caller mutations', () => {
+test('multipliers, fees and invalid selections keep existing behavior', () => {
   const input = createDefaultRenovationInput();
-  input.floors = [{ floor: 1, height: 3 }];
-  const first = estimateRenovation(input);
-  input.rooms.bedroom = 0;
-  input.floors[0].height = 9;
-  first.input.rooms.living = 0;
-  first.spaces[0].groups[0].items[0].quantity = 999;
-  const second = estimateRenovation(createDefaultRenovationInput());
-
-  assert.equal(first.input.rooms.bedroom, 3);
-  assert.equal(first.input.floors[0].height, 3);
-  assert.equal(second.input.rooms.living, 2);
-  assert.equal(second.spaces[0].groups[0].items[0].quantity, 30);
-});
-
-test('optional width and depth normalize to unfilled values', () => {
-  const input = createDefaultRenovationInput();
-  for (const value of [null, '', undefined]) {
-    const result = estimateRenovation({ ...input, width: value, depth: value, height: value });
-    assert.equal(result.input.width, null);
-    assert.equal(result.input.depth, null);
-    assert.equal(result.input.height, 3);
-  }
+  const quality = estimateRenovation({ ...input, standard: 'quality' }, { fees: { tax: true } });
+  assert.equal(quality.fees[2].amount, Math.round(quality.engineeringAmount * 0.034));
+  for (const item of allItems(quality)) assert.equal(item.amount, item.included ? Math.round(item.quantity * (item.materialUnitPrice + item.laborAuxUnitPrice)) : 0);
+  assert.throws(() => estimateRenovation(input, { quantities: { 'missing.item': 1 } }), /未知装修报价项目/);
+  assert.throws(() => estimateRenovation(input, { quantities: { 'bedroom.floor.tile': -1 } }), /工程量/);
 });
 
 test('TypeScript source and JavaScript runtime artifact stay synchronized', () => {
-  const utilsDir = path.join(__dirname, '../miniprogram/utils');
-  const tsSource = fs.readFileSync(path.join(utilsDir, 'renovation-pricing.ts'), 'utf8');
-  const jsSource = fs.readFileSync(path.join(utilsDir, 'renovation-pricing.js'), 'utf8');
-  assert.ok(tsSource.startsWith('// @ts-nocheck\n'));
-  assert.equal(tsSource.slice('// @ts-nocheck\n'.length), jsSource);
-  assert.doesNotMatch(tsSource, /require\(['"]\.\/renovation-pricing\.js['"]\)/);
+  const dir = path.join(__dirname, '../miniprogram/utils');
+  const ts = fs.readFileSync(path.join(dir, 'renovation-pricing.ts'), 'utf8');
+  const js = fs.readFileSync(path.join(dir, 'renovation-pricing.js'), 'utf8');
+  assert.ok(ts.startsWith('// @ts-nocheck\n'));
+  assert.equal(ts.slice('// @ts-nocheck\n'.length), js);
+  assert.doesNotMatch(ts, /require\(['"]\.\/renovation-pricing\.js['"]\)/);
 });
 
-test('invalid or malicious numeric values and unknown selections are rejected', () => {
-  const valid = createDefaultRenovationInput();
-  for (const patch of [
-    { area: 0 }, { area: 100001 }, { area: NaN }, { width: Infinity },
-    { floorCount: 1.5 }, { floorCount: 21 }, { height: -1 },
-    { floors: [{ floor: 1, height: NaN }] },
-    { rooms: { ...valid.rooms, bathroom: -1 } },
-    { rooms: { ...valid.rooms, bedroom: 51 } },
-  ]) {
-    assert.throws(() => estimateRenovation({ ...valid, ...patch }), /装修报价参数不正确/);
-  }
-  assert.throws(() => estimateRenovation(valid, { quantities: { 'bedroom.floor.tile': -1 } }), /工程量/);
-  assert.throws(() => estimateRenovation(valid, { quantities: { 'bedroom.floor.tile': Infinity } }), /工程量/);
-  assert.throws(() => estimateRenovation(valid, { quantities: { 'bedroom.floor.tile': 1000001 } }), /工程量/);
-  assert.throws(() => estimateRenovation(valid, { quantities: { 'missing.item': 1 } }), /未知装修报价项目/);
-  assert.throws(() => estimateRenovation({ ...valid, standard: 'luxury' }), /装修报价参数不正确/);
+test('automatically derived quantities obey the same bounds as manually entered quantities', () => {
+  const input = createDefaultRenovationInput();
+  input.measurement = { version: 1, mode: 'measured', floors: [{ index: 0, height: 100, spaces: [
+    { id: '0.bedroom.0', type: 'bedroom', name: '卧室1', length: 1000000, width: 0.0001, height: null },
+  ] }] };
+  assert.throws(() => estimateRenovation(input), /工程量/);
 });

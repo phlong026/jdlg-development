@@ -48,7 +48,7 @@ export type RenovationCostItem = {
 
 export type RenovationCostGroup = { id: string; name: string; amount: number; items: RenovationCostItem[] };
 export type RenovationCostSpace = { id: 'bedroom' | 'living' | 'kitchen' | 'bathroom' | 'balcony' | 'common'; name: string; count: number; amount: number; groups: RenovationCostGroup[] };
-export type RenovationCostEstimate = { pricingVersion: 'renovation-reference-v1'; totalAmount: number; spaces: RenovationCostSpace[] };
+export type RenovationCostEstimate = { pricingVersion: 'renovation-reference-v1' | 'renovation-dynamic-v2'; quantityBasis?: 'estimated' | 'measured' | 'mixed'; totalAmount: number; spaces: RenovationCostSpace[] };
 
 export type CostEstimateShareSnapshot = {
   report_id: string;
@@ -109,8 +109,11 @@ function isRenovationResult(result: Partial<CostEstimateShareResult>): boolean {
   if (!result.basicInfo.every((item, index) => isBasicInfo(item) && item.label === RENOVATION_INFO_LABELS[index] && (item.fullWidth === true) === (index === 0))) return false;
   if (!result.costBreakdown.every((item, index) => isBreakdown(item) && item.name === RENOVATION_BREAKDOWN_NAMES[index])) return false;
   const renovation = result.renovation;
-  if (renovation.pricingVersion !== 'renovation-reference-v1' || !validNumber(renovation.totalAmount)
+  if (!['renovation-reference-v1', 'renovation-dynamic-v2'].includes(renovation.pricingVersion) || !validNumber(renovation.totalAmount)
     || !Array.isArray(renovation.spaces) || renovation.spaces.length !== RENOVATION_SPACES.length) return false;
+  if (renovation.pricingVersion === 'renovation-dynamic-v2') {
+    if (!['estimated', 'measured', 'mixed'].includes(String(renovation.quantityBasis))) return false;
+  } else if (renovation.quantityBasis !== undefined) return false;
   let engineering = 0;
   let materialAmount = 0;
   let itemCount = 0;
@@ -198,7 +201,8 @@ export function sanitizeCostEstimateShareResult(value: unknown): CostEstimateSha
     ...common,
     quoteType: 'renovation',
     renovation: {
-      pricingVersion: 'renovation-reference-v1',
+      pricingVersion: value.renovation.pricingVersion,
+      ...(value.renovation.quantityBasis ? { quantityBasis: value.renovation.quantityBasis } : {}),
       totalAmount: value.renovation.totalAmount,
       spaces: value.renovation.spaces.map(space => ({
         id: space.id,

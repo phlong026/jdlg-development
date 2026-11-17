@@ -1,5 +1,7 @@
 // @ts-nocheck
-const PRICING_VERSION = 'renovation-reference-v1';
+const { resolveRenovationGeometry } = require('./renovation-geometry');
+
+const PRICING_VERSION = 'renovation-dynamic-v2';
 const STANDARD_MULTIPLIERS = { economy: 0.7, standard: 1, quality: 1.2 };
 const HOUSE_MULTIPLIERS = { new: 1, old: 1.1087 };
 const ROOM_IDS = ['bedroom', 'living', 'kitchen', 'bathroom', 'balcony'];
@@ -93,13 +95,15 @@ function normalizeInput(input) {
     rooms: normalizedRooms,
   };
   if (input.floors !== undefined) normalized.floors = cloneFloorValue(input.floors);
+  if (input.measurement !== undefined) normalized.measurement = cloneFloorValue(input.measurement);
   return normalized;
 }
 
 const qty = {
-  fixed: value => () => value,
   area: factor => input => input.area * factor,
   room: id => input => input.rooms[id],
+  metric: (id, field) => (input, metrics) => metrics.byType[id][field],
+  whole: field => (input, metrics) => metrics.wholeHouse[field],
 };
 
 function item(id, name, unit, quantity, materialUnitPrice, laborAuxUnitPrice) {
@@ -111,21 +115,21 @@ const SPACE_DEFINITIONS = [
     id: 'bedroom', name: '卧室', count: input => input.rooms.bedroom,
     groups: [
       { id: 'ceiling', name: '天花板', items: [
-        item('bedroom.ceiling.primer', '顶面墙固', '㎡', qty.fixed(30), 0, 9.6),
-        item('bedroom.ceiling.putty', '顶面腻子', '㎡', qty.fixed(30), 0, 28),
-        item('bedroom.ceiling.latex', '顶面乳胶漆', '㎡', qty.fixed(30), 0, 17.6),
-        item('bedroom.ceiling.gypsum_line', '顶面石膏线', 'm', qty.fixed(22), 0, 28),
-        item('bedroom.ceiling.curtain_box', '窗帘盒', 'm', qty.fixed(4), 0, 126),
+        item('bedroom.ceiling.primer', '顶面墙固', '㎡', qty.metric('bedroom', 'ceilingArea'), 0, 9.6),
+        item('bedroom.ceiling.putty', '顶面腻子', '㎡', qty.metric('bedroom', 'ceilingArea'), 0, 28),
+        item('bedroom.ceiling.latex', '顶面乳胶漆', '㎡', qty.metric('bedroom', 'ceilingArea'), 0, 17.6),
+        item('bedroom.ceiling.gypsum_line', '顶面石膏线', 'm', qty.metric('bedroom', 'perimeter'), 0, 28),
+        item('bedroom.ceiling.curtain_box', '窗帘盒', 'm', qty.metric('bedroom', 'curtainBoxLength'), 0, 126),
       ] },
       { id: 'wall', name: '墙面', items: [
-        item('bedroom.wall.primer', '墙面墙固', '㎡', qty.fixed(70), 0, 9.6),
-        item('bedroom.wall.putty', '墙面腻子', '㎡', qty.fixed(70), 0, 28),
-        item('bedroom.wall.mesh', '墙面挂网', '㎡', qty.fixed(70), 0, 9.6),
+        item('bedroom.wall.primer', '墙面墙固', '㎡', qty.metric('bedroom', 'wallArea'), 0, 9.6),
+        item('bedroom.wall.putty', '墙面腻子', '㎡', qty.metric('bedroom', 'wallArea'), 0, 28),
+        item('bedroom.wall.mesh', '墙面挂网', '㎡', qty.metric('bedroom', 'wallArea'), 0, 9.6),
       ] },
       { id: 'floor', name: '地面', items: [
-        item('bedroom.floor.seam', '地砖美缝', '㎡', qty.fixed(30), 0, 24),
-        item('bedroom.floor.tile', '地砖铺贴', '㎡', qty.fixed(30), 112, 80),
-        item('bedroom.floor.skirting', '踢脚线', 'm', qty.fixed(22), 8, 24),
+        item('bedroom.floor.seam', '地砖美缝', '㎡', qty.metric('bedroom', 'floorArea'), 0, 24),
+        item('bedroom.floor.tile', '地砖铺贴', '㎡', qty.metric('bedroom', 'floorArea'), 112, 80),
+        item('bedroom.floor.skirting', '踢脚线', 'm', qty.metric('bedroom', 'skirtingLength'), 8, 24),
       ] },
       { id: 'door', name: '室内门', items: [
         item('bedroom.door.bedroom_door', '卧室门', '套', qty.room('bedroom'), 1200, 0),
@@ -136,49 +140,49 @@ const SPACE_DEFINITIONS = [
     id: 'living', name: '客餐厅', count: input => input.rooms.living,
     groups: [
       { id: 'ceiling', name: '天花板', items: [
-        item('living.ceiling.primer', '顶面墙固', '㎡', qty.fixed(30), 0, 9.6),
-        item('living.ceiling.putty', '顶面腻子', '㎡', qty.fixed(30), 0, 28),
-        item('living.ceiling.latex', '顶面乳胶漆', '㎡', qty.fixed(30), 0, 17.6),
-        item('living.ceiling.gypsum_line', '顶面石膏线', 'm', qty.fixed(22), 0, 20),
-        item('living.ceiling.curtain_box', '窗帘盒', 'm', qty.fixed(4), 0, 126),
+        item('living.ceiling.primer', '顶面墙固', '㎡', qty.metric('living', 'ceilingArea'), 0, 9.6),
+        item('living.ceiling.putty', '顶面腻子', '㎡', qty.metric('living', 'ceilingArea'), 0, 28),
+        item('living.ceiling.latex', '顶面乳胶漆', '㎡', qty.metric('living', 'ceilingArea'), 0, 17.6),
+        item('living.ceiling.gypsum_line', '顶面石膏线', 'm', qty.metric('living', 'perimeter'), 0, 20),
+        item('living.ceiling.curtain_box', '窗帘盒', 'm', qty.metric('living', 'curtainBoxLength'), 0, 126),
       ] },
       { id: 'wall', name: '墙面', items: [
-        item('living.wall.primer', '墙面墙固', '㎡', qty.fixed(70), 0, 9.6),
-        item('living.wall.putty', '墙面腻子', '㎡', qty.fixed(70), 0, 28),
-        item('living.wall.latex', '墙面乳胶漆', '㎡', qty.fixed(70), 0, 17.6),
-        item('living.wall.tv_background', '电视背景墙', '㎡', qty.fixed(10), 400, 80),
+        item('living.wall.primer', '墙面墙固', '㎡', qty.metric('living', 'wallArea'), 0, 9.6),
+        item('living.wall.putty', '墙面腻子', '㎡', qty.metric('living', 'wallArea'), 0, 28),
+        item('living.wall.latex', '墙面乳胶漆', '㎡', qty.metric('living', 'wallArea'), 0, 17.6),
+        item('living.wall.tv_background', '电视背景墙', '㎡', qty.metric('living', 'tvBackgroundArea'), 400, 80),
       ] },
       { id: 'floor', name: '地面', items: [
-        item('living.floor.tile', '地砖铺贴', '㎡', qty.fixed(30), 96, 80),
-        item('living.floor.seam', '地砖美缝', '㎡', qty.fixed(30), 0, 24),
-        item('living.floor.skirting', '踢脚线', 'm', qty.fixed(22), 8, 24),
+        item('living.floor.tile', '地砖铺贴', '㎡', qty.metric('living', 'floorArea'), 96, 80),
+        item('living.floor.seam', '地砖美缝', '㎡', qty.metric('living', 'floorArea'), 0, 24),
+        item('living.floor.skirting', '踢脚线', 'm', qty.metric('living', 'skirtingLength'), 8, 24),
       ] },
       { id: 'threshold', name: '门槛石', items: [
-        item('living.threshold.stone', '客餐厅门槛石', '块', qty.fixed(1), 56, 56),
+        item('living.threshold.stone', '客餐厅门槛石', '块', qty.metric('living', 'count'), 56, 56),
       ] },
     ],
   },
   {
     id: 'kitchen', name: '厨房', count: input => input.rooms.kitchen,
     groups: [
-      { id: 'ceiling', name: '天花板', items: [item('kitchen.ceiling.aluminum', '铝扣板吊顶', '㎡', qty.fixed(6), 112, 16)] },
+      { id: 'ceiling', name: '天花板', items: [item('kitchen.ceiling.aluminum', '铝扣板吊顶', '㎡', qty.metric('kitchen', 'ceilingArea'), 112, 16)] },
       { id: 'wall', name: '墙面', items: [
-        item('kitchen.wall.tile', '墙砖铺贴', '㎡', qty.fixed(25), 72, 80),
-        item('kitchen.wall.pipe_wrap', '厨房包管', '项', qty.room('kitchen'), 0, 400),
+        item('kitchen.wall.tile', '墙砖铺贴', '㎡', qty.metric('kitchen', 'wallArea'), 72, 80),
+        item('kitchen.wall.pipe_wrap', '厨房包管', '项', qty.metric('kitchen', 'pipeEquivalent'), 0, 400),
       ] },
       { id: 'floor', name: '地面', items: [
-        item('kitchen.floor.leak', '地面防漏处理', '㎡', qty.fixed(6), 0, 52),
-        item('kitchen.floor.tile', '地砖铺贴', '㎡', qty.fixed(6), 56, 80),
-        item('kitchen.floor.threshold', '厨房门槛石', '块', input => input.rooms.kitchen * 2, 40, 56),
+        item('kitchen.floor.leak', '地面防漏处理', '㎡', qty.metric('kitchen', 'floorArea'), 0, 52),
+        item('kitchen.floor.tile', '地砖铺贴', '㎡', qty.metric('kitchen', 'floorArea'), 56, 80),
+        item('kitchen.floor.threshold', '厨房门槛石', '块', qty.metric('kitchen', 'count'), 40, 56),
       ] },
       { id: 'kitchenware', name: '厨具', items: [
-        item('kitchen.utensils.cabinet', '橱柜', 'm', qty.fixed(3), 1600, 0),
+        item('kitchen.utensils.cabinet', '橱柜', 'm', qty.metric('kitchen', 'cabinetLength'), 1600, 0),
         item('kitchen.utensils.sink', '水槽龙头', '套', qty.room('kitchen'), 400, 0),
         item('kitchen.utensils.hardware', '五金安装', '项', qty.area(0.1), 80, 4),
         item('kitchen.utensils.hood_stove', '烟机灶具', '套', qty.room('kitchen'), 2400, 0),
       ] },
       { id: 'door', name: '室内门', items: [
-        item('kitchen.door.threshold', '厨房门槛石', '块', input => input.rooms.kitchen * 2, 56, 56),
+        item('kitchen.door.threshold', '厨房门槛石', '块', qty.metric('kitchen', 'count'), 56, 56),
         item('kitchen.door.sliding', '厨房推拉门', '套', qty.room('kitchen'), 1440, 0),
       ] },
       { id: 'lighting', name: '灯具', items: [item('kitchen.light.main', '厨房灯', '套', qty.room('kitchen'), 80, 40)] },
@@ -187,16 +191,16 @@ const SPACE_DEFINITIONS = [
   {
     id: 'bathroom', name: '卫生间', count: input => input.rooms.bathroom,
     groups: [
-      { id: 'ceiling', name: '天花板', items: [item('bathroom.ceiling.aluminum', '铝扣板吊顶', '㎡', qty.fixed(8), 112, 16)] },
+      { id: 'ceiling', name: '天花板', items: [item('bathroom.ceiling.aluminum', '铝扣板吊顶', '㎡', qty.metric('bathroom', 'ceilingArea'), 112, 16)] },
       { id: 'wall', name: '墙面', items: [
-        item('bathroom.wall.waterproof', '墙面防水', '㎡', qty.fixed(30), 0, 52),
+        item('bathroom.wall.waterproof', '墙面防水', '㎡', qty.metric('bathroom', 'wallArea'), 0, 52),
         item('bathroom.wall.pipe', '上下水管', '项', qty.room('bathroom'), 56, 0),
-        item('bathroom.wall.vertical_pipe', '立管包管', '项', qty.room('bathroom'), 0, 280),
-        item('bathroom.wall.tile', '墙砖铺贴', '㎡', qty.fixed(30), 64, 80),
+        item('bathroom.wall.vertical_pipe', '立管包管', '项', qty.metric('bathroom', 'pipeEquivalent'), 0, 280),
+        item('bathroom.wall.tile', '墙砖铺贴', '㎡', qty.metric('bathroom', 'wallArea'), 64, 80),
       ] },
       { id: 'floor', name: '地面', items: [
-        item('bathroom.floor.tile', '地砖铺贴', '㎡', qty.fixed(8), 56, 80),
-        item('bathroom.floor.sunken', '下沉式沉箱处理', '㎡', qty.fixed(8), 0, 224),
+        item('bathroom.floor.tile', '地砖铺贴', '㎡', qty.metric('bathroom', 'floorArea'), 56, 80),
+        item('bathroom.floor.sunken', '下沉式沉箱处理', '㎡', qty.metric('bathroom', 'floorArea'), 0, 224),
         item('bathroom.floor.threshold', '卫生间门槛石', '块', qty.room('bathroom'), 40, 56),
       ] },
       { id: 'sanitary', name: '卫浴用具', items: [
@@ -215,12 +219,12 @@ const SPACE_DEFINITIONS = [
     id: 'balcony', name: '阳台', count: input => input.rooms.balcony,
     groups: [
       { id: 'ceiling', name: '天花板', items: [
-        item('balcony.ceiling.primer', '顶面墙固', '㎡', qty.fixed(8), 0, 9.6),
-        item('balcony.ceiling.putty', '顶面腻子', '㎡', qty.fixed(8), 0, 28),
-        item('balcony.ceiling.latex', '顶面乳胶漆', '㎡', qty.fixed(8), 0, 17.6),
+        item('balcony.ceiling.primer', '顶面墙固', '㎡', qty.metric('balcony', 'ceilingArea'), 0, 9.6),
+        item('balcony.ceiling.putty', '顶面腻子', '㎡', qty.metric('balcony', 'ceilingArea'), 0, 28),
+        item('balcony.ceiling.latex', '顶面乳胶漆', '㎡', qty.metric('balcony', 'ceilingArea'), 0, 17.6),
       ] },
-      { id: 'wall', name: '墙面', items: [item('balcony.wall.vertical_pipe', '阳台立管', '项', qty.room('balcony'), 0, 280)] },
-      { id: 'floor', name: '地面', items: [item('balcony.floor.tile', '地砖铺贴', '㎡', qty.fixed(6), 56, 80)] },
+      { id: 'wall', name: '墙面', items: [item('balcony.wall.vertical_pipe', '阳台立管', '项', qty.metric('balcony', 'pipeEquivalent'), 0, 280)] },
+      { id: 'floor', name: '地面', items: [item('balcony.floor.tile', '地砖铺贴', '㎡', qty.metric('balcony', 'floorArea'), 56, 80)] },
     ],
   },
   {
@@ -228,11 +232,11 @@ const SPACE_DEFINITIONS = [
     groups: [
       { id: 'utilities', name: '水电改造', items: [
         item('common.utilities.switch_wiring', '开关插座布线', '位', qty.area(0.6), 38.5, 35.75),
-        item('common.utilities.network_tv', '网络电视点位', '位', qty.fixed(2), 77, 71.5),
+        item('common.utilities.network_tv', '网络电视点位', '位', qty.whole('networkTvPoints'), 77, 71.5),
         item('common.utilities.switch_install', '开关插座安装', '位', qty.area(0.6), 16.5, 5.5),
-        item('common.utilities.electric_box', '电箱', '个', qty.fixed(2), 165, 220),
+        item('common.utilities.electric_box', '电箱', '个', qty.whole('electricBoxCount'), 165, 220),
         item('common.utilities.water_pipe', '给水管', 'm', qty.area(0.4), 23.65, 24.75),
-        item('common.utilities.channel_repair', '开槽修复', '项', qty.fixed(1), 110, 440),
+        item('common.utilities.channel_repair', '开槽修复', '项', qty.whole('channelRepairCount'), 110, 440),
       ] },
       { id: 'handling', name: '搬运清洁', items: [
         item('common.cleaning.handling', '材料搬运', '㎡', qty.area(1), 0, 8),
@@ -280,7 +284,8 @@ function normalizeSelections(selections, knownIds) {
 }
 
 function estimateRenovation(input, selections) {
-  const normalizedInput = normalizeInput(input);
+  const geometry = resolveRenovationGeometry(input);
+  const normalizedInput = normalizeInput(geometry.input);
   const knownIds = new Set();
   for (const space of SPACE_DEFINITIONS) for (const group of space.groups) for (const definition of group.items) knownIds.add(definition.id);
   const normalizedSelections = normalizeSelections(selections, knownIds);
@@ -291,10 +296,11 @@ function estimateRenovation(input, selections) {
     const active = spaceDefinition.count(normalizedInput) > 0;
     for (const groupDefinition of spaceDefinition.groups) {
       for (const definition of groupDefinition.items) {
-        const defaultQuantity = definition.quantity(normalizedInput);
+        const defaultQuantity = definition.quantity(normalizedInput, geometry.metrics);
         const quantity = Object.prototype.hasOwnProperty.call(normalizedSelections.quantities, definition.id)
           ? normalizedSelections.quantities[definition.id]
           : defaultQuantity;
+        finiteNumber(quantity, `工程量.${definition.id}`, 0, MAX_QUANTITY);
         const included = active && !normalizedSelections.excludedItems.has(definition.id);
         const materialUnitPrice = effectiveUnitPrice(definition.materialUnitPrice, multiplier);
         const laborAuxUnitPrice = effectiveUnitPrice(definition.laborAuxUnitPrice, multiplier);
@@ -357,6 +363,7 @@ function estimateRenovation(input, selections) {
   return {
     pricingVersion: PRICING_VERSION,
     input: cloneValue(normalizedInput),
+    geometrySummary: cloneValue(geometry.summary),
     spaces,
     engineeringAmount,
     materialAmount,

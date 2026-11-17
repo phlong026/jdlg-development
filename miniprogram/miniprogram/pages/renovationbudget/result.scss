@@ -222,3 +222,10 @@
 .context-info picker {
   color: #7c521f;
 }
+
+.measurement-link { display: flex; align-items: center; justify-content: space-between; margin: 0 0 14rpx; padding: 18rpx 20rpx; border-radius: 16rpx; background: rgba(255, 250, 243, .9); color: #7c521f; font-size: 26rpx; font-weight: 700; }
+.measurement-link > view { display: flex; flex-direction: column; gap: 4rpx; }
+.measurement-state { color: #806d5c; font-size: 21rpx; font-weight: 400; }
+.input-field.readonly { background: #f5eee5; }
+.auto-button { margin: 14rpx 0 0; padding: 0; color: #9b6a24; background: transparent; font-size: 24rpx; line-height: 58rpx; text-align: left; }
+.auto-button::after { border: 0; }

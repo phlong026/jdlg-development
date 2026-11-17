@@ -23,6 +23,20 @@ function formatAmount(value) {
   return value.toLocaleString('zh-CN', { maximumFractionDigits: 2 });
 }
 
+function reportHeight(input) {
+  const explicit = (value, inherited) => value === null || value === undefined || value === '' ? inherited : value;
+  const measurement = input.measurement;
+  if (!measurement || !Array.isArray(measurement.floors)) return `${input.height}m`;
+  const heights = new Set();
+  measurement.floors.forEach((floor, index) => {
+    const recordedFloor = (input.floors || [])[index] || {};
+    const floorHeight = explicit(floor.height, explicit(recordedFloor.height, input.height));
+    if (measurement.mode === 'measured') (floor.spaces || []).forEach(space => heights.add(explicit(space.height, floorHeight)));
+    else heights.add(floorHeight);
+  });
+  return heights.size > 1 ? '分层/空间设置' : `${heights.size ? Array.from(heights)[0] : input.height}m`;
+}
+
 function estimateToSnapshot(estimate) {
   const input = estimate.input;
   const rooms = input.rooms;
@@ -31,7 +45,7 @@ function estimateToSnapshot(estimate) {
     { label: '装修面积', value: `${input.area}㎡` },
     { label: '房屋状态', value: input.houseType === 'old' ? '旧房改造' : '新房' },
     { label: '楼层数', value: `${input.floorCount}层` },
-    { label: '层高', value: `${input.height}m` },
+    { label: '层高', value: reportHeight(input) },
     { label: '面宽', value: input.width == null ? '未填写' : `${input.width}m` },
     { label: '进深', value: input.depth == null ? '未填写' : `${input.depth}m` },
     { label: '户型', value: `${rooms.bedroom}室${rooms.living}厅${rooms.kitchen}厨${rooms.bathroom}卫${rooms.balcony}阳台` },
@@ -44,6 +58,9 @@ function estimateToSnapshot(estimate) {
     amounts.push(fee ? fee.amount : 0);
   });
   const names = ['主材费', '辅材费', '人工费', '管理费', '设计费', '税费'];
+  const geometry = estimate.geometrySummary;
+  const quantityBasis = geometry && geometry.mode === 'measured'
+    ? (geometry.estimatedFields && geometry.estimatedFields.length ? 'mixed' : 'measured') : 'estimated';
   const costBreakdown = names.map((name, index) => ({
     name, amount: amounts[index],
     amountText: index > 2 && !amounts[index] ? '未计入' : `${formatAmount(amounts[index])}元`,
@@ -55,7 +72,9 @@ function estimateToSnapshot(estimate) {
     estimatedTotalCost: `${(estimate.totalAmount / 10000).toFixed(2)}万元`,
     estimatedUnitCost: `${estimate.unitAmount.toFixed(2)}元/㎡`,
     basicInfo, costBreakdown, dynamicNotes: [],
-    renovation: { pricingVersion: estimate.pricingVersion, totalAmount: estimate.totalAmount, spaces: clone(estimate.spaces) },
+    renovation: { pricingVersion: estimate.pricingVersion,
+      ...(estimate.pricingVersion === 'renovation-dynamic-v2' ? { quantityBasis } : {}),
+      totalAmount: estimate.totalAmount, spaces: clone(estimate.spaces) },
   });
 }
 
@@ -63,8 +82,10 @@ function writeRenovationReport(estimate, selections) {
   const userID = getBudgetAccountId();
   if (!userID) throw new Error('请先登录后再保存报价');
   const record = {
-    version: 1, userID, input: clone(estimate.input), selections: clone(selections || {}),
+    version: estimate.pricingVersion === 'renovation-dynamic-v2' ? 2 : 1,
+    userID, input: clone(estimate.input), selections: clone(selections || {}),
     report: estimateToSnapshot(estimate),
+    ...(estimate.geometrySummary ? { quantityBasis: clone(estimate.geometrySummary) } : {}),
   };
   try {
     wx.setStorageSync(`renovationBudgetResult:${userID}`, record);
@@ -79,7 +100,7 @@ function readRenovationReport() {
   const userID = getBudgetAccountId();
   if (!userID) throw new Error('请登录后重新测算');
   const record = wx.getStorageSync(`renovationBudgetResult:${userID}`);
-  if (!record || record.version !== 1 || record.userID !== userID || !record.input || !record.selections
+  if (!record || ![1, 2].includes(record.version) || record.userID !== userID || !record.input || !record.selections
     || !isCostEstimateShareResult(record.report) || record.report.version !== 5) {
     throw new Error('报价已过期，请重新测算');
   }

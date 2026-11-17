@@ -6,8 +6,8 @@ const src=path.join(root,'miniprogram/miniprogram');
 const out='/tmp/jdlg-renovation-ui-preview-20261117';
 function write(name,data){const p=path.join(out,'miniprogram',name);fs.mkdirSync(path.dirname(p),{recursive:true});fs.writeFileSync(p,data)}
 function copy(name){const p=path.join(src,name);for(const file of fs.readdirSync(p)){const rel=path.join(name,file), full=path.join(src,rel);if(fs.statSync(full).isDirectory()){copy(rel);continue}const ext=path.extname(file);if(ext==='.ts')write(rel.slice(0,-3)+'.js',ts.transpileModule(fs.readFileSync(full,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText);else if(ext==='.scss')write(rel.slice(0,-5)+'.wxss',sass.compile(full,{silenceDeprecations:['import','legacy-js-api']}).css);else if(ext!=='.js' && ext!=='.wxss')write(rel,fs.readFileSync(full));else if(!fs.existsSync(full.replace(/\.(js|wxss)$/,ext==='.js'?'.ts':'.scss')))write(rel,fs.readFileSync(full));}}
-for(const p of ['pages/renovationbudget','pages/aicostshare','pages/aicost','components/navigation-bar','components/quote-type-switch','components/renovation-report'])copy(p);
-for(const name of ['renovation-pricing','renovation-report','costRegions','costEstimateShare','costEstimateShareImage','renovationCostShareImage']){
+for(const p of ['pages/renovationbudget','pages/aicostshare','pages/aicost','components/navigation-bar','components/quote-type-switch','components/renovation-report','components/renovation-measurement-editor'])copy(p);
+for(const name of ['renovation-pricing','renovation-geometry','renovation-report','costRegions','costEstimateShare','costEstimateShareImage','renovationCostShareImage']){
  const full=path.join(src,'utils',name+'.ts');write('utils/'+name+'.js',ts.transpileModule(fs.readFileSync(full,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText);
 }
 write('utils/deviceFingerprint.js','exports.getCachedDeviceFingerprint=()=>"offline-fixture";');

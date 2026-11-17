@@ -114,7 +114,14 @@ func validRenovationCostEstimateShare(result model.CostEstimateShareResult) bool
 
 	renovation := result.Renovation
 	totalAmount, ok := renovationAmount(renovation.TotalAmount, 1e12)
-	if !ok || renovation.PricingVersion != "renovation-reference-v1" || len(renovation.Spaces) != len(renovationCostSpaces) {
+	if !ok || (renovation.PricingVersion != "renovation-reference-v1" && renovation.PricingVersion != "renovation-dynamic-v2") || len(renovation.Spaces) != len(renovationCostSpaces) {
+		return false
+	}
+	if renovation.PricingVersion == "renovation-dynamic-v2" {
+		if renovation.QuantityBasis != "estimated" && renovation.QuantityBasis != "measured" && renovation.QuantityBasis != "mixed" {
+			return false
+		}
+	} else if renovation.QuantityBasis != "" {
 		return false
 	}
 	engineeringAmount := 0.0

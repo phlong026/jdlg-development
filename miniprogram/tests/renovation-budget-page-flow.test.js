@@ -5,6 +5,7 @@ const vm = require('node:vm');
 const { test } = require('node:test');
 const ts = require('./report-runtime')('typescript');
 const pricing = require('../miniprogram/utils/renovation-pricing');
+const geometry = require('../miniprogram/utils/renovation-geometry');
 const costRegions = require('../miniprogram/utils/costRegions');
 
 const root = path.join(__dirname, '../miniprogram/pages/renovationbudget');
@@ -34,6 +35,7 @@ function loadPage(name, overrides = {}) {
     Page(value) { definition = value; },
     require(request) {
       if (request === '../../utils/renovation-pricing') return pricing;
+      if (request === '../../utils/renovation-geometry') return geometry;
       if (request === '../../utils/renovation-report') return reportHelpers;
       if (request === '../../utils/costRegions') return costRegions;
       if (request === '../../utils/costEstimateShare') return { createCostEstimateShare: async () => ({ report_id: 'public-1' }) };
@@ -60,6 +62,28 @@ function loadPage(name, overrides = {}) {
     selectComponent() { return null; },
   };
   return { page, writes, navigations, toasts, reportHelpers };
+}
+
+function loadMeasurementEditor(input) {
+  let definition;
+  const toasts = [];
+  const code = ts.transpileModule(fs.readFileSync(path.join(__dirname, '../miniprogram/components/renovation-measurement-editor/index.ts'), 'utf8'), {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
+  }).outputText;
+  vm.runInNewContext(code, {
+    exports: {}, Component(value) { definition = value; },
+    require(request) { if (request === '../../utils/renovation-geometry') return geometry; throw new Error(`unexpected import ${request}`); },
+    wx: { showToast(args) { toasts.push(args.title); } }, console,
+  });
+  const events = [];
+  const component = {
+    ...definition.methods,
+    data: { ...definition.data, visible: true, input },
+    setData(values) { Object.assign(this.data, values); },
+    triggerEvent(name, detail) { events.push({ name, detail }); },
+  };
+  component.resetDraft();
+  return { component, events, toasts };
 }
 
 test('renovation form keeps price fields blank until the user supplies them', () => {
@@ -90,6 +114,24 @@ test('three floor areas keep the exact entered total by assigning the rounding r
   assert.deepEqual(Array.from(page.data.floors, floor => floor.area), [33.33, 33.33, 33.34]);
 });
 
+test('area changes preserve custom floor rooms, heights, and same-id measurement values', () => {
+  const { page } = loadPage('index');
+  Object.assign(page.data, {
+    area: '100', floorCount: '2', rooms: { bedroom: 3, living: 1, kitchen: 1, bathroom: 1, balcony: 0 },
+    floors: [
+      { index: 0, name: '1层', area: 40, height: 3.2, rooms: { bedroom: 1, living: 1, kitchen: 1, bathroom: 1, balcony: 0 } },
+      { index: 1, name: '2层', area: 60, height: null, rooms: { bedroom: 2, living: 0, kitchen: 0, bathroom: 0, balcony: 0 } },
+    ],
+  });
+  const input = page.buildInput(); const target = input.measurement.floors[1].spaces.find(space => space.type === 'bedroom');
+  target.doorArea = 1.25; page.data.measurement = input.measurement;
+  page.onAreaInput({ detail: { value: '120' } });
+  assert.deepEqual(Array.from(page.data.floors, floor => floor.rooms.bedroom), [1, 2]);
+  assert.deepEqual(Array.from(page.data.floors, floor => floor.area), [48, 72]);
+  assert.equal(page.data.floors[0].height, 3.2);
+  assert.equal(page.data.measurement.floors[1].spaces.find(space => space.id === target.id).doorArea, 1.25);
+});
+
 test('floor confirmation rejects a zero-area floor even when the overall sum matches', () => {
   const { page, toasts } = loadPage('index');
   page.data.area = '50'; page.data.floorCount = '2'; page.data.floorDrawerVisible = true;
@@ -97,6 +139,21 @@ test('floor confirmation rejects a zero-area floor even when the overall sum mat
   page.confirmFloors();
   assert.equal(page.data.floorDrawerVisible, true);
   assert.match(toasts[0], /每层面积/);
+});
+
+test('floor confirmation rejects an empty positive-area floor unless the whole house has zero rooms', () => {
+  const first = loadPage('index'); first.page.data.area = '100'; first.page.data.floorCount = '2'; first.page.data.floorDrawerVisible = true;
+  first.page.data.floors = [
+    { index: 0, area: 50, height: null, rooms: { bedroom: 1, living: 1, kitchen: 1, bathroom: 1, balcony: 0 } },
+    { index: 1, area: 50, height: null, rooms: { bedroom: 0, living: 0, kitchen: 0, bathroom: 0, balcony: 0 } },
+  ];
+  first.page.confirmFloors();
+  assert.equal(first.page.data.floorDrawerVisible, true);
+  assert.match(first.toasts[0], /第2层.*空间/);
+  const commonOnly = loadPage('index'); commonOnly.page.data.area = '100'; commonOnly.page.data.floorCount = '2'; commonOnly.page.data.floorDrawerVisible = true;
+  commonOnly.page.data.floors = [0, 1].map(index => ({ index, area: 50, height: null, rooms: { bedroom: 0, living: 0, kitchen: 0, bathroom: 0, balcony: 0 } }));
+  commonOnly.page.confirmFloors();
+  assert.equal(commonOnly.page.data.floorDrawerVisible, false);
 });
 
 test('global room decrement updates the floor that actually owns the room count', () => {
@@ -183,6 +240,23 @@ test('result parameter update keeps optional width and depth blank', async () =>
   assert.equal(writes.length, 1);
   assert.equal(writes[0].input.width, null);
   assert.equal(writes[0].input.depth, null);
+});
+
+test('result parameter update resizes estimated floors when area and floor count change', async () => {
+  const estimate = pricing.estimateRenovation(pricing.createDefaultRenovationInput());
+  const record = { input: estimate.input, selections: { excludedItems: [], quantities: {}, fees: { management: true, design: true, tax: false } }, report: { version: 5, quoteType: 'renovation', renovation: estimate } };
+  const writes = [];
+  const { page } = loadPage('result', { reportHelpers: {
+    readRenovationReport: () => record,
+    writeRenovationReport: async (nextEstimate, selections) => { writes.push(nextEstimate); return { ...record, input: nextEstimate.input, selections, report: { ...record.report, renovation: nextEstimate } }; },
+  } });
+  page.onLoad(); page.onParametersEdit();
+  Object.assign(page.data.parameterDraft, { area: '120', floorCount: '2' });
+  await page.confirmParameters();
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].input.floors.length, 2);
+  assert.equal(writes[0].input.floors.reduce((sum, floor) => sum + floor.area, 0), 120);
+  assert.equal(writes[0].input.floors.every(floor => Object.values(floor.rooms).some(Number)), true);
 });
 
 test('missing fee selections preserve the approved management and design defaults with tax off', () => {
@@ -357,4 +431,173 @@ test('the result standard selector recalculates while preserving selected quanti
   assert.equal(writes[0].estimate.input.standard, 'quality');
   assert.equal(writes[0].selections.fees.design, false);
   assert.equal(writes[0].selections.quantities['bedroom.ceiling.primer'], 20);
+});
+
+test('multiple floors receive room counts instead of placing every room on the first floor', () => {
+  const { page } = loadPage('index');
+  page.data.area = '120';
+  page.onFloorCountInput({ detail: { value: '3' } });
+  assert.equal(page.data.floors.length, 3);
+  assert.equal(page.data.floors.every(floor => Object.values(floor.rooms).some(Number)), true);
+  assert.equal(page.data.floors.reduce((sum, floor) => sum + floor.rooms.bedroom, 0), page.data.rooms.bedroom);
+});
+
+test('measurement editor derives measured area, inherits the whole-house height, and cancel drops its draft', () => {
+  const input = pricing.createDefaultRenovationInput();
+  const loaded = loadMeasurementEditor(input);
+  loaded.component.onModeTap({ currentTarget: { dataset: { mode: 'measured' } } });
+  loaded.component.data.draft.floors.forEach(floor => floor.spaces.forEach(space => { space.length = '3'; space.width = '2'; }));
+  loaded.component.confirm();
+  assert.equal(loaded.events.length, 1);
+  assert.equal(loaded.events[0].name, 'confirm');
+  assert.equal(loaded.events[0].detail.input.area, 54);
+  assert.equal(loaded.events[0].detail.input.measurement.floors[0].spaces[0].height, null);
+  assert.equal(loaded.events[0].detail.input.floors[0].height, null);
+  loaded.component.cancel();
+  assert.equal(loaded.component.data.draft, null);
+  assert.equal(loaded.events[1].name, 'cancel');
+});
+
+test('blank total area can enter measured mode and is replaced by the measured space sum', () => {
+  const { page } = loadPage('index');
+  assert.equal(page.data.area, '');
+  page.openMeasurementDrawer();
+  assert.equal(page.data.measurementDrawerVisible, true);
+  const loaded = loadMeasurementEditor(page.data.measurementEditorInput);
+  loaded.component.onModeTap({ currentTarget: { dataset: { mode: 'measured' } } });
+  loaded.component.data.draft.floors.forEach(floor => floor.spaces.forEach(space => { space.length = '2'; space.width = '2'; }));
+  loaded.component.confirm();
+  page.onMeasurementConfirm(loaded.events[0]);
+  assert.equal(page.data.area, '36');
+  assert.equal(page.data.measurement.mode, 'measured');
+});
+
+test('measurement editor keeps invalid measured values open for correction', () => {
+  const loaded = loadMeasurementEditor(pricing.createDefaultRenovationInput());
+  loaded.component.onModeTap({ currentTarget: { dataset: { mode: 'measured' } } });
+  loaded.component.confirm();
+  assert.equal(loaded.events.length, 0);
+  assert.ok(loaded.component.data.draft);
+  assert.match(loaded.toasts[0], /长度/);
+});
+
+test('measurement editor rejects out-of-range dimensions without losing the draft', () => {
+  const loaded = loadMeasurementEditor(pricing.createDefaultRenovationInput());
+  loaded.component.onModeTap({ currentTarget: { dataset: { mode: 'measured' } } });
+  loaded.component.data.draft.floors.forEach(floor => floor.spaces.forEach(space => { space.length = '2'; space.width = '2'; }));
+  loaded.component.data.draft.floors[0].spaces[0].length = '1000'; loaded.component.data.draft.floors[0].spaces[0].width = '1000';
+  loaded.component.confirm();
+  assert.equal(loaded.events.length, 0);
+  assert.equal(loaded.component.data.draft.floors[0].spaces[0].length, '1000');
+  assert.match(loaded.toasts[0], /(面积|工程量)/);
+});
+
+test('form applies measured geometry as read-only total area and keeps it when returning from result', () => {
+  const base = pricing.createDefaultRenovationInput();
+  const measurement = geometry.createMeasurementDraft(base);
+  measurement.mode = 'measured';
+  measurement.floors.forEach(floor => floor.spaces.forEach(space => { space.length = 2; space.width = 2; }));
+  const resolved = geometry.resolveRenovationGeometry({ ...base, measurement });
+  const { page } = loadPage('index');
+  page.onMeasurementConfirm({ detail: resolved });
+  assert.equal(page.data.area, '36');
+  assert.equal(page.data.measurement.mode, 'measured');
+  const record = { input: resolved.input, selections: { excludedItems: [], quantities: {}, fees: { management: true, design: true, tax: false } } };
+  page.applyReportRecord(record);
+  assert.equal(page.data.measurement.mode, 'measured');
+  assert.equal(page.data.area, '36');
+});
+
+test('measurement source text exposes mixed estimates and old results as historical reference', () => {
+  const base = pricing.createDefaultRenovationInput(); const measurement = geometry.createMeasurementDraft(base); measurement.mode = 'measured';
+  measurement.floors.forEach(floor => floor.spaces.forEach(space => { space.length = 2; space.width = 2; }));
+  const resolved = geometry.resolveRenovationGeometry({ ...base, measurement });
+  const form = loadPage('index').page; form.onMeasurementConfirm({ detail: resolved });
+  assert.match(form.data.measurementBasisText, /含估算项/);
+  const selections = { excludedItems: [], quantities: {}, fees: { management: true, design: true, tax: false } };
+  const estimate = pricing.estimateRenovation(resolved.input, selections);
+  const mixedRecord = { input: estimate.input, selections, quantityBasis: estimate.geometrySummary, report: { version: 5, quoteType: 'renovation', renovation: { ...estimate, quantityBasis: 'mixed' } } };
+  const mixed = loadPage('result', { reportHelpers: { readRenovationReport: () => mixedRecord } }); mixed.page.onLoad();
+  assert.match(mixed.page.data.measurementBasisText, /含估算项/);
+  const oldRecord = { input: { ...pricing.createDefaultRenovationInput(), measurement: undefined }, selections, report: { version: 5, quoteType: 'renovation', renovation: estimate } };
+  const old = loadPage('result', { reportHelpers: { readRenovationReport: () => oldRecord } }); old.page.onLoad();
+  assert.equal(old.page.data.measurementBasisText, '历史参考报价');
+});
+
+test('estimated measurement draft retains same-id values when form structure changes', () => {
+  const { page } = loadPage('index');
+  Object.assign(page.data, { area: '100', floorCount: '1', height: '3' });
+  const input = page.buildInput();
+  input.measurement.floors[0].spaces[0].doorArea = 1.5;
+  page.data.measurement = input.measurement;
+  page.onAreaInput({ detail: { value: '120' } });
+  assert.equal(page.data.measurement.floors[0].spaces[0].doorArea, 1.5);
+  assert.equal(page.data.measurement.mode, 'estimated');
+});
+
+test('floor settings keep an optional raw floor height and measured floor area cannot be edited directly', () => {
+  const { page } = loadPage('index');
+  page.data.area = '100'; page.data.floors = [{ ...page.data.floors[0], area: 100, height: null }];
+  page.openFloorDrawer();
+  page.onFloorHeightInput({ detail: { value: '3.6' } });
+  page.confirmFloors();
+  assert.equal(page.data.floors[0].height, 3.6);
+  assert.equal(page.data.measurement.floors[0].height, 3.6);
+  page.data.measurement.mode = 'measured';
+  page.onFloorAreaInput({ detail: { value: '80' } });
+  assert.equal(page.data.floors[0].area, 100);
+});
+
+test('changing whole-house height recalculates inherited measured wall quantities without filling room height', async () => {
+  const base = pricing.createDefaultRenovationInput();
+  const measurement = geometry.createMeasurementDraft(base); measurement.mode = 'measured';
+  measurement.floors.forEach(floor => floor.spaces.forEach(space => { space.length = 2; space.width = 2; }));
+  const input = geometry.resolveRenovationGeometry({ ...base, measurement }).input;
+  const selections = { excludedItems: [], quantities: {}, fees: { management: true, design: true, tax: false } };
+  const estimate = pricing.estimateRenovation(input, selections);
+  const record = { input, selections, report: { version: 5, quoteType: 'renovation', renovation: estimate } };
+  const writes = [];
+  const { page } = loadPage('result', { reportHelpers: {
+    readRenovationReport: () => record,
+    writeRenovationReport: async (nextEstimate, nextSelections) => { writes.push(nextEstimate); return { ...record, input: nextEstimate.input, selections: nextSelections, report: { ...record.report, renovation: nextEstimate } }; },
+  } });
+  page.onLoad(); page.onParametersEdit(); page.onParameterInput({ currentTarget: { dataset: { field: 'height' } }, detail: { value: '4' } });
+  await page.confirmParameters();
+  const findQuantity = current => current.spaces.flatMap(space => space.groups).flatMap(group => group.items).find(item => item.id === 'bedroom.wall.primer').quantity;
+  assert.equal(writes.length, 1);
+  assert.ok(findQuantity(writes[0]) > findQuantity(estimate));
+  assert.equal(writes[0].input.measurement.floors[0].spaces[0].height, null);
+});
+
+test('restoring automatic quantity removes only the override and preserves exclusion and fees', async () => {
+  const input = pricing.createDefaultRenovationInput();
+  const selections = { excludedItems: ['bedroom.ceiling.primer'], quantities: { 'bedroom.ceiling.primer': 20 }, fees: { management: false, design: true, tax: true } };
+  const estimate = pricing.estimateRenovation(input, selections);
+  const record = { input: estimate.input, selections, report: { version: 5, quoteType: 'renovation', renovation: estimate } };
+  const loaded = loadPage('result', { reportHelpers: {
+    readRenovationReport: () => record,
+    writeRenovationReport: async (nextEstimate, nextSelections) => ({ ...record, input: nextEstimate.input, selections: nextSelections, report: { ...record.report, renovation: nextEstimate } }),
+  } });
+  loaded.page.onLoad();
+  loaded.page.onItemEdit({ detail: { item: { id: 'bedroom.ceiling.primer', quantity: 20, included: false } } });
+  await loaded.page.onRestoreAutoQuantity();
+  assert.equal('bedroom.ceiling.primer' in loaded.page.data.record.selections.quantities, false);
+  assert.deepEqual(Array.from(loaded.page.data.record.selections.excludedItems), ['bedroom.ceiling.primer']);
+  assert.equal(loaded.page.data.record.selections.fees.tax, true);
+});
+
+test('failed result saves keep item and measurement drawers open for retry', async () => {
+  const input = pricing.createDefaultRenovationInput();
+  const selections = { excludedItems: [], quantities: {}, fees: { management: true, design: true, tax: false } };
+  const estimate = pricing.estimateRenovation(input, selections);
+  const record = { input: estimate.input, selections, report: { version: 5, quoteType: 'renovation', renovation: estimate } };
+  const loaded = loadPage('result', { reportHelpers: { readRenovationReport: () => record, writeRenovationReport: async () => { throw new Error('offline'); } } });
+  loaded.page.onLoad();
+  loaded.page.onItemEdit({ detail: { item: { id: 'bedroom.ceiling.primer', quantity: 20, included: true } } });
+  await loaded.page.confirmItemEdit();
+  assert.equal(loaded.page.data.itemDrawerVisible, true);
+  loaded.page.onMeasurementEdit();
+  await loaded.page.onMeasurementConfirm({ detail: { input } });
+  assert.equal(loaded.page.data.measurementDrawerVisible, true);
+  assert.equal(loaded.toasts.filter(value => value === '保存失败，请重试').length, 2);
 });

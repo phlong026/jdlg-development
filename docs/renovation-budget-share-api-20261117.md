@@ -25,7 +25,8 @@
   "costBreakdown": [],
   "dynamicNotes": [],
   "renovation": {
-    "pricingVersion": "renovation-reference-v1",
+    "pricingVersion": "renovation-dynamic-v2",
+    "quantityBasis": "estimated",
     "totalAmount": 90400,
     "spaces": []
   }
@@ -33,6 +34,10 @@
 ```
 
 `basicInfo` 顺序固定为：所在地区、装修面积、房屋状态、楼层数、层高、面宽、进深、户型、室内风格、装修标准。只有所在地区携带 `fullWidth: true`。
+
+`pricingVersion` 接受 `renovation-reference-v1`（历史参考量）与 `renovation-dynamic-v2`（空间动态算量）。创建时保留实际版本；读取旧快照不重新计算。v2必须携带 `quantityBasis`，值为 `estimated`（按参数估算）、`measured`（按空间尺寸计算）或 `mixed`（空间尺寸中仍含柜体等估算项）；v1不带该字段。逐间尺寸及门窗扣减原始数据只保存在账户报告中，公开树只携带来源枚举与量价。
+
+存在楼层/空间层高覆盖时，基础信息“层高”显示实际统一高度；高度不一致时显示“分层/空间设置”，不把全屋默认高度误作所有房间实测高度。
 
 `costBreakdown` 顺序固定为：主材费、辅材费、人工费、管理费、设计费、税费。前三项合计等于空间工程基准；后三项分别只能为零或工程基准的 10%、4%、3.4% 四舍五入金额；六项合计等于 `renovation.totalAmount`。
 

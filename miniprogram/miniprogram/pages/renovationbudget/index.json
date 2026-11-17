@@ -2,7 +2,8 @@
   "usingComponents": {
     "navigation-bar": "/components/navigation-bar/navigation-bar",
     "login-guard": "/components/login-guard/login-guard",
-    "quote-type-switch": "/components/quote-type-switch/index"
+    "quote-type-switch": "/components/quote-type-switch/index",
+    "renovation-measurement-editor": "/components/renovation-measurement-editor/index"
   },
   "navigationStyle": "custom",
   "navigationBarTitleText": "装修报价"

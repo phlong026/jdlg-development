@@ -10,6 +10,7 @@ const typedSources = new Set(['pages/contentreader/contentreader.ts', 'utils/cos
 const sources=fs.readdirSync(path.join(root,'utils/tracking')).filter(x=>x.endsWith('.ts')).map(x=>'utils/tracking/'+x).concat([
  'utils/profile-access.ts',
  'utils/renovation-pricing.ts',
+ 'utils/renovation-geometry.ts',
  'utils/renovation-report.ts',
  'utils/costEstimateShare.ts',
  'utils/renovationCostShareImage.ts',
@@ -45,6 +46,7 @@ const sources=fs.readdirSync(path.join(root,'utils/tracking')).filter(x=>x.endsW
  'pages/visitdetail/visitdetail.ts',
  'components/quote-type-switch/index.ts',
  'components/renovation-report/index.ts',
+ 'components/renovation-measurement-editor/index.ts',
  'pages/renovationbudget/index.ts',
  'pages/renovationbudget/result.ts'
 ]);

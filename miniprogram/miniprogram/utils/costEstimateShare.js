@@ -62,8 +62,14 @@ function isRenovationResult(result) {
     if (!result.costBreakdown.every((item, index) => isBreakdown(item) && item.name === RENOVATION_BREAKDOWN_NAMES[index]))
         return false;
     const renovation = result.renovation;
-    if (renovation.pricingVersion !== 'renovation-reference-v1' || !validNumber(renovation.totalAmount)
+    if (!['renovation-reference-v1', 'renovation-dynamic-v2'].includes(renovation.pricingVersion) || !validNumber(renovation.totalAmount)
         || !Array.isArray(renovation.spaces) || renovation.spaces.length !== RENOVATION_SPACES.length)
+        return false;
+    if (renovation.pricingVersion === 'renovation-dynamic-v2') {
+        if (!['estimated', 'measured', 'mixed'].includes(String(renovation.quantityBasis)))
+            return false;
+    }
+    else if (renovation.quantityBasis !== undefined)
         return false;
     let engineering = 0;
     let materialAmount = 0;
@@ -162,7 +168,8 @@ function sanitizeCostEstimateShareResult(value) {
         ...common,
         quoteType: 'renovation',
         renovation: {
-            pricingVersion: 'renovation-reference-v1',
+            pricingVersion: value.renovation.pricingVersion,
+            ...(value.renovation.quantityBasis ? { quantityBasis: value.renovation.quantityBasis } : {}),
             totalAmount: value.renovation.totalAmount,
             spaces: value.renovation.spaces.map(space => ({
                 id: space.id,

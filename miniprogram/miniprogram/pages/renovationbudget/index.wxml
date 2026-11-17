@@ -14,7 +14,8 @@
         <view class="select-field"><text>{{province}} / {{city}}</text><text class="arrow">〉</text></view>
       </picker>
       <text class="field-label">装修面积</text>
-      <view class="input-field"><input type="digit" value="{{area}}" placeholder="请输入" bindinput="onAreaInput" /><text>㎡</text></view>
+      <view class="input-field {{measurement && measurement.mode === 'measured' ? 'readonly' : ''}}"><input type="digit" value="{{area}}" disabled="{{measurement && measurement.mode === 'measured'}}" placeholder="请输入" bindinput="onAreaInput" /><text>㎡</text></view>
+      <view class="measurement-link" bindtap="openMeasurementDrawer"><view><text>空间尺寸</text><text class="measurement-state">{{measurementBasisText}}</text></view><text>›</text></view>
       <view class="divider"></view>
       <view class="section-title">房屋几何参数</view>
       <view class="grid two-col">
@@ -52,12 +53,14 @@
       <scroll-view class="floor-tabs" scroll-x><view wx:for="{{floors}}" wx:key="index" class="floor-tab {{activeFloor === index ? 'selected' : ''}}" data-index="{{index}}" bindtap="selectFloor">{{item.name}}</view></scroll-view>
       <view class="floor-content">
         <view class="section-title">{{floors[activeFloor].name}} · {{floors[activeFloor].area || '--'}}㎡</view>
-        <text class="field-label">本层面积</text><view class="input-field"><input type="digit" value="{{floors[activeFloor].area}}" bindinput="onFloorAreaInput"/><text>㎡</text></view>
+        <text class="field-label">本层面积</text><view class="input-field {{measurement && measurement.mode === 'measured' ? 'readonly' : ''}}"><input type="digit" value="{{floors[activeFloor].area}}" disabled="{{measurement && measurement.mode === 'measured'}}" bindinput="onFloorAreaInput"/><text>㎡</text></view>
+        <text class="field-label">本层层高</text><view class="input-field"><input type="digit" value="{{floors[activeFloor].height}}" placeholder="继承全屋层高" bindinput="onFloorHeightInput"/><text>m</text></view>
         <view class="floor-room" wx:for="{{roomFields}}" wx:key="*this"><text>{{roomLabels[item]}}</text><view class="counter"><button data-field="{{item}}" data-delta="-1" bindtap="onFloorRoomChange">−</button><text>{{floors[activeFloor].rooms[item]}}</text><button data-field="{{item}}" data-delta="1" bindtap="onFloorRoomChange">+</button></view></view>
       </view>
       <button class="primary" bindtap="confirmFloors">确认</button><button class="secondary" bindtap="closeFloorDrawer">返回</button>
     </view>
   </view>
+  <renovation-measurement-editor visible="{{measurementDrawerVisible}}" input="{{measurementEditorInput}}" bind:cancel="closeMeasurementDrawer" bind:confirm="onMeasurementConfirm" />
 </view>
 </block>
 <login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

@@ -1,5 +1,6 @@
 const { cityOptionsMap } = require('../../utils/costRegions');
 const { estimateRenovation } = require('../../utils/renovation-pricing');
+const { createMeasurementDraft, resolveRenovationGeometry } = require('../../utils/renovation-geometry');
 const { getBudgetAccountId, requestBudgetLogin, writeRenovationReport, readRenovationReport, readBuildingPrefill } = require('../../utils/renovation-report');
 
 const provinceOptions = Object.keys(cityOptionsMap);
@@ -35,24 +36,68 @@ function makeFloors(count, area, rooms) {
   const floors = [];
   for (let index = 0; index < floorCount; index += 1) {
     const floorRooms = {};
-    roomFields.forEach((field) => { floorRooms[field] = index === 0 ? rooms[field] : 0; });
+    roomFields.forEach((field) => {
+      const total = Math.max(0, Number(rooms[field] || 0));
+      floorRooms[field] = Math.floor(total / floorCount) + (index < total % floorCount ? 1 : 0);
+    });
     const floorArea = totalArea && index === floorCount - 1 ? Number((totalArea - Number(baseArea) * (floorCount - 1)).toFixed(2)) : baseArea;
-    floors.push({ index, name: `${index + 1}层`, area: floorArea, rooms: floorRooms });
+    floors.push({ index, name: `${index + 1}层`, area: floorArea, height: null, rooms: floorRooms });
   }
   return floors;
+}
+function resizeFloorAreas(floors, count, area, rooms) {
+  if (!Array.isArray(floors) || floors.length !== count) return makeFloors(count, area, rooms);
+  const totalArea = numeric(area); const oldTotal = floors.reduce((sum, floor) => sum + numeric(floor.area), 0); let used = 0;
+  return floors.map((floor, index) => {
+    if (!totalArea) return { ...clone(floor), area: '' };
+    const nextArea = index === count - 1 ? Number((totalArea - used).toFixed(2)) : Number((oldTotal > 0 ? totalArea * numeric(floor.area) / oldTotal : totalArea / count).toFixed(2));
+    used += nextArea; return { ...clone(floor), area: nextArea };
+  });
+}
+function measurementStatus(input, summary) {
+  if (!input || !input.measurement) return '按房屋参数估算';
+  if (input.measurement.mode !== 'measured') return '按房屋参数估算';
+  try {
+    const resolvedSummary = summary || resolveRenovationGeometry(input).summary;
+    return resolvedSummary.estimatedFields && resolvedSummary.estimatedFields.length ? '已按空间尺寸计算 · 含估算项' : '已按空间尺寸计算';
+  } catch (error) { return '空间尺寸待补充'; }
 }
 function restoredData(record) {
   if (!record || !record.input || !record.selections) throw new Error('报价记录不完整');
   const input = record.input; const provinceIndex = provinceOptions.indexOf(input.province); const availableCities = provinceIndex >= 0 ? cities(input.province) : cities('福建');
   const cityIndex = availableCities.indexOf(input.city); const safeProvinceIndex = provinceIndex >= 0 ? provinceIndex : provinceOptions.indexOf('福建'); const safeCityIndex = cityIndex >= 0 ? cityIndex : availableCities.indexOf('泉州');
   const floorCount = positiveInteger(input.floorCount) || 1; const rooms = clone(input.rooms); const floors = Array.isArray(input.floors) && input.floors.length === floorCount ? clone(input.floors) : makeFloors(floorCount, input.area, rooms);
+  floors.forEach((floor, index) => { floor.height = input.measurement && input.measurement.floors && input.measurement.floors[index] ? input.measurement.floors[index].height : (floor.height == null ? null : floor.height); });
   return {
     province: provinceOptions[safeProvinceIndex], city: availableCities[Math.max(0, safeCityIndex)], cityOptions: availableCities,
     regionOptions: [provinceOptions, availableCities], regionIndex: [safeProvinceIndex, Math.max(0, safeCityIndex)],
     houseType: input.houseType, area: String(input.area), width: input.width == null ? '' : String(input.width), depth: input.depth == null ? '' : String(input.depth),
     floorCount: String(floorCount), height: String(input.height), rooms, style: input.style, standard: input.standard,
-    floors, selections: clone(record.selections),
+    floors, measurement: input.measurement ? clone(input.measurement) : null, measurementBasisText: measurementStatus(input, record.quantityBasis), selections: clone(record.selections),
   };
+}
+
+function rawInput(data, measurement = data.measurement) {
+  const floorCount = positiveInteger(data.floorCount);
+  const suppliedFloors = Array.isArray(data.floors) ? data.floors : [];
+  const floorArea = suppliedFloors.reduce((sum, floor) => sum + numeric(floor.area), 0);
+  const floors = suppliedFloors.length === floorCount && suppliedFloors.every((floor) => numeric(floor.area) > 0) && Math.abs(floorArea - numeric(data.area)) <= 0.01
+    ? suppliedFloors : makeFloors(floorCount, data.area, data.rooms);
+  return {
+    province: data.province, city: data.city, area: numeric(data.area),
+    width: optionalNumeric(data.width), depth: optionalNumeric(data.depth), floorCount,
+    height: numeric(data.height), houseType: data.houseType, standard: data.standard,
+    style: data.style, rooms: clone(data.rooms), floors: clone(floors), measurement: measurement ? clone(measurement) : null,
+  };
+}
+
+function rawFloorsFromResolved(input) {
+  const floors = clone(input.floors);
+  floors.forEach((floor, index) => {
+    const measuredHeight = input.measurement && input.measurement.floors[index] ? input.measurement.floors[index].height : null;
+    floor.height = measuredHeight === null || measuredHeight === undefined || measuredHeight === '' ? (floor.height == null ? null : floor.height) : measuredHeight;
+  });
+  return floors;
 }
 
 Page({
@@ -66,7 +111,7 @@ Page({
     standard: 'standard', standardOptions,
     selections: defaultSelections(),
     floors: makeFloors(1, '', { bedroom: 3, living: 2, kitchen: 1, bathroom: 2, balcony: 1 }),
-    floorDrawerVisible: false, activeFloor: 0, generating: false,
+    floorDrawerVisible: false, measurementDrawerVisible: false, measurementEditorInput: null, measurement: null, measurementBasisText: '按房屋参数估算', activeFloor: 0, generating: false,
   },
 
   onLoad(options = {}) {
@@ -116,14 +161,14 @@ Page({
     this.setData({ province, city: cityOptions[index[1]] || cityOptions[0], cityOptions, regionOptions: [provinceOptions, cityOptions], regionIndex: index });
   },
   onHouseTypeTap(e) { this.setData({ houseType: e.currentTarget.dataset.value }); },
-  onInput(e) { this.setData({ [e.currentTarget.dataset.field]: e.detail.value }); },
+  onInput(e) { this.applyStructureUpdate({ [e.currentTarget.dataset.field]: e.detail.value }); },
   onFloorCountInput(e) {
     const floorCount = e.detail.value; const count = positiveInteger(floorCount);
-    this.setData({ floorCount, ...(count ? { floors: makeFloors(count, this.data.area, this.data.rooms) } : {}) });
+    this.applyStructureUpdate({ floorCount, ...(count ? { floors: makeFloors(count, this.data.area, this.data.rooms) } : {}) });
   },
   onAreaInput(e) {
     const area = e.detail.value; const count = positiveInteger(this.data.floorCount);
-    this.setData({ area, ...(count ? { floors: makeFloors(count, area, this.data.rooms) } : {}) });
+    this.applyStructureUpdate({ area, ...(count ? { floors: resizeFloorAreas(this.data.floors, count, area, this.data.rooms) } : {}) });
   },
   onRoomChange(e) {
     const field = e.currentTarget.dataset.field; const delta = Number(e.currentTarget.dataset.delta);
@@ -136,10 +181,42 @@ Page({
       }
     }
     const rooms = { ...this.data.rooms, [field]: floors.reduce((sum, floor) => sum + Number(floor.rooms[field] || 0), 0) };
-    this.setData({ rooms, floors });
+    this.applyStructureUpdate({ rooms, floors });
   },
   onStyleTap(e) { this.setData({ style: e.currentTarget.dataset.value }); },
   onStandardTap(e) { this.setData({ standard: e.currentTarget.dataset.value }); },
+  applyStructureUpdate(updates) {
+    const next = { ...this.data, ...updates };
+    if (this.data.measurement) {
+      try {
+        updates.measurement = createMeasurementDraft(rawInput(next, this.data.measurement), this.data.measurement);
+        if (Array.isArray(updates.floors)) updates.floors.forEach((floor, index) => {
+          const measurementFloor = updates.measurement.floors[index];
+          if (measurementFloor && measurementFloor.height !== null && measurementFloor.height !== undefined && measurementFloor.height !== '') floor.height = measurementFloor.height;
+        });
+        updates.measurementBasisText = measurementStatus(rawInput({ ...next, ...updates }, updates.measurement));
+      }
+      catch (error) { console.warn('同步空间尺寸结构失败:', error); }
+    }
+    this.setData(updates);
+  },
+  openMeasurementDrawer() {
+    if (!this.data.province || !this.data.city) { wx.showToast({ title: '请选择所在地区', icon: 'none' }); return; }
+    if (optionalNumeric(this.data.width) !== null && !(optionalNumeric(this.data.width) > 0)) { wx.showToast({ title: '面宽需填写大于0的数字', icon: 'none' }); return; }
+    if (optionalNumeric(this.data.depth) !== null && !(optionalNumeric(this.data.depth) > 0)) { wx.showToast({ title: '进深需填写大于0的数字', icon: 'none' }); return; }
+    if (!positiveInteger(this.data.floorCount)) { wx.showToast({ title: '楼层数请填写1至20的整数', icon: 'none' }); return; }
+    if (!(numeric(this.data.height) > 0)) { wx.showToast({ title: '请填写层高', icon: 'none' }); return; }
+    this.setData({ measurementDrawerVisible: true, measurementEditorInput: rawInput(this.data) });
+  },
+  closeMeasurementDrawer() { this.setData({ measurementDrawerVisible: false }); },
+  onMeasurementConfirm(e) {
+    const input = e.detail.input;
+    this.setData({
+      measurementDrawerVisible: false, measurement: clone(input.measurement), area: String(input.area),
+      width: input.width == null ? '' : String(input.width), depth: input.depth == null ? '' : String(input.depth),
+      floorCount: String(input.floorCount), height: String(input.height), rooms: clone(input.rooms), floors: rawFloorsFromResolved(input), measurementBasisText: measurementStatus(input, e.detail.summary),
+    });
+  },
   openFloorDrawer() {
     const count = positiveInteger(this.data.floorCount);
     if (!count) { wx.showToast({ title: '请先填写1至20层', icon: 'none' }); return; }
@@ -153,7 +230,11 @@ Page({
   stopPropagation() {},
   selectFloor(e) { this.setData({ activeFloor: Number(e.currentTarget.dataset.index) }); },
   onFloorAreaInput(e) {
+    if (this.data.measurement && this.data.measurement.mode === 'measured') return;
     const floors = clone(this.data.floors); floors[this.data.activeFloor].area = e.detail.value; this.setData({ floors });
+  },
+  onFloorHeightInput(e) {
+    const floors = clone(this.data.floors); floors[this.data.activeFloor].height = e.detail.value; this.setData({ floors });
   },
   onFloorRoomChange(e) {
     const floors = clone(this.data.floors); const field = e.currentTarget.dataset.field; const delta = Number(e.currentTarget.dataset.delta);
@@ -165,6 +246,9 @@ Page({
     if (floors.some((floor) => !(numeric(floor.area) > 0))) {
       wx.showToast({ title: '每层面积都需大于0', icon: 'none' }); return;
     }
+    if (floors.some((floor) => optionalNumeric(floor.height) !== null && !(optionalNumeric(floor.height) > 0))) {
+      wx.showToast({ title: '本层层高需大于0', icon: 'none' }); return;
+    }
     if (!totalArea || Math.abs(totalArea - numeric(this.data.area)) > 0.01) {
       wx.showToast({ title: '分层面积合计需与装修面积一致', icon: 'none' }); return;
     }
@@ -172,7 +256,14 @@ Page({
     floors.forEach((floor) => roomFields.forEach((field) => { rooms[field] += Number(floor.rooms[field] || 0); }));
     const overLimit = roomFields.find((field) => rooms[field] > 50);
     if (overLimit) { wx.showToast({ title: `${roomLabels[overLimit]}合计不能超过50间`, icon: 'none' }); return; }
-    this.floorDrawerSnapshot = null; this.setData({ rooms, floorDrawerVisible: false });
+    const roomTotal = roomFields.reduce((sum, field) => sum + rooms[field], 0);
+    const emptyFloor = roomTotal ? floors.findIndex((floor) => roomFields.every((field) => Number(floor.rooms[field] || 0) === 0)) : -1;
+    if (emptyFloor >= 0) { wx.showToast({ title: `第${emptyFloor + 1}层请至少设置一个空间`, icon: 'none' }); return; }
+    const normalizedFloors = clone(floors); normalizedFloors.forEach((floor) => { floor.height = optionalNumeric(floor.height); });
+    const next = { ...this.data, rooms, floors: normalizedFloors };
+    const measurement = createMeasurementDraft(rawInput(next, this.data.measurement), this.data.measurement || null);
+    measurement.floors.forEach((floor, index) => { floor.height = normalizedFloors[index].height; });
+    this.floorDrawerSnapshot = null; this.setData({ rooms, floors: normalizedFloors, measurement, measurementBasisText: measurementStatus(rawInput(next, measurement)), floorDrawerVisible: false });
   },
   validate() {
     if (!this.data.province || !this.data.city) return '请选择所在地区';
@@ -184,12 +275,9 @@ Page({
     return '';
   },
   buildInput() {
-    return {
-      province: this.data.province, city: this.data.city, area: numeric(this.data.area),
-      width: optionalNumeric(this.data.width), depth: optionalNumeric(this.data.depth), floorCount: positiveInteger(this.data.floorCount),
-      height: numeric(this.data.height), houseType: this.data.houseType, standard: this.data.standard,
-      style: this.data.style, rooms: clone(this.data.rooms), floors: clone(this.data.floors),
-    };
+    const base = rawInput(this.data);
+    const measurement = createMeasurementDraft(base, this.data.measurement || null);
+    return resolveRenovationGeometry({ ...base, measurement }).input;
   },
   async onGenerateReport() {
     if (this.data.generating) return;
@@ -198,7 +286,9 @@ Page({
     this.setData({ generating: true });
     try {
       const selections = clone(this.data.selections || defaultSelections());
-      const estimate = estimateRenovation(this.buildInput(), selections);
+      const input = this.buildInput();
+      const estimate = estimateRenovation(input, selections);
+      this.setData({ measurement: clone(input.measurement), measurementBasisText: measurementStatus(input, estimate.geometrySummary), area: String(input.area), floorCount: String(input.floorCount), rooms: clone(input.rooms), floors: rawFloorsFromResolved(input) });
       await writeRenovationReport(estimate, selections);
       wx.navigateTo({ url: '/pages/renovationbudget/result', fail: () => wx.showToast({ title: '报价报告打开失败', icon: 'none' }) });
     } catch (error) {

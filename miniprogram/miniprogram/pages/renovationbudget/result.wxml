@@ -3,6 +3,7 @@
   <navigation-bar title="报价报告" background="#e6daca" custom-back="{{true}}" bind:back="onReturnModify" />
   <scroll-view class="page-scroll" scroll-y enhanced show-scrollbar="{{false}}">
     <view class="context-bar" wx:if="{{report}}"><view class="context-info"><text>{{record.input.province}} / {{record.input.city}} · {{record.input.area}}㎡</text><text>{{record.input.houseType === 'new' ? '新房' : '旧房'}}</text><picker mode="selector" range="{{standardOptions}}" range-key="name" value="{{record.input.standard === 'economy' ? 0 : record.input.standard === 'quality' ? 2 : 1}}" disabled="{{saving}}" bindchange="onStandardChange"><text>{{record.input.standard === 'economy' ? '经济型' : record.input.standard === 'quality' ? '品质型' : '标准型'}}⌄</text></picker></view><quote-type-switch kind="renovation" /></view>
+    <view class="measurement-link" wx:if="{{report}}" bindtap="onMeasurementEdit"><view><text>空间尺寸</text><text class="measurement-state">{{measurementBasisText}}</text></view><text>›</text></view>
     <view class="state-card" wx:if="{{loading}}"><text class="state-title">正在读取报价</text></view>
     <view class="state-card" wx:elif="{{error}}"><text class="state-title">报价暂时无法打开</text><text class="state-copy">{{error}}</text><view class="state-actions"><button class="secondary" bindtap="onRetry">重试</button><button class="primary" bindtap="onReturnModify">返回修改</button></view></view>
     <block wx:elif="{{report}}">
@@ -18,6 +19,7 @@
     <view class="drawer-head"><view><text class="drawer-title">{{editingItem.name}}</text></view><text bindtap="closeDrawers">×</text></view>
     <checkbox-group bindchange="onItemIncludedChange"><label class="include-row"><checkbox value="included" checked="{{editingIncluded}}" color="#b98f5c"/><text>计入报价</text></label></checkbox-group>
     <text class="field-label">工程量</text><view class="input-field"><input type="digit" value="{{editingQuantity}}" bindinput="onItemQuantityInput"/><text>{{editingItem.unit}}</text></view>
+    <button class="auto-button" wx:if="{{editingHasOverride}}" loading="{{saving}}" bindtap="onRestoreAutoQuantity">恢复自动计算</button>
     <view class="readonly-row"><text>主材单价</text><text>{{editingItem.materialUnitPrice}} 元/{{editingItem.unit}}</text></view><view class="readonly-row"><text>人工/辅材单价</text><text>{{editingItem.laborAuxUnitPrice}} 元/{{editingItem.unit}}</text></view>
     <view class="drawer-actions"><button class="secondary" bindtap="closeDrawers">取消</button><button class="primary" loading="{{saving}}" bindtap="confirmItemEdit">确认</button></view>
   </view></view>
@@ -30,9 +32,10 @@
 
   <view class="mask" wx:if="{{parameterDrawerVisible}}" bindtap="closeDrawers"><view class="drawer" catchtap="stopPropagation">
     <view class="drawer-head"><text class="drawer-title">调整房屋参数</text><text bindtap="closeDrawers">×</text></view>
-    <view class="parameter-grid"><view wx:for="{{parameterFields}}" wx:key="field"><text class="field-label">{{item.label}}</text><view class="input-field"><input type="digit" value="{{parameterDraft[item.field]}}" data-field="{{item.field}}" bindinput="onParameterInput"/><text>{{item.unit}}</text></view></view></view>
+    <view class="parameter-grid"><view wx:for="{{parameterFields}}" wx:key="field"><text class="field-label">{{item.label}}</text><view class="input-field {{item.field === 'area' && record.input.measurement && record.input.measurement.mode === 'measured' ? 'readonly' : ''}}"><input type="digit" value="{{parameterDraft[item.field]}}" disabled="{{item.field === 'area' && record.input.measurement && record.input.measurement.mode === 'measured'}}" data-field="{{item.field}}" bindinput="onParameterInput"/><text>{{item.unit}}</text></view></view></view>
     <view class="drawer-actions"><button class="secondary" bindtap="closeDrawers">取消</button><button class="primary" loading="{{saving}}" bindtap="confirmParameters">重新测算</button></view>
   </view></view>
+  <renovation-measurement-editor visible="{{measurementDrawerVisible}}" input="{{measurementEditorInput}}" bind:cancel="closeMeasurementDrawer" bind:confirm="onMeasurementConfirm" />
 </view>
 </block>
 <login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

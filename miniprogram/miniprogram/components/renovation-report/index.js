@@ -9,7 +9,7 @@ Component({
     readonly: { type: Boolean, value: false },
     detailsExpanded: { type: Boolean, value: false, observer() { this.refresh(); } },
   },
-  data: { activeSpace: 0, viewSpaces: [], basicInfo: [], totalWan: '0.00', totalAmountText: '¥0', unitText: '--', engineeringText: '¥0', materialText: '¥0', auxiliaryText: '¥0', laborText: '¥0', ringStyle: '', feeRows: [] },
+  data: { activeSpace: 0, viewSpaces: [], basicInfo: [], basisText: '', totalWan: '0.00', totalAmountText: '¥0', unitText: '--', engineeringText: '¥0', materialText: '¥0', auxiliaryText: '¥0', laborText: '¥0', ringStyle: '', feeRows: [] },
   lifetimes: { attached() { this.refresh(); } },
   methods: {
     refresh() {
@@ -27,7 +27,10 @@ Component({
       const materialEnd = engineeringAmount ? (materialAmount / engineeringAmount * 100).toFixed(2) : '0';
       const auxiliaryEnd = engineeringAmount ? ((materialAmount + auxiliaryAmount) / engineeringAmount * 100).toFixed(2) : '0';
       const totalAmount = Number.isFinite(renovation.totalAmount) ? renovation.totalAmount : 0;
+      const basisText = { estimated: '按房屋参数估算', measured: '按空间尺寸计算', mixed: '按空间尺寸计算 · 含估算项' }[renovation.quantityBasis]
+        || (renovation.pricingVersion === 'renovation-reference-v1' ? '历史参考工程量' : '');
       this.setData({
+        basisText,
         viewSpaces: spaces, basicInfo: Array.isArray(report.basicInfo) ? report.basicInfo : [], activeSpace: Math.min(this.data.activeSpace, Math.max(0, spaces.length - 1)),
         totalWan: wan(totalAmount), totalAmountText: money(totalAmount),
         unitText: report.estimatedUnitCost || `${renovation.unitAmount || '--'} 元/㎡`, engineeringText: money(renovation.engineeringAmount || engineeringAmount),

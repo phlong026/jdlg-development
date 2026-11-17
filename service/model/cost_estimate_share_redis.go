@@ -86,6 +86,7 @@ type RenovationCostSpace struct {
 
 type RenovationCostEstimate struct {
 	PricingVersion string                `json:"pricingVersion"`
+	QuantityBasis  string                `json:"quantityBasis,omitempty"`
 	TotalAmount    *float64              `json:"totalAmount"`
 	Spaces         []RenovationCostSpace `json:"spaces"`
 }

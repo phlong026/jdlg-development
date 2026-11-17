@@ -152,6 +152,24 @@ func TestRenovationCostShareStrictContractAndBalance(t *testing.T) {
 	}
 }
 
+func TestRenovationPricingVersionsRemainReadable(t *testing.T) {
+	for _, version := range []string{"renovation-reference-v1", "renovation-dynamic-v2"} {
+		snapshot := validRenovationShareResult()
+		snapshot.Renovation.PricingVersion = version
+		if version == "renovation-dynamic-v2" {
+			snapshot.Renovation.QuantityBasis = "mixed"
+		}
+		if !validRenovationCostEstimateShare(snapshot) || !validStoredCostEstimateShare(snapshot) {
+			t.Fatalf("valid immutable snapshot rejected: %s", version)
+		}
+	}
+	snapshot := validRenovationShareResult()
+	snapshot.Renovation.PricingVersion = "unknown-dynamic-v99"
+	if validRenovationCostEstimateShare(snapshot) {
+		t.Fatal("unknown pricing version accepted")
+	}
+}
+
 func TestRenovationCostShareUsesIndependentBoundedAuthenticatedCreate(t *testing.T) {
 	router, _ := newCostEstimateShareRouter(t)
 	result := validRenovationShareResult()
