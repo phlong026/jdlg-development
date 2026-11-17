@@ -1,9 +1,9 @@
 {
-  "recorded_at": "2026-11-17T20:55:14+08:00",
+  "recorded_at": "2026-11-17T21:44:09+08:00",
   "timezone": "Asia/Shanghai",
   "scope": "联合部署；真实AI供应商调用与启用除外；服务号及公众号同步按用户指示延后",
   "server_deployment_complete": true,
-  "delivery_complete": false,
+  "delivery_complete": true,
   "source": {
     "pr_url": "https://github.com/phlong026/jdlg-development/pull/57",
     "candidate_commit": "f8688da5753dc729d76166bf6dbff3f78f9d3da3",
@@ -90,7 +90,8 @@
     "tls_certificate_verified": true,
     "previous_hashed_assets_retained": true,
     "backup": "/root/jdlg-backup-20261117-f8688da/web/admin/original",
-    "nginx_configuration_changed": false
+    "nginx_configuration_changed": false,
+    "public_index_rechecked_at": "2026-11-17T21:45:28+08:00"
   },
   "database": {
     "backup": {
@@ -172,18 +173,21 @@
     "version": "8.0.13",
     "source_commit": "f8688da5753dc729d76166bf6dbff3f78f9d3da3",
     "source_files_verified": 985,
-    "status": "pending_user_confirmation",
-    "uploaded": false,
+    "status": "uploaded",
+    "uploaded": true,
     "taskId": "confirmation_upload_f98ca8f2-455f-46aa-8f7f-acf34d4e9667",
     "tool": "wechatide -c codex upload",
-    "last_task_status": "pending",
-    "next_action": "用户在开发者工具确认后先查旧 taskId；不得重复发起上传",
+    "last_task_status": "success",
     "experience_version_status": "not independently verified",
     "submitted_for_review": false,
-    "formally_released_by_this_task": false
+    "formally_released_by_this_task": false,
+    "terminal_detail": "execution_success",
+    "completed_at": "2026-11-17T21:41:59.323+08:00",
+    "upload_receipt": "wechat-upload-receipt.json",
+    "uploaded_total_bytes": 3638473,
+    "uploaded_main_bytes": 1399088
   },
   "remaining_acceptance": [
-    "微信开发者工具确认后的上传终态",
     "体验版指向与真机角色验收",
     "服务号及公众号同步后续配置",
     "真实AI供应商配置、价格核对及付费验收"
@@ -216,5 +220,6 @@
     "database_full_restore": "仅在单独维护窗口确认后使用私有完整备份；本次未进行生产恢复演练",
     "renovation_v5_links": "回退到旧后端可能暂不可用，需与小程序成套回退",
     "reversibility": "messy"
-  }
+  },
+  "delivery_completion_scope": "后端、管理台、数据库迁移及小程序开发版上传；不含体验版指向、提审、正式发布与真机验收，服务号及真实AI配置按用户要求延后"
 }
