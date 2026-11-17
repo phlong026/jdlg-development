@@ -1,0 +1,24 @@
+{
+  "fixture_only": true,
+  "empty_add_css_pixels": {
+    "success": true,
+    "width": 368,
+    "height": 207
+  },
+  "selected_preview_css_pixels": {
+    "success": true,
+    "width": 180,
+    "height": 101
+  },
+  "filled_add_css_pixels": {
+    "success": true,
+    "width": 180,
+    "height": 101
+  },
+  "add_opens_material_picker": true,
+  "selected_reference_count": 1,
+  "screenshots": [
+    "reference-add-empty.png",
+    "reference-add-filled.png"
+  ]
+}

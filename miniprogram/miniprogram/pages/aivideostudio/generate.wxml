@@ -45,9 +45,8 @@
     </view>
 
     <view wx:else class="section-block">
-      <view class="section-heading"><text>参考素材</text><view class="reference-actions"><text>{{references.length}} / {{limits.total_max}}</text><text class="add-reference" data-target="reference" bindtap="chooseMaterial">+添加</text></view></view>
-      <view wx:if="{{!references.length}}" class="reference-empty" data-target="reference" bindtap="chooseMaterial"><text class="plus">+</text><text>添加图片、视频或音频</text></view>
-      <view class="visual-references">
+      <view class="section-heading"><text>参考素材</text><text class="reference-count">{{references.length}} / {{limits.total_max}}</text></view>
+      <view class="visual-references {{!references.length ? 'visual-references-empty' : ''}}">
         <block wx:for="{{references}}" wx:key="media_id">
           <view wx:if="{{item.media_type === 'image' || item.media_type === 'video'}}" class="reference-visual">
             <view class="reference-preview">
@@ -60,6 +59,7 @@
             <input class="purpose-input" value="{{item.purpose}}" maxlength="120" data-id="{{item.media_id}}" bindinput="updateReferencePurpose" placeholder="说明用途" />
           </view>
         </block>
+        <view wx:if="{{references.length < limits.total_max}}" class="reference-add" data-target="reference" bindtap="chooseMaterial" aria-role="button" aria-label="添加图片、视频或音频"><text class="plus">+</text></view>
       </view>
       <block wx:for="{{references}}" wx:key="media_id">
         <view wx:if="{{item.media_type === 'audio'}}" class="audio-reference">
