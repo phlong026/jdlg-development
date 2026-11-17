@@ -44,6 +44,15 @@ type EventJob struct {
 	LeaseToken string
 }
 
+// EventPresentation is resolved before opening the materialization transaction.
+// DeliveryAllowed only gates external delivery; the resolver's bool gates inbox too.
+type EventPresentation struct {
+	Body            string
+	DeliveryAllowed bool
+}
+
+type EventPresentationResolver func(context.Context, Event) (EventPresentation, bool, error)
+
 type Notification struct {
 	ID          string     `json:"notification_id"`
 	EventID     string     `json:"event_id"`
@@ -100,6 +109,7 @@ type Eligibility struct {
 	DeliveryEligible bool
 	BindingVersion   int64
 	Reason           string
+	Body             string
 }
 
 // DeliveryStore commits a lease before returning a job. Provider HTTP calls

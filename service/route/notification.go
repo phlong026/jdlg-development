@@ -27,7 +27,7 @@ func parseNoticeTemplateFields(raw string) (map[string]string, error) {
 		return nil, notification.ErrInvalidInput
 	}
 	fields := map[string]string{}
-	allowed := map[string]bool{"title": true, "body": true, "time": true}
+	allowed := map[string]bool{"title": true, "body": true, "time": true, "visitor": true}
 	for decoder.More() {
 		keyToken, err := decoder.Token()
 		key, ok := keyToken.(string)

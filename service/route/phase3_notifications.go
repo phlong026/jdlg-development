@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"log"
-	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -142,6 +141,10 @@ func registerPhase3Notifications(parent context.Context, public, mini *gin.Route
 			}
 			return false, err
 		}
+		if visitorTemplateMode(fields) && browseNoticeKind(event.Kind) {
+			_, eligible, err := svc.BrowseNoticePresentation(ctx, scope, event.RecipientID, event.ID)
+			return eligible, err
+		}
 		return phase3NoticeEligible(ctx, svc, event, scope)
 	}
 	svc.OnNoticeEvent = func(ctx context.Context, event tracking.NoticeEvent) error {
@@ -153,7 +156,18 @@ func registerPhase3Notifications(parent context.Context, public, mini *gin.Route
 	}
 	// Tracking is configured once at startup, before requests or workers start.
 	svc.NoticeRules.BrowseEnabled = os.Getenv("BROWSE_NOTIFICATIONS_ENABLED") == "true"
-	cfg := notification.ConsumerConfig{Channel: "official_account", PollInterval: 2 * time.Second, LeaseDuration: time.Minute, ErrorBackoff: 10 * time.Second, MaxAttempts: 5, Eligibility: eligible}
+	resolvePresentation := func(ctx context.Context, recipient int64, eventID string) (tracking.BrowseNoticePresentation, bool, error) {
+		scope, err := loadMiniTrackingMyScope(ctx, users.DB, svc.Config.Tenant, recipient)
+		if err != nil {
+			var denied *tracking.Error
+			if errors.As(err, &denied) && (denied.Status == 401 || denied.Status == 403) {
+				return tracking.BrowseNoticePresentation{}, false, nil
+			}
+			return tracking.BrowseNoticePresentation{}, false, err
+		}
+		return svc.BrowseNoticePresentation(ctx, scope, recipient, eventID)
+	}
+	cfg := notification.ConsumerConfig{Channel: "official_account", PollInterval: 2 * time.Second, LeaseDuration: time.Minute, ErrorBackoff: 10 * time.Second, MaxAttempts: 5, Eligibility: eligible, Presentation: noticeEventPresentation(fields, resolvePresentation)}
 	deliveryReady := bindings != nil && officialCfg.Status().BindingAvailable && officialCfg.Status().DeliveryAvailable && fieldsErr == nil
 	if deliveryReady {
 		cfg.Binding = func(ctx context.Context, recipient int64) (int64, bool, error) {
@@ -176,19 +190,11 @@ func registerPhase3Notifications(parent context.Context, public, mini *gin.Route
 	}
 	if deliveryReady {
 		sender := officialaccount.NewSender(officialCfg, bindings, newTrackingWechatAPI(miniprogramCredentials()))
-		send := officialaccount.DeliveryAdapter(sender, func(_ context.Context, job notification.DeliveryJob) (officialaccount.SendRequest, error) {
-			data := map[string]string{}
-			values := map[string]string{"title": job.Notice.Title, "body": job.Notice.Body, "time": job.Notice.CreatedAt.In(time.FixedZone("CST", 8*3600)).Format("2006-01-02 15:04")}
-			for key, source := range fields {
-				value := []rune(values[source])
-				if len(value) > 200 {
-					value = value[:200]
-				}
-				data[key] = string(value)
-			}
-			return officialaccount.SendRequest{DetailQuery: url.Values{"notification_id": {job.Notice.ID}}.Encode(), Data: data}, nil
-		})
+		send := noticeTemplateSend(sender, fields, resolvePresentation)
 		worker, err := notification.NewDeliveryWorker(inbox, notification.DeliveryWorkerConfig{Channel: "official_account", PollInterval: 2 * time.Second, LeaseDuration: time.Minute, ErrorBackoff: 10 * time.Second, RetryBase: 30 * time.Second, RetryMax: 30 * time.Minute, MaxAttempts: 5, Send: send, Eligibility: func(ctx context.Context, job notification.DeliveryJob) (bool, error) {
+			if visitorTemplateMode(fields) && !browseNoticeKind(job.Notice.Kind) {
+				return false, nil
+			}
 			ok, err := eligible(ctx, deliveryNoticeEvent(job))
 			if err != nil || !ok {
 				return false, err
