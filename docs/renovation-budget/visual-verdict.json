@@ -1,0 +1,23 @@
+{
+  "method": "manual-native-comparison",
+  "reference": "20261117-V2右上角切换与文案精简",
+  "status": "core-layout-verified",
+  "evidence": [
+    "evidence/native-overview.png",
+    "evidence/native-details.png",
+    "evidence/native-public.png"
+  ],
+  "verified": [
+    "米白棕金、原生导航和内容右上角小切换",
+    "总价与主辅材人工环图",
+    "默认收起及展开费用明细",
+    "附加费用抽屉与税费重算97814到100731",
+    "公开完整房屋信息、无编辑入口"
+  ],
+  "limitations": [
+    "离线合成账户与网络fixture；没有生产写入",
+    "不同设备像素及真机手势尚未验收",
+    "自动化点击基础库2.32.3触摸桥接缺失e.touches；栈位于WAWebview.js，未改基础库",
+    "截图后新增标准选择器与分层数量提示，由行为测试及原生WXML编译验证"
+  ]
+}

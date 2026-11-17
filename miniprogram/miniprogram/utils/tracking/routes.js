@@ -129,6 +129,17 @@ const ROUTES = {
     "readiness": "rendered",
     "collect": true
   },
+  "pages/renovationbudget/index": {
+    "kind": "form",
+    "readiness": "rendered",
+    "collect": true
+  },
+  "pages/renovationbudget/result": {
+    "kind": "excluded",
+    "readiness": "excluded-private-estimate",
+    "collect": false,
+    "exclusionReason": "private-estimate"
+  },
   "pages/aicostshare/aicostshare": {
     "kind": "detail",
     "readiness": "explicit",

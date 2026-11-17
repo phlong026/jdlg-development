@@ -1,0 +1,10 @@
+{
+  "usingComponents": {
+    "navigation-bar": "/components/navigation-bar/navigation-bar",
+    "login-guard": "/components/login-guard/login-guard",
+    "quote-type-switch": "/components/quote-type-switch/index",
+    "renovation-report": "/components/renovation-report/index"
+  },
+  "navigationStyle": "custom",
+  "navigationBarTitleText": "装修报价报告"
+}

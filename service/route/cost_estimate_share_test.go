@@ -61,6 +61,7 @@ func costEstimateShareRouterForStore(t *testing.T, store *model.CostEstimateShar
 		}
 	})
 	RegisterCostEstimateShareRoutes(public, auth, store)
+	RegisterRenovationCostShareRoutes(auth, store)
 	return router
 }
 
@@ -79,6 +80,9 @@ func TestCostEstimateShareAnonymousReadsExactSnapshotWithoutOwner(t *testing.T) 
 	router, _ := newCostEstimateShareRouter(t)
 	result := validCostEstimateShareResult()
 	body, _ := json.Marshal(result)
+	if strings.Contains(string(body), "quoteType") || strings.Contains(string(body), "renovation") {
+		t.Fatal("v4 payload shape changed", string(body))
+	}
 	created := costShareRequest(router, http.MethodPost, "", string(body), "42")
 	if created.Code != 200 {
 		t.Fatal(created.Code, created.Body.String())

@@ -22,7 +22,7 @@ func makeTrackingCostSnapshotResolver(store *model.CostEstimateShareRedisModel) 
 		if err != nil {
 			return tracking.LegacyMetadata{}, tracking.ErrUnavailable
 		}
-		if !validCostEstimateShare(snapshot.Result) {
+		if !validStoredCostEstimateShare(snapshot.Result) {
 			return tracking.LegacyMetadata{}, tracking.ErrUnavailable
 		}
 		return costSnapshotMetadata(snapshot), nil

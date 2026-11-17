@@ -29,6 +29,7 @@ const anonymousBusinessRoutes = new Set([
   'pages/aitooldetail/aitooldetail',
   'pages/aitoolworkbench/aitoolworkbench',
   'pages/aicost/aicost',
+  'pages/renovationbudget/index',
   'pages/newminnantool/newminnantool',
   'pages/allrounddesign/allrounddesign',
 ]);
@@ -45,7 +46,7 @@ test('every business route hides its content behind the shared profile guard', (
 });
 
 test('every public route mounts the profile guard outside its protected content', () => {
-  assert.equal(publicRoutes.length, 23);
+  assert.equal(publicRoutes.length, 24);
   for (const route of publicRoutes) {
     const template = fs.readFileSync(path.join(root, route + '.wxml'), 'utf8');
     const config = JSON.parse(fs.readFileSync(path.join(root, route + '.json'), 'utf8'));
@@ -142,7 +143,7 @@ for (const route of anonymousBusinessRoutes) {
   });
 }
 test('only the approved browse and AI input pages run content lifecycle before profile approval', () => {
-  assert.equal(anonymousBusinessRoutes.size, 16);
+  assert.equal(anonymousBusinessRoutes.size, 17);
   for (const route of businessRoutes) {
     const h = harness(route); h.mount({ route });
     if (anonymousBusinessRoutes.has(route)) {
@@ -182,7 +183,7 @@ test('ordinary business pages are protected even when analytics collection is di
   h.grant();
   assert.deepEqual(h.calls.map(x => x[0]), ['load', 'show', 'ready']);
 });
-  for (const route of ['pages/generatedetails/generatedetails', 'pages/generatehistory/generatehistory', 'pages/generateprogress/generateprogress', 'pages/aicostresult/aicostresult']) {
+  for (const route of ['pages/generatedetails/generatedetails', 'pages/generatehistory/generatehistory', 'pages/generateprogress/generateprogress', 'pages/aicostresult/aicostresult', 'pages/renovationbudget/result']) {
   test(`${route}: private AI account pages request account verification without requiring public profile`, () => {
     const h = harness(route); h.mount({ task_no: 'private-task' });
     assert.equal(h.checks(), 1);

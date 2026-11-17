@@ -6,7 +6,7 @@
   <view class="cost-scroll-wrap">
     <scroll-view class="content-scroll" scroll-y enhanced show-scrollbar="{{false}}">
       <view class="form-section">
-        <view class="section-title">基础地区信息</view>
+        <view class="section-title" style="display:flex;align-items:center;justify-content:space-between;"><text>基础地区信息</text><quote-type-switch kind="building" /></view>
         <view class="section-content">
           <view class="form-group">
             <view class="form-row">

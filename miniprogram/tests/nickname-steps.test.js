@@ -77,6 +77,7 @@ function loadCostShare(extension, { token = 'tk' } = {}) {
   const dependencies = {
     '../../utils/costEstimateShare': { getCostEstimateShare: async () => snapshot },
     '../../utils/costEstimateShareImage': { prepareCostEstimateShareImage: async () => 'chat', prepareCostEstimateTimelineImage: async () => 'timeline' },
+    '../../utils/renovationCostShareImage': { prepareRenovationShareImage: async () => 'renovation-chat', prepareRenovationTimelineImage: async () => 'renovation-timeline' },
   };
   const wx = {
     getStorageSync: key => (key === 'token' ? token : undefined),
@@ -143,6 +144,7 @@ function loadCostShareFailed(extension) {
   const dependencies = {
     '../../utils/costEstimateShare': { getCostEstimateShare: async () => { throw new Error('revoked'); } },
     '../../utils/costEstimateShareImage': { prepareCostEstimateShareImage: async () => 'chat', prepareCostEstimateTimelineImage: async () => 'timeline' },
+    '../../utils/renovationCostShareImage': { prepareRenovationShareImage: async () => 'renovation-chat', prepareRenovationTimelineImage: async () => 'renovation-timeline' },
   };
   const wx = {
     getStorageSync: key => (key === 'token' ? 'tk' : undefined),

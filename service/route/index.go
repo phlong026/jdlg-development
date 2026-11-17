@@ -131,6 +131,9 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		costShareAuth := miniprogram.Group("")
 		costShareAuth.Use(costEstimateShareBodyLimit(), TokenAuthRequired(codeSessionModel), MiniprogramBannedBlock(userDBModel))
 		RegisterCostEstimateShareRoutes(miniprogram, costShareAuth, costShareStore)
+		renovationCostShareAuth := miniprogram.Group("")
+		renovationCostShareAuth.Use(renovationCostShareBodyLimit(), TokenAuthRequired(codeSessionModel), MiniprogramBannedBlock(userDBModel))
+		RegisterRenovationCostShareRoutes(renovationCostShareAuth, costShareStore)
 		// AI任务信息接口（需要token验证）
 		RegisterAITaskInfoRoutes(miniprogramAI, codeSessionModel, taskModel)
 		// AI流式聊天接口（需要token验证）

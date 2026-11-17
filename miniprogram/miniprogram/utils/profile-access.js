@@ -24,6 +24,7 @@ const PUBLIC_BROWSE_ROUTES = new Set([
   'pages/aitooldetail/aitooldetail',
   'pages/aitoolworkbench/aitoolworkbench',
   'pages/aicost/aicost',
+  'pages/renovationbudget/index',
   'pages/newminnantool/newminnantool',
   'pages/allrounddesign/allrounddesign',
 ]);
@@ -34,6 +35,7 @@ const ACCOUNT_ONLY_ROUTES = new Set([
   'pages/generatehistory/generatehistory',
   'pages/generateprogress/generateprogress',
   'pages/aicostresult/aicostresult',
+  'pages/renovationbudget/result',
 ]);
 
 // 分享查看页保留登录后返回原页的场景参数，资料门禁与其它受保护页一致。

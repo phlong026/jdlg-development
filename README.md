@@ -73,3 +73,13 @@ npm run check:tracking-routes
 客户跟踪逐次访问列表的页面、统计口径、本人权限、验证和回滚说明见[实施说明](docs/phase3/customer-visit-feed-20261114/README.md)。
 
 剩余分支统一主线、媒体自适应和本地证据见[本轮实施记录](docs/phase3/unify-main-20261113/implementation-status.md)。
+
+## 装修报价（2026-11-17，本地实现）
+
+新增独立装修预算，复用建房预算的登录规则。入口在建房表单右上角，原建房计价、账户缓存和 v4 分享保持兼容。
+
+- [功能、校验与回滚](docs/renovation-budget/README.md)
+- [参考计价及已知口径](docs/renovation-budget/pricing-reference.md)
+- [v5 分享接口](docs/renovation-budget-share-api-20261117.md)
+
+使用既有依赖运行 `cd miniprogram && npm run check:tracking && npm run check:tracking-routes && npm run test:renovation`。无本地依赖时，可将 `REPORT_TEST_NODE_MODULES` 指向已有后台依赖目录；不需要为此新增依赖。

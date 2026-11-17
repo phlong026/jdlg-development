@@ -321,6 +321,13 @@
       ]
     },
     {
+      "root": "pages/renovationbudget",
+      "pages": [
+        "index",
+        "result"
+      ]
+    },
+    {
       "root": "pages/real",
       "pages": [
         "real"

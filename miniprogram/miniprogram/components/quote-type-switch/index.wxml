@@ -1,0 +1,7 @@
+<view class="switch-wrap">
+  <view class="switch-button" catchtap="toggle"><text>{{labels[kind] || labels.building}}</text><text class="arrow {{open ? 'open' : ''}}">⌄</text></view>
+  <view class="menu" wx:if="{{open}}">
+    <view class="menu-item {{kind === 'building' ? 'selected' : ''}}" data-kind="building" catchtap="select"><text>建房报价</text><text wx:if="{{kind === 'building'}}">✓</text></view>
+    <view class="menu-item {{kind === 'renovation' ? 'selected' : ''}}" data-kind="renovation" catchtap="select"><text>装修报价</text><text wx:if="{{kind === 'renovation'}}">✓</text></view>
+  </view>
+</view>

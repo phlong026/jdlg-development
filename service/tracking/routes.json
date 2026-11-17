@@ -131,6 +131,18 @@
     "Public": true,
     "Audience": "customer"
   },
+  "pages/renovationbudget/index": {
+    "Title": "装修报价测算",
+    "Type": "form",
+    "Public": true,
+    "Audience": "customer"
+  },
+  "pages/renovationbudget/result": {
+    "Title": "私人装修报价报告",
+    "Type": "excluded",
+    "Public": false,
+    "Audience": "customer"
+  },
   "pages/aicostresult/aicostresult": {
     "Title": "pages/aicostresult/aicostresult",
     "Type": "excluded",

@@ -1,12 +1,16 @@
 <block wx:if="{{__profileAccessMounted}}">
 <view class="page">
-  <navigation-bar title="公开造价报告" background="#e6daca" />
+  <navigation-bar title="{{pageTitle}}" background="#e6daca" />
   <scroll-view class="public-report" scroll-y>
     <view class="report-card" wx:if="{{loading}}">正在读取分享人公开的报告…</view>
     <view class="report-card" wx:elif="{{error}}">
       <text>{{error}}</text><button bindtap="retry">重试</button>
     </view>
     <block wx:elif="{{result}}">
+      <view class="renovation-public" wx:if="{{isRenovation}}">
+        <renovation-report report="{{result}}" readonly="{{true}}" />
+      </view>
+      <block wx:else>
       <view class="report-card">
         <text class="heading">{{result.totalLabel}}</text><text class="amount">{{result.estimatedTotalCost}}</text>
         <text>{{result.unitLabel}}：{{result.estimatedUnitCost}}</text>
@@ -25,8 +29,9 @@
         <text class="notice" wx:for="{{result.dynamicNotes}}" wx:key="*this">{{item}}</text>
         <text class="notice">以上为快速参考估算，最终价格需结合图纸、现场条件和施工范围确认。</text>
       </view>
+      </block>
     </block>
-    <button class="start" bindtap="startOwnEstimate">我也测算自己的方案</button>
+    <button class="start" bindtap="startOwnEstimate">{{startLabel}}</button>
   </scroll-view>
   <nickname-guard id="nicknameGuard" />
 </view>

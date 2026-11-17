@@ -184,3 +184,25 @@ func TestPublicCostSnapshotHTTPMetadataMatchesAuthoritativeBinding(t *testing.T)
 		t.Fatal("expired snapshot still returned public identity", response.Code, response.Body.String())
 	}
 }
+
+func TestRenovationCostSnapshotTrackingAcceptsV5WithoutEmbeddingReportFields(t *testing.T) {
+	ctx := context.Background()
+	mr := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: mr.Addr(), MaxRetries: -1})
+	defer client.Close()
+	snapshots := model.NewCostEstimateShareRedisModel(client)
+	result := validRenovationShareResult()
+	result.BasicInfo[0].Value = "敏感地区测试值"
+	snapshot, err := snapshots.Create(ctx, 42, result)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata, err := makeTrackingCostSnapshotResolver(snapshots)(ctx, snapshot.ReportID)
+	if err != nil {
+		t.Fatal("v5 public snapshot was not accepted by tracking", err)
+	}
+	raw, _ := json.Marshal(metadata)
+	if metadata.Title != "公开造价测算报告" || metadata.Type != "cost_snapshot" || strings.Contains(string(raw), "敏感地区测试值") || strings.Contains(string(raw), "basicInfo") || strings.Contains(string(raw), "2348") {
+		t.Fatal("renovation details leaked into tracking metadata", string(raw))
+	}
+}

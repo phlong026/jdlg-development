@@ -6,7 +6,7 @@ const path = require('node:path');
 
 // An intentional app-route addition must update this reviewed baseline as well
 // as both policy inventories. Never silently classify an unreviewed page.
-const EXPECTED_ROUTE_COUNT = 80;
+const EXPECTED_ROUTE_COUNT = 82;
 
 function validateTrackingRoutes({ app, policies, backendRoutes }) {
   assert.ok(Array.isArray(app.pages), 'app.pages must be an array');
