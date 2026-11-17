@@ -30,6 +30,7 @@ function validateReferences(references, configuredLimits) {
     if (ids.has(item.id)) return result('reference_duplicate', '同一素材不能重复引用');
     ids.add(item.id);
     if (!(item.type in counts)) return result('reference_type', '参考素材类型不受支持');
+    if (Array.from(item.purpose).length > 120) return result('reference_purpose_length', '单项素材用途不能超过120字');
     counts[item.type] += 1;
     if (item.type !== 'image') {
       if (!Number.isFinite(item.duration) || item.duration < limits.media_duration_min || item.duration > limits.media_duration_max) {
@@ -47,6 +48,17 @@ function validateReferences(references, configuredLimits) {
   return { ok: true, value: items };
 }
 
+function providerVisibleReferencePrompt(prompt, references) {
+  const counts = { image: 0, video: 0, audio: 0 };
+  const bindings = normalizedReferences(references).flatMap((item, index) => {
+    counts[item.type] = Number(counts[item.type] || 0) + 1;
+    if (!item.purpose) return [];
+    const label = ({ image: '图片', video: '视频', audio: '音频' }[item.type] || '素材') + counts[item.type];
+    return [`${label}（引用编号${index + 1}）：${item.purpose}`];
+  });
+  return bindings.length ? `${String(prompt || '').trim()}\n\n参考素材用途：\n${bindings.join('\n')}` : String(prompt || '').trim();
+}
+
 function validateCreation(input, capabilities) {
   const value = input || {};
   const mode = String(value.mode || '');
@@ -58,6 +70,9 @@ function validateCreation(input, capabilities) {
     if (!String(value.reference_prompt || '').trim()) return result('reference_prompt_required', '请输入参考素材的使用说明');
     const checked = validateReferences(value.references, capabilities && capabilities.reference_limits);
     if (!checked.ok) return checked;
+    if (Array.from(providerVisibleReferencePrompt(value.reference_prompt, value.references)).length > 7000) {
+      return result('reference_prompt_total_length', '画面描述与素材用途合计不能超过7000字');
+    }
   }
   const parameters = value.parameters || value;
   if (!String(parameters.ratio || '').trim() || !String(parameters.resolution || '').trim()) return result('parameters', '请选择画幅和清晰度');
@@ -109,4 +124,4 @@ function ratioOptionsForMode(mode, serverRatios) {
   return ratios;
 }
 
-module.exports = { DEFAULT_LIMITS, normalizedReferences, validateReferences, validateCreation, billableFingerprint, isQuoteUsable, buildBatchRequest, ratioOptionsForMode };
+module.exports = { DEFAULT_LIMITS, normalizedReferences, validateReferences, providerVisibleReferencePrompt, validateCreation, billableFingerprint, isQuoteUsable, buildBatchRequest, ratioOptionsForMode };
