@@ -49,12 +49,13 @@ npm run build
 
 ```sh
 cd ../miniprogram
+npm run typecheck
 node --test tests/*.test.js
 npm run check:tracking
 npm run check:tracking-routes
 ```
 
-阅读页现在对生命周期参数进行真实 TypeScript 检查，`npm run build:tracking` 与 `npm run check:tracking` 使用后台锁定的 TypeScript 编译器生成和校验该页 JS；其余兼容页面保持现有确定性构建。此处与鉴权签名构建复用同一编译运行时，无新增依赖。执行前沿用上面的后台锁定安装步骤；上传使用提交中的 JS 产物。
+`npm run typecheck` 按小程序现有严格配置执行完整 TypeScript 语义检查，CI同步执行。`npm run build:tracking` 与 `npm run check:tracking` 负责生成和核对 JS；生成产物检查与类型检查分别执行。两者与鉴权签名构建复用后台锁定的编译运行时，无新增依赖。执行前沿用上面的后台锁定安装步骤；上传使用提交中的 JS 产物。修复范围及验证记录见[小程序类型检查修复](docs/miniprogram-typecheck-20261117.md)。
 
 需要本机微信 WXML 编译器的用例在缺少编译器时会明确跳过，可通过 `WXML_COMPILER` 指定编译器后执行。CI 的 `Admin quality` 同时执行全量小程序回归及 `npm audit --audit-level=high`，发现高危或严重依赖告警时失败；原有追踪专项与 Go 检查继续执行。
 

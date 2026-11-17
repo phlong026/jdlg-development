@@ -8,6 +8,7 @@
   "type": "commonjs",
   "main": "index.js",
   "scripts": {
+    "typecheck": "node scripts/typecheck.js",
     "build:auth-signer": "node scripts/build-auth-signer.js",
     "build:tracking": "node scripts/build-tracking.js",
     "check:auth-signer": "node scripts/build-auth-signer.js --check",
