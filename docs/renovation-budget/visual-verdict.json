@@ -1,0 +1,23 @@
+{
+  "method": "manual-native-comparison",
+  "reference": "20261117-V2右上角切换与文案精简",
+  "status": "dynamic-recalculation-verified",
+  "evidence": [
+    "evidence/dynamic-measurement-editor.png",
+    "evidence/dynamic-after-length-change.png",
+    "evidence/dynamic-after-height-change.png"
+  ],
+  "verified": [
+    "native measurement editor",
+    "4x3/H3: area12, total11445",
+    "5x3/H3: area15, total13209",
+    "5x3/H4: area15, total14071",
+    "estimated/measured/mixed provenance and v1 frozen snapshots"
+  ],
+  "limitations": [
+    "offline synthetic account and HTTP fixture only",
+    "real device gestures and pixel comparison remain untested",
+    "WeChat 2.32.3 automation touch bridge may receive missing e.touches"
+  ],
+  "version": "renovation-dynamic-v2"
+}

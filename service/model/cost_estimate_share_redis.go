@@ -58,9 +58,43 @@ type CostEstimateBreakdown struct {
 	Estimable  bool    `json:"estimable"`
 }
 
+type RenovationCostItem struct {
+	ID                string   `json:"id"`
+	Name              string   `json:"name"`
+	Unit              string   `json:"unit"`
+	Quantity          *float64 `json:"quantity"`
+	MaterialUnitPrice *float64 `json:"materialUnitPrice"`
+	LaborAuxUnitPrice *float64 `json:"laborAuxUnitPrice"`
+	Amount            *float64 `json:"amount"`
+	Included          *bool    `json:"included"`
+}
+
+type RenovationCostGroup struct {
+	ID     string               `json:"id"`
+	Name   string               `json:"name"`
+	Amount *float64             `json:"amount"`
+	Items  []RenovationCostItem `json:"items"`
+}
+
+type RenovationCostSpace struct {
+	ID     string                `json:"id"`
+	Name   string                `json:"name"`
+	Count  *int                  `json:"count"`
+	Amount *float64              `json:"amount"`
+	Groups []RenovationCostGroup `json:"groups"`
+}
+
+type RenovationCostEstimate struct {
+	PricingVersion string                `json:"pricingVersion"`
+	QuantityBasis  string                `json:"quantityBasis,omitempty"`
+	TotalAmount    *float64              `json:"totalAmount"`
+	Spaces         []RenovationCostSpace `json:"spaces"`
+}
+
 // Only the reference estimate's display fields can enter a public snapshot.
 type CostEstimateShareResult struct {
 	Version            int                     `json:"version"`
+	QuoteType          string                  `json:"quoteType,omitempty"`
 	EstimatedTotalCost string                  `json:"estimatedTotalCost"`
 	EstimatedUnitCost  string                  `json:"estimatedUnitCost"`
 	TotalLabel         string                  `json:"totalLabel"`
@@ -68,6 +102,7 @@ type CostEstimateShareResult struct {
 	BasicInfo          []CostEstimateBasicInfo `json:"basicInfo"`
 	CostBreakdown      []CostEstimateBreakdown `json:"costBreakdown"`
 	DynamicNotes       []string                `json:"dynamicNotes"`
+	Renovation         *RenovationCostEstimate `json:"renovation,omitempty"`
 }
 
 type CostEstimateShareSnapshot struct {

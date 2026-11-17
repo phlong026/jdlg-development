@@ -1,6 +1,13 @@
 <block wx:if="{{__profileAccessMounted}}">
-<navigation-bar title="我的提示词" back="{{true}}" background="#fbfaf7" /><view class="page"><view class="hero"><text class="hero-title">我的提示词</text><text class="hero-copy">保存常用描述，导入时由你确认是否覆盖当前输入。</text></view>
-<view class="card section"><view class="field"><text class="label">名称</text><input class="input" maxlength="60" value="{{name}}" bindinput="inputName" placeholder="提示词名称"/></view><view class="field"><text class="label">内容</text><textarea class="textarea" maxlength="4000" value="{{prompt}}" bindinput="inputPrompt" placeholder="输入完整提示词"/></view><button class="button" bindtap="save" loading="{{saving}}" disabled="{{saving}}">保存提示词</button></view>
-<view wx:if="{{loading}}" class="state">正在加载…</view><view wx:elif="{{error}}" class="card error">{{error}}</view><view wx:elif="{{!items.length}}" class="card state">暂无已保存提示词。</view>
-<view wx:for="{{items}}" wx:key="prompt_id" class="card"><text class="title">{{item.name}}</text><text class="meta">{{item.prompt}}</text><view class="row"><button wx:if="{{selectMode}}" class="button-secondary grow" data-index="{{index}}" bindtap="choose">导入</button><button class="button-secondary grow" data-index="{{index}}" bindtap="remove">删除</button></view></view>
-</view></block><login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />
+  <navigation-bar class="studio-navigation" title="我的提示词" variant="studio" back="{{true}}" background="#fbfaf7" />
+  <view class="page">
+    <view class="tutorial-entry"><text class="text-link" bindtap="openTutorial" aria-role="button">提示词写法教程 ›</text></view>
+    <view class="prompt-form"><input class="input" maxlength="60" value="{{name}}" bindinput="inputName" placeholder="提示词名称"/><textarea class="textarea" maxlength="7000" value="{{prompt}}" bindinput="inputPrompt" placeholder="输入画面描述" cursor-spacing="120" adjust-position="{{true}}"/><button class="button" bindtap="save" loading="{{saving}}" disabled="{{saving}}">保存提示词</button></view>
+    <view wx:if="{{loading}}" class="state">加载中…</view>
+    <view wx:elif="{{error}}" class="error prompt-error"><text>{{error}}</text><button class="text-button" bindtap="load">重试</button></view>
+    <view wx:elif="{{!items.length}}" class="state">暂无提示词</view>
+    <view wx:for="{{items}}" wx:key="prompt_id" class="card"><text class="title">{{item.name}}</text><text class="meta prompt-copy">{{item.prompt}}</text><view class="row"><button wx:if="{{selectMode}}" class="text-button" data-index="{{index}}" bindtap="choose">导入</button><button class="text-button delete-button" data-index="{{index}}" bindtap="remove">删除</button></view></view>
+    <button wx:if="{{hasMore}}" class="button-secondary" bindtap="loadMore" loading="{{loadingMore}}">加载更多</button>
+  </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

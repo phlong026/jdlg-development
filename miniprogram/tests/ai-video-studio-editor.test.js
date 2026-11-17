@@ -305,7 +305,7 @@ test('opening an unresolved editor only queries and never creates a paid batch a
   assert.match(page.data.notice, /原请求/);
 });
 
-test('editor markup follows the confirmed two-tab workspace without fake AI polish', () => {
+test('editor markup follows the confirmed two-tab workspace with the connected AI polish entry', () => {
   const root = path.resolve(__dirname, '../miniprogram/pages/aivideostudio');
   const markup = fs.readFileSync(path.join(root, 'generate.wxml'), 'utf8');
   const style = fs.readFileSync(path.join(root, 'generate.wxss'), 'utf8');
@@ -316,7 +316,9 @@ test('editor markup follows the confirmed two-tab workspace without fake AI poli
   assert.match(markup, /我的素材/);
   assert.match(markup, /我的提示词/);
   assert.match(markup, /创作记录/);
-  assert.match(markup, /AI 润色（暂未开放）/);
+  assert.match(markup, /AI 润色/);
+  assert.match(markup, /bindtap="startPolish"/);
+  assert.doesNotMatch(markup, /bindtap="polishUnavailable"/);
   assert.match(markup, />生成视频</);
   assert.doesNotMatch(markup, /查看报价|确认并生成/);
   assert.match(markup, /<video/);
@@ -325,7 +327,7 @@ test('editor markup follows the confirmed two-tab workspace without fake AI poli
   assert.match(markup, /<picker[\s\S]*<picker[\s\S]*<picker[\s\S]*<picker/);
   assert.doesNotMatch(style, /linear-gradient|radial-gradient/);
   assert.match(style, /#fbfaf7/i);
-  assert.match(style, /#bd8144/i);
-  assert.match(style, /\.frame-slot::before\s*\{[^}]*padding-top:56\.25%/);
+  assert.match(style, /#b98245/i);
+  assert.match(style, /\.frame-slot::before\s*\{[^}]*padding-top:177\.7778%/);
   assert.match(style, /\.frame-image,\.frame-empty\s*\{[^}]*position:absolute[^}]*inset:0/);
 });

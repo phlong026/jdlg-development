@@ -1,1 +1,2 @@
 @import "./common.wxss";
+.record-tabs { margin:8rpx 0 32rpx; }

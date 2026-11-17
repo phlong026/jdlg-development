@@ -34,7 +34,11 @@ import (
 
 const studioMediaMaxBytes = int64(50 << 20)
 
-var studioMediaWriteSlots = make(chan struct{}, 2)
+var (
+	studioMediaWriteSlots     = make(chan struct{}, 2)
+	errStudioResultTooLarge   = errors.New("成片超过50MB留存上限")
+	errStudioResultReadFailed = errors.New("成片下载读取失败，留存未完成")
+)
 
 type studioMediaInspection struct {
 	Kind, MIME      string
@@ -353,6 +357,10 @@ func registerAIVideoStudioMediaRoutes(g *gin.RouterGroup, store *model.AIVideoSt
 		}
 		data, err := downloadStudioResult(ctx, raw)
 		if err != nil {
+			if errors.Is(err, errStudioResultTooLarge) {
+				studioError(c, http.StatusRequestEntityTooLarge, err.Error())
+				return
+			}
 			studioMediaFailure(c, "retain_download", err)
 			return
 		}
@@ -415,14 +423,28 @@ func attachStudioRetainedMedia(ctx context.Context, store *model.AIVideoStudioSt
 }
 
 func studioResult(ctx context.Context, store *model.AIVideoStudioStore, userID int64, id string) (status, raw, stableID string, err error) {
+	return studioResultWithProvider(ctx, store, userID, id, aivideostudio.NewMetasoProvider(os.Getenv("AI_VIDEO_STUDIO_METASO_API_KEY")))
+}
+
+type studioResultQuerier interface {
+	Query(context.Context, string) (aivideostudio.GenerationStatus, error)
+}
+
+func studioResultWithProvider(ctx context.Context, store *model.AIVideoStudioStore, userID int64, id string, provider studioResultQuerier) (status, raw, stableID string, err error) {
 	var external string
 	err = store.DB.QueryRowContext(ctx, `SELECT status,COALESCE(result_url,''),stable_media_id,external_id FROM ai_video_studio_tasks WHERE id=? AND user_id=?`, id, userID).Scan(&status, &raw, &stableID, &external)
 	if err == nil && stableID == "" && external != "" && (status == "completed" || status == "succeeded") {
-		result, e := aivideostudio.NewMetasoProvider(os.Getenv("AI_VIDEO_STUDIO_METASO_API_KEY")).Query(ctx, external)
+		result, e := provider.Query(ctx, external)
 		if e != nil {
+			if safeStudioRemoteURL(raw) {
+				return status, raw, stableID, nil
+			}
 			return status, "", stableID, e
 		}
 		if result.Status != "succeeded" || !safeStudioRemoteURL(result.ResultURL) {
+			if safeStudioRemoteURL(raw) {
+				return status, raw, stableID, nil
+			}
 			return status, "", stableID, errors.New("result temporarily unavailable")
 		}
 		raw = result.ResultURL
@@ -508,9 +530,16 @@ func downloadStudioResult(ctx context.Context, raw string) ([]byte, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, errors.New("成片地址已失效或暂时不可下载")
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, studioMediaMaxBytes+1))
-	if err != nil || int64(len(data)) > studioMediaMaxBytes {
-		return nil, errors.New("成片下载不完整或超过50MB")
+	return readStudioResultBody(resp.Body)
+}
+
+func readStudioResultBody(body io.Reader) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(body, studioMediaMaxBytes+1))
+	if err != nil {
+		return nil, errStudioResultReadFailed
+	}
+	if int64(len(data)) > studioMediaMaxBytes {
+		return nil, errStudioResultTooLarge
 	}
 	return data, nil
 }

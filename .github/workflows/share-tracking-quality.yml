@@ -83,6 +83,9 @@ jobs:
         working-directory: background
         run: npm ci --ignore-scripts --no-audit --no-fund
 
+      - name: Check all mini-program TypeScript types
+        run: npm run typecheck
+
       - name: Run focused tracking regression tests
         run: npm run test:tracking
 

@@ -1,0 +1,145 @@
+TAP version 13
+# Subtest: tutorial covers three writing formulas with a copyable courtyard example
+not ok 1 - tutorial covers three writing formulas with a copyable courtyard example
+  ---
+  duration_ms: 1.133208
+  location: '/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js:28:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Cannot find module '../miniprogram/utils/ai-video-tutorial'
+    Require stack:
+    - /Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js
+  code: 'MODULE_NOT_FOUND'
+  stack: |-
+    Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    Module._load (node:internal/modules/cjs/loader:1038:27)
+    Module.require (node:internal/modules/cjs/loader:1289:19)
+    require (node:internal/modules/helpers:182:18)
+    TestContext.<anonymous> (/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js:29:34)
+    Test.runInAsyncScope (node:async_hooks:206:9)
+    Test.run (node:internal/test_runner/test:796:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:526:18)
+    node:internal/test_runner/harness:255:12
+    node:internal/process/task_queues:140:7
+  ...
+# Subtest: tutorial opens at the requested mode and switches examples without a server request
+not ok 2 - tutorial opens at the requested mode and switches examples without a server request
+  ---
+  duration_ms: 0.253958
+  location: '/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js:46:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Cannot find module '../miniprogram/pages/aivideostudio/tutorial'
+    Require stack:
+    - /Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js
+  code: 'MODULE_NOT_FOUND'
+  stack: |-
+    Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    Function.resolve (node:internal/modules/helpers:193:19)
+    pageDefinition (/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js:8:24)
+    mount (/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js:19:22)
+    TestContext.<anonymous> (/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js:48:16)
+    Test.runInAsyncScope (node:async_hooks:206:9)
+    Test.run (node:internal/test_runner/test:796:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:526:18)
+    Test.postRun (node:internal/test_runner/test:889:19)
+    Test.run (node:internal/test_runner/test:835:12)
+  ...
+# Subtest: copy writes only the selected case and reports a recoverable clipboard error
+not ok 3 - copy writes only the selected case and reports a recoverable clipboard error
+  ---
+  duration_ms: 0.148125
+  location: '/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js:58:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Cannot find module '../miniprogram/pages/aivideostudio/tutorial'
+    Require stack:
+    - /Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js
+  code: 'MODULE_NOT_FOUND'
+  stack: |-
+    Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    Function.resolve (node:internal/modules/helpers:193:19)
+    pageDefinition (/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js:8:24)
+    mount (/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js:19:22)
+    TestContext.<anonymous> (/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js:61:16)
+    Test.runInAsyncScope (node:async_hooks:206:9)
+    Test.run (node:internal/test_runner/test:796:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:526:18)
+    Test.postRun (node:internal/test_runner/test:889:19)
+    Test.run (node:internal/test_runner/test:835:12)
+  ...
+# Subtest: late clipboard callbacks cannot change another account or a reloaded page
+not ok 4 - late clipboard callbacks cannot change another account or a reloaded page
+  ---
+  duration_ms: 0.198667
+  location: '/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js:72:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Cannot find module '../miniprogram/pages/aivideostudio/tutorial'
+    Require stack:
+    - /Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js
+  code: 'MODULE_NOT_FOUND'
+  stack: |-
+    Module._resolveFilename (node:internal/modules/cjs/loader:1207:15)
+    Function.resolve (node:internal/modules/helpers:193:19)
+    pageDefinition (/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js:8:24)
+    mount (/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js:19:22)
+    TestContext.<anonymous> (/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js:76:16)
+    Test.runInAsyncScope (node:async_hooks:206:9)
+    Test.run (node:internal/test_runner/test:796:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:526:18)
+    Test.postRun (node:internal/test_runner/test:889:19)
+    Test.run (node:internal/test_runner/test:835:12)
+  ...
+# Subtest: writing and saved-prompt pages open the contextual tutorial without changing their inputs
+not ok 5 - writing and saved-prompt pages open the contextual tutorial without changing their inputs
+  ---
+  duration_ms: 3.513916
+  location: '/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js:90:1'
+  failureType: 'testCodeFailure'
+  error: 'generator.openTutorial is not a function'
+  code: 'ERR_TEST_FAILURE'
+  name: 'TypeError'
+  stack: |-
+    TestContext.<anonymous> (/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js:94:13)
+    Test.runInAsyncScope (node:async_hooks:206:9)
+    Test.run (node:internal/test_runner/test:796:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:526:18)
+    Test.postRun (node:internal/test_runner/test:889:19)
+    Test.run (node:internal/test_runner/test:835:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:526:7)
+  ...
+# Subtest: tutorial is registered as a private workspace route excluded from tracking
+not ok 6 - tutorial is registered as a private workspace route excluded from tracking
+  ---
+  duration_ms: 7.116125
+  location: '/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js:103:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    The expression evaluated to a falsy value:
+
+      assert.ok(studio.pages.includes('tutorial'))
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js:108:10)
+    Test.runInAsyncScope (node:async_hooks:206:9)
+    Test.run (node:internal/test_runner/test:796:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:526:18)
+    Test.postRun (node:internal/test_runner/test:889:19)
+    Test.run (node:internal/test_runner/test:835:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:526:7)
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 0
+# fail 6
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 59.354791

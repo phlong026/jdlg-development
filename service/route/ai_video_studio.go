@@ -18,6 +18,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"service/aivideostudio"
 	"service/model"
 	"service/tracking"
 )
@@ -152,6 +153,13 @@ func validateAIVideoStudioDraftSave(in aiVideoStudioDraftInput, limits aiVideoSt
 			if err := validateAIVideoStudioReferences(in.References, limits); err != nil {
 				return err
 			}
+			references := make([]aivideostudio.GenerationReference, 0, len(in.References))
+			for _, ref := range in.References {
+				references = append(references, aivideostudio.GenerationReference{Type: ref.MediaType, Purpose: ref.Purpose, Position: ref.Position})
+			}
+			if _, err := aivideostudio.ReferencePromptWithPurposes(in.ReferencePrompt, references); err != nil {
+				return err
+			}
 		}
 	default:
 		return errors.New("生成模式不受支持")
@@ -197,18 +205,23 @@ func validateAIVideoStudioReferences(refs []aiVideoStudioReferenceInput, limits 
 
 func studioLimitsFromConfig(config model.AIVideoStudioConfig) aiVideoStudioLimits {
 	l := defaultAIVideoStudioLimits()
-	set := func(key string, target *int) {
+	setPositive := func(key string, target *int) {
 		if value := config.Limits[key]; value > 0 {
 			*target = value
 		}
 	}
-	set("max_quantity", &l.QuantityMax)
-	set("max_duration_768p", &l.MaxDuration768p)
-	set("max_duration_2k", &l.MaxDuration2k)
-	set("max_reference_images", &l.ImageMax)
-	set("max_reference_videos", &l.VideoMax)
-	set("max_reference_audios", &l.AudioMax)
-	set("max_reference_total", &l.TotalMax)
+	setReference := func(key string, target *int) {
+		if value, configured := config.Limits[key]; configured && value >= 0 {
+			*target = value
+		}
+	}
+	setPositive("max_quantity", &l.QuantityMax)
+	setPositive("max_duration_768p", &l.MaxDuration768p)
+	setPositive("max_duration_2k", &l.MaxDuration2k)
+	setReference("max_reference_images", &l.ImageMax)
+	setReference("max_reference_videos", &l.VideoMax)
+	setReference("max_reference_audios", &l.AudioMax)
+	setReference("max_reference_total", &l.TotalMax)
 	return l
 }
 
@@ -243,8 +256,108 @@ func studioAccountingReady(stores ...*model.AIVideoStudioStore) bool {
 	return studioExecutionReady(stores...)
 }
 
-func RegisterAIVideoStudioRoutes(group *gin.RouterGroup, store *model.AIVideoStudioStore, media *model.AIVideoStudioMediaStore, trackingService *tracking.Service, users *model.UserModel) {
+type aiVideoStudioReadiness struct {
+	BillingReady, ExecutionReady, AccountingReady bool
+	MediaStorageReady, MediaSigningReady          bool
+	FFprobeReady, NewTasksReady                   bool
+	DisabledReason                                string
+	ModeReadiness                                 map[string]gin.H
+}
+
+func studioReadiness(config model.AIVideoStudioConfig, store *model.AIVideoStudioStore, trackingService *tracking.Service) aiVideoStudioReadiness {
+	state := aiVideoStudioReadiness{
+		ExecutionReady:    studioExecutionReady(store),
+		AccountingReady:   studioAccountingReady(store),
+		MediaStorageReady: contentMediaConfigured(trackingService),
+		MediaSigningReady: len(strings.TrimSpace(os.Getenv("TRACKING_MEDIA_SIGN_KEY"))) >= 32,
+		ModeReadiness:     make(map[string]gin.H, 4),
+	}
+	_, ffprobeErr := exec.LookPath("ffprobe")
+	state.FFprobeReady = ffprobeErr == nil
+	if validateAIVideoStudioConfig(config) == nil {
+		state.BillingReady = studioHasBillableTier(config)
+	}
+	baseReady := config.Enabled && config.ProviderConfigured && state.BillingReady && state.ExecutionReady && state.AccountingReady
+	if !state.ExecutionReady || !state.AccountingReady {
+		state.DisabledReason = "生成服务尚未开放"
+	} else if !config.Enabled {
+		state.DisabledReason = "运营暂未开放"
+	} else if !config.ProviderConfigured {
+		state.DisabledReason = "视频生成服务尚未配置"
+	} else if !state.BillingReady {
+		state.DisabledReason = "视频生成价格尚未配置"
+	}
+	imageMediaReady := state.MediaStorageReady && state.MediaSigningReady
+	limits := studioLimitsFromConfig(config)
+	referenceCapacityReady := limits.TotalMax > 0 && (limits.ImageMax > 0 || limits.VideoMax > 0 || limits.AudioMax > 0)
+	for _, code := range []string{"text", "first_frame", "first_last_frame", "reference"} {
+		open, reason := baseReady && config.Modes[code], state.DisabledReason
+		if baseReady && !config.Modes[code] {
+			reason = "该生成方式暂未开放"
+		}
+		if open && (code == "first_frame" || code == "first_last_frame") && !imageMediaReady {
+			open, reason = false, "素材存储或安全签名尚未配置"
+		}
+		if open && code == "reference" && !referenceCapacityReady {
+			open, reason = false, "参考素材上限未开放"
+		} else if open && code == "reference" && (!imageMediaReady || !state.FFprobeReady) {
+			open, reason = false, "素材存储、安全签名或时长探测尚未配置"
+		}
+		if !open && reason == "" {
+			reason = "该生成方式暂未开放"
+		}
+		state.ModeReadiness[code] = gin.H{"enabled": open, "disabled_reason": reason}
+		state.NewTasksReady = state.NewTasksReady || open
+	}
+	if state.DisabledReason == "" && !state.NewTasksReady {
+		state.DisabledReason = "没有可用的生成方式"
+	}
+	return state
+}
+
+func studioHasBillableTier(config model.AIVideoStudioConfig) bool {
+	limits := studioLimitsFromConfig(config)
+	for _, tier := range []struct {
+		resolution  string
+		maxDuration int
+	}{{"768p", limits.MaxDuration768p}, {"2k", limits.MaxDuration2k}} {
+		for _, duration := range durationRange(tier.maxDuration) {
+			price, ok := studioPrice(config.Prices, tier.resolution, duration)
+			if ok && price.UnitStones != nil && *price.UnitStones > 0 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func studioModeIsReady(readiness aiVideoStudioReadiness, mode string) (bool, string) {
+	state, ok := readiness.ModeReadiness[mode]
+	if !ok {
+		return false, "当前生成方式未开放"
+	}
+	enabled, _ := state["enabled"].(bool)
+	reason, _ := state["disabled_reason"].(string)
+	return enabled, reason
+}
+
+func studioReadyPrice(config model.AIVideoStudioConfig, readiness aiVideoStudioReadiness, draft model.AIVideoStudioDraft) (model.AIVideoStudioPrice, string, bool) {
+	if ready, reason := studioModeIsReady(readiness, draft.Mode); !ready {
+		return model.AIVideoStudioPrice{}, reason, false
+	}
+	price, ok := studioPrice(config.Prices, draft.Resolution, draft.Duration)
+	if !ok || price.UnitStones == nil || *price.UnitStones <= 0 {
+		return model.AIVideoStudioPrice{}, "当前生成档位尚未配置价格", false
+	}
+	return price, "", true
+}
+
+func RegisterAIVideoStudioRoutes(group *gin.RouterGroup, store *model.AIVideoStudioStore, media *model.AIVideoStudioMediaStore, trackingService *tracking.Service, users *model.UserModel, polishServices ...*studioPolishService) {
 	g := group.Group("/ai-video-studio")
+	polish := &studioPolishService{store: store, media: media}
+	if len(polishServices) > 0 && polishServices[0] != nil {
+		polish = polishServices[0]
+	}
 	g.Use(func(c *gin.Context) {
 		userID := GetTokenUserID(c)
 		var approved int
@@ -259,53 +372,20 @@ func RegisterAIVideoStudioRoutes(group *gin.RouterGroup, store *model.AIVideoStu
 		}
 		c.Next()
 	})
+	registerStudioPolishRoutes(g, polish)
 	g.GET("/capabilities", func(c *gin.Context) {
 		config, err := store.Config(c, studioProviderConfigured())
 		if err != nil {
 			studioError(c, 503, "AI视频能力暂时不可用")
 			return
 		}
-		billingReady := false
-		if validateAIVideoStudioConfig(config) == nil {
-			for _, price := range config.Prices {
-				if price.Enabled && price.Code != "ai_video_studio_prompt_optimize" && price.UnitStones != nil && *price.UnitStones > 0 {
-					billingReady = true
-				}
-			}
-		}
-		_, ffprobeErr := exec.LookPath("ffprobe")
-		mediaSigningReady := len(strings.TrimSpace(os.Getenv("TRACKING_MEDIA_SIGN_KEY"))) >= 32
-		imageMediaReady := contentMediaConfigured(trackingService) && mediaSigningReady
-		mixedMediaReady := imageMediaReady && ffprobeErr == nil
-		executionReady, accountingReady := studioExecutionReady(store), studioAccountingReady(store)
-		enabled := config.Enabled && config.ProviderConfigured && billingReady && executionReady && accountingReady
-		reason := ""
-		if !executionReady || !accountingReady {
-			reason = "生成服务尚未开放"
-		} else if !config.Enabled {
-			reason = "运营暂未开放"
-		} else if !config.ProviderConfigured {
-			reason = "视频生成服务尚未配置"
-		} else if !billingReady {
-			reason = "视频生成价格尚未配置"
-		}
+		readiness := studioReadiness(config, store, trackingService)
+		imageMediaReady := readiness.MediaStorageReady && readiness.MediaSigningReady
+		mixedMediaReady := imageMediaReady && readiness.FFprobeReady
 		modes := make([]gin.H, 0, 4)
 		for _, code := range []string{"text", "first_frame", "first_last_frame", "reference"} {
-			open := enabled && config.Modes[code]
-			if (code == "first_frame" || code == "first_last_frame") && !imageMediaReady {
-				open = false
-			}
-			if code == "reference" && !mixedMediaReady {
-				open = false
-			}
-			modeReason := ""
-			if !open {
-				modeReason = reason
-				if modeReason == "" {
-					modeReason = "该生成方式暂未开放"
-				}
-			}
-			modes = append(modes, gin.H{"code": code, "enabled": open, "disabled_reason": modeReason})
+			mode := readiness.ModeReadiness[code]
+			modes = append(modes, gin.H{"code": code, "enabled": mode["enabled"], "disabled_reason": mode["disabled_reason"]})
 		}
 		limits := studioLimitsFromConfig(config)
 		resolutions := []string{}
@@ -326,7 +406,7 @@ func RegisterAIVideoStudioRoutes(group *gin.RouterGroup, store *model.AIVideoStu
 				durations[res] = ds
 			}
 		}
-		studioOK(c, gin.H{"enabled": enabled, "billing_ready": billingReady, "execution_ready": executionReady, "accounting_ready": accountingReady, "history_readable": true, "disabled_reason": reason, "capability_version": config.Version, "quote_version": config.Version, "modes": modes, "ratios": []string{"16:9", "9:16", "1:1", "adaptive"}, "resolutions": resolutions, "durations_by_resolution": durations, "quantity_max": limits.QuantityMax, "image_upload_enabled": imageMediaReady, "media_upload_enabled": mixedMediaReady, "media_disabled_reason": map[bool]string{true: "", false: "素材存储、安全签名或时长探测尚未配置"}[mixedMediaReady], "reference_limits": gin.H{"image_max": limits.ImageMax, "video_max": limits.VideoMax, "audio_max": limits.AudioMax, "total_max": limits.TotalMax, "media_duration_min": limits.MediaDurationMin, "media_duration_max": limits.MediaDurationMax, "video_total_duration_max": limits.VideoTotalDuration, "audio_total_duration_max": limits.AudioTotalDuration}})
+		studioOK(c, gin.H{"enabled": readiness.NewTasksReady, "new_tasks_ready": readiness.NewTasksReady, "billing_ready": readiness.BillingReady, "execution_ready": readiness.ExecutionReady, "accounting_ready": readiness.AccountingReady, "history_readable": true, "disabled_reason": readiness.DisabledReason, "capability_version": config.Version, "quote_version": config.Version, "modes": modes, "ratios": []string{"16:9", "9:16", "1:1", "adaptive"}, "resolutions": resolutions, "durations_by_resolution": durations, "quantity_max": limits.QuantityMax, "image_upload_enabled": imageMediaReady, "media_upload_enabled": mixedMediaReady, "media_disabled_reason": map[bool]string{true: "", false: "素材存储、安全签名或时长探测尚未配置"}[mixedMediaReady], "reference_limits": gin.H{"image_max": limits.ImageMax, "video_max": limits.VideoMax, "audio_max": limits.AudioMax, "total_max": limits.TotalMax, "media_duration_min": limits.MediaDurationMin, "media_duration_max": limits.MediaDurationMax, "video_total_duration_max": limits.VideoTotalDuration, "audio_total_duration_max": limits.AudioTotalDuration}})
 	})
 	g.GET("/drafts", func(c *gin.Context) {
 		page, size := studioPage(c)
@@ -434,8 +514,8 @@ func RegisterAIVideoStudioRoutes(group *gin.RouterGroup, store *model.AIVideoStu
 	registerAIVideoStudioPromptRoutes(g, store)
 	registerAIVideoStudioMediaRoutes(g, store, media, trackingService, users)
 	registerAIVideoStudioAdoptionRoutes(g, media, trackingService, users)
-	g.POST("/quotes", func(c *gin.Context) { handleAIVideoStudioQuote(c, store, media) })
-	g.POST("/batches", func(c *gin.Context) { handleStudioBatchCreate(c, store) })
+	g.POST("/quotes", func(c *gin.Context) { handleAIVideoStudioQuote(c, store, media, trackingService) })
+	g.POST("/batches", func(c *gin.Context) { handleStudioBatchCreate(c, store, trackingService) })
 	g.GET("/submissions/:idempotencyKey", func(c *gin.Context) {
 		key := c.Param("idempotencyKey")
 		if strings.TrimSpace(key) == "" || len(key) > 128 {
@@ -624,7 +704,7 @@ func validateAIVideoStudioMedia(ctx context.Context, media *model.AIVideoStudioM
 	return nil
 }
 
-func handleAIVideoStudioQuote(c *gin.Context, store *model.AIVideoStudioStore, media *model.AIVideoStudioMediaStore) {
+func handleAIVideoStudioQuote(c *gin.Context, store *model.AIVideoStudioStore, media *model.AIVideoStudioMediaStore, trackingService *tracking.Service) {
 	var input struct {
 		DraftID          int64 `json:"draft_id"`
 		ExpectedRevision int64 `json:"expected_revision"`
@@ -667,6 +747,11 @@ func handleAIVideoStudioQuote(c *gin.Context, store *model.AIVideoStudioStore, m
 		studioError(c, 403, "当前生成方式未开放")
 		return
 	}
+	price, reason, ready := studioReadyPrice(config, studioReadiness(config, store, trackingService), *draft)
+	if !ready {
+		studioError(c, 503, reason)
+		return
+	}
 	validatedInput := studioDraftInput(draft)
 	if err := validateAIVideoStudioMedia(c, media, GetTokenUserID(c), &validatedInput); err != nil {
 		studioError(c, 400, err.Error())
@@ -674,11 +759,6 @@ func handleAIVideoStudioQuote(c *gin.Context, store *model.AIVideoStudioStore, m
 	}
 	if err := validateAIVideoStudioDraft(validatedInput, studioLimitsFromConfig(config)); err != nil {
 		studioError(c, 400, err.Error())
-		return
-	}
-	price, ok := studioPrice(config.Prices, draft.Resolution, draft.Duration)
-	if !ok || price.UnitStones == nil || *price.UnitStones <= 0 {
-		studioError(c, 503, "当前生成档位尚未配置价格")
 		return
 	}
 	validatedReferences, _ := json.Marshal(validatedInput.References)
@@ -765,6 +845,14 @@ func defaultAIVideoStudioPrices() []model.AIVideoStudioPrice {
 }
 
 func validateAIVideoStudioConfig(config model.AIVideoStudioConfig) error {
+	if err := validateStudioPolishConfig(config.PromptOptimize); err != nil {
+		return err
+	}
+	if config.PromptOptimize.Enabled {
+		if _, ok := studioPolishPrice(config); !ok {
+			return errors.New("开放润色前必须启用独立按次价格")
+		}
+	}
 	limits := config.Limits
 	if limits["max_concurrency"] < 1 || limits["max_concurrency"] > maxAIVideoStudioConcurrency {
 		return errors.New("并发限制超出安全范围")
@@ -799,6 +887,9 @@ func validateAIVideoStudioConfig(config model.AIVideoStudioConfig) error {
 			return errors.New("价格代码不能重复")
 		}
 		seenPrices[price.Code] = true
+		if price.Code == studioPolishPriceCode && price.BillingUnit != "per_request" {
+			return errors.New("润色必须按次计费")
+		}
 		if price.BillingUnit != "per_request" && price.BillingUnit != "per_video" && price.BillingUnit != "per_second" {
 			return errors.New("价格计价方式无效")
 		}
@@ -843,8 +934,13 @@ func validStudioBatchStatus(status string) bool {
 	return false
 }
 
-func RegisterAIVideoStudioManagementRoutes(group *gin.RouterGroup, store *model.AIVideoStudioStore) {
+func RegisterAIVideoStudioManagementRoutes(group *gin.RouterGroup, store *model.AIVideoStudioStore, trackingService *tracking.Service, polishServices ...*studioPolishService) {
 	g := group.Group("/ai-video-studio")
+	polish := &studioPolishService{store: store}
+	if len(polishServices) > 0 && polishServices[0] != nil {
+		polish = polishServices[0]
+	}
+	registerStudioPolishManagement(g, polish)
 	registerStudioReconciliation(g, store)
 	g.GET("/config", func(c *gin.Context) {
 		config, err := store.Config(c, studioProviderConfigured())
@@ -855,16 +951,23 @@ func RegisterAIVideoStudioManagementRoutes(group *gin.RouterGroup, store *model.
 		if len(config.Prices) == 0 {
 			config.Prices = defaultAIVideoStudioPrices()
 		}
-		studioOK(c, gin.H{"enabled": config.Enabled, "execution_ready": studioExecutionReady(store), "accounting_ready": studioAccountingReady(store), "provider_code": config.ProviderCode, "provider_display_name": "秘塔 H3", "provider_configured": config.ProviderConfigured, "modes": config.Modes, "limits": config.Limits, "prices": config.Prices, "version": config.Version, "updated_at": config.UpdatedAt})
+		readiness := studioReadiness(config, store, trackingService)
+		_, _, polishErr := polish.readiness(c, config)
+		polishReason := ""
+		if polishErr != nil {
+			polishReason = polishErr.Error()
+		}
+		studioOK(c, gin.H{"prompt_optimize": config.PromptOptimize, "prompt_optimize_ready": polishErr == nil, "prompt_optimize_disabled_reason": polishReason, "enabled": config.Enabled, "execution_ready": readiness.ExecutionReady, "accounting_ready": readiness.AccountingReady, "billing_ready": readiness.BillingReady, "media_storage_ready": readiness.MediaStorageReady, "media_signing_ready": readiness.MediaSigningReady, "ffprobe_ready": readiness.FFprobeReady, "new_tasks_ready": readiness.NewTasksReady, "disabled_reason": readiness.DisabledReason, "mode_readiness": readiness.ModeReadiness, "provider_code": config.ProviderCode, "provider_display_name": "秘塔 H3", "provider_configured": config.ProviderConfigured, "modes": config.Modes, "limits": config.Limits, "prices": config.Prices, "version": config.Version, "updated_at": config.UpdatedAt})
 	})
 	g.PUT("/config", func(c *gin.Context) {
 		var input struct {
-			Enabled         bool                       `json:"enabled"`
-			ProviderCode    string                     `json:"provider_code"`
-			Modes           map[string]bool            `json:"modes"`
-			Limits          map[string]int             `json:"limits"`
-			Prices          []model.AIVideoStudioPrice `json:"prices"`
-			ExpectedVersion int64                      `json:"expected_version"`
+			Enabled         bool                            `json:"enabled"`
+			ProviderCode    string                          `json:"provider_code"`
+			Modes           map[string]bool                 `json:"modes"`
+			Limits          map[string]int                  `json:"limits"`
+			Prices          []model.AIVideoStudioPrice      `json:"prices"`
+			PromptOptimize  model.AIVideoStudioPolishConfig `json:"prompt_optimize"`
+			ExpectedVersion int64                           `json:"expected_version"`
 		}
 		if c.ShouldBindJSON(&input) != nil || input.ExpectedVersion < 1 || input.ProviderCode != "metaso_h3" {
 			studioError(c, 400, "配置参数不合法")
@@ -889,7 +992,11 @@ func RegisterAIVideoStudioManagementRoutes(group *gin.RouterGroup, store *model.
 			}
 			price.Version = input.ExpectedVersion + 1
 		}
-		config := model.AIVideoStudioConfig{Enabled: input.Enabled, ProviderCode: input.ProviderCode, ProviderConfigured: studioProviderConfigured(), Modes: input.Modes, Limits: input.Limits, Prices: input.Prices}
+		input.PromptOptimize.Model = strings.TrimSpace(input.PromptOptimize.Model)
+		if input.PromptOptimize.TimeoutSeconds == 0 && !input.PromptOptimize.Enabled {
+			input.PromptOptimize.TimeoutSeconds = 45
+		}
+		config := model.AIVideoStudioConfig{Enabled: input.Enabled, ProviderCode: input.ProviderCode, ProviderConfigured: studioProviderConfigured(), Modes: input.Modes, Limits: input.Limits, Prices: input.Prices, PromptOptimize: input.PromptOptimize}
 		if err := validateAIVideoStudioConfig(config); err != nil {
 			studioError(c, 400, err.Error())
 			return
@@ -909,7 +1016,13 @@ func RegisterAIVideoStudioManagementRoutes(group *gin.RouterGroup, store *model.
 		if len(updated.Prices) == 0 {
 			updated.Prices = defaultAIVideoStudioPrices()
 		}
-		studioOK(c, gin.H{"enabled": updated.Enabled, "execution_ready": studioExecutionReady(store), "accounting_ready": studioAccountingReady(store), "provider_code": updated.ProviderCode, "provider_display_name": "秘塔 H3", "provider_configured": updated.ProviderConfigured, "modes": updated.Modes, "limits": updated.Limits, "prices": updated.Prices, "version": updated.Version, "updated_at": updated.UpdatedAt})
+		readiness := studioReadiness(updated, store, trackingService)
+		_, _, polishErr := polish.readiness(c, updated)
+		polishReason := ""
+		if polishErr != nil {
+			polishReason = polishErr.Error()
+		}
+		studioOK(c, gin.H{"prompt_optimize": updated.PromptOptimize, "prompt_optimize_ready": polishErr == nil, "prompt_optimize_disabled_reason": polishReason, "enabled": updated.Enabled, "execution_ready": readiness.ExecutionReady, "accounting_ready": readiness.AccountingReady, "billing_ready": readiness.BillingReady, "media_storage_ready": readiness.MediaStorageReady, "media_signing_ready": readiness.MediaSigningReady, "ffprobe_ready": readiness.FFprobeReady, "new_tasks_ready": readiness.NewTasksReady, "disabled_reason": readiness.DisabledReason, "mode_readiness": readiness.ModeReadiness, "provider_code": updated.ProviderCode, "provider_display_name": "秘塔 H3", "provider_configured": updated.ProviderConfigured, "modes": updated.Modes, "limits": updated.Limits, "prices": updated.Prices, "version": updated.Version, "updated_at": updated.UpdatedAt})
 	})
 	g.GET("/tasks", func(c *gin.Context) {
 		page, size := studioPage(c)

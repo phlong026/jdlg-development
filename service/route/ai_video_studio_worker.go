@@ -10,6 +10,7 @@ import (
 	"os"
 	"service/aivideostudio"
 	"service/model"
+	"service/tracking"
 	"strings"
 	"time"
 )
@@ -32,7 +33,7 @@ func startStudioWorker(ctx context.Context, s *model.AIVideoStudioStore, media *
 			case <-ticker.C:
 				if studioProviderConfigured() {
 					if e := w.Step(workerCtx); e != nil && workerCtx.Err() == nil {
-						log.Printf("[AI视频工作台] worker operation failed")
+						log.Printf("[AI视频工作台] worker failed %s", e)
 					}
 				}
 			}
@@ -40,7 +41,7 @@ func startStudioWorker(ctx context.Context, s *model.AIVideoStudioStore, media *
 	}()
 	return func() { cancel(); <-done }
 }
-func handleStudioBatchCreate(c *gin.Context, s *model.AIVideoStudioStore) {
+func handleStudioBatchCreate(c *gin.Context, s *model.AIVideoStudioStore, trackingService *tracking.Service) {
 	var in struct {
 		QuoteID string `json:"quote_id"`
 		Key     string `json:"idempotency_key"`
@@ -65,6 +66,25 @@ func handleStudioBatchCreate(c *gin.Context, s *model.AIVideoStudioStore) {
 		}
 		if !s.Ready || !studioProviderConfigured() {
 			studioError(c, 503, "生成服务尚未配置")
+			return
+		}
+		config, configErr := s.Config(c, true)
+		if configErr != nil {
+			studioError(c, 503, "能力配置读取失败")
+			return
+		}
+		var snapshot []byte
+		if queryErr := s.DB.QueryRowContext(c, `SELECT input_snapshot FROM ai_video_studio_quotes WHERE id=? AND user_id=?`, in.QuoteID, uid).Scan(&snapshot); queryErr != nil {
+			studioError(c, 409, "报价已失效，请重新报价")
+			return
+		}
+		var draft model.AIVideoStudioDraft
+		if jsonErr := json.Unmarshal(snapshot, &draft); jsonErr != nil {
+			studioError(c, 409, "报价已失效，请重新报价")
+			return
+		}
+		if _, reason, ready := studioReadyPrice(config, studioReadiness(config, s, trackingService), draft); !ready {
+			studioError(c, 503, reason)
 			return
 		}
 		id, _, e = s.CreatePaidBatch(c, uid, in.QuoteID, in.Key)

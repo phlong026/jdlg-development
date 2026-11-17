@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/gin-gonic/gin"
 	"service/model"
 )
 
@@ -215,6 +216,72 @@ func TestValidateAIVideoStudioPromptLengthBoundary(t *testing.T) {
 	in.ReferencePrompt = strings.Repeat("参", 7000)
 	in.References = []aiVideoStudioReferenceInput{{MediaID: "image-1", MediaType: "image", Position: 1}}
 	if err := validateAIVideoStudioDraft(in, defaultAIVideoStudioLimits()); err != nil {
-		t.Fatalf("7000 rune reference prompt should pass: %v", err)
+		t.Fatalf("7000 rune reference prompt without purpose should pass: %v", err)
+	}
+	in.References[0].Purpose = "控制庭院风格"
+	if err := validateAIVideoStudioDraft(in, defaultAIVideoStudioLimits()); err == nil {
+		t.Fatal("reference prompt plus provider-visible purpose over 7000 runes must fail before quote")
+	}
+	in.ReferencePrompt = "庭院镜头"
+	in.References[0].Purpose = strings.Repeat("用", 121)
+	if err := validateAIVideoStudioDraft(in, defaultAIVideoStudioLimits()); err == nil {
+		t.Fatal("purpose over 120 runes must fail before quote")
+	}
+}
+
+func TestStudioLimitsPreserveExplicitZeroReferenceLimits(t *testing.T) {
+	limits := studioLimitsFromConfig(model.AIVideoStudioConfig{Limits: map[string]int{
+		"max_quantity": 1, "max_duration_768p": 15, "max_duration_2k": 15,
+		"max_reference_images": 0, "max_reference_videos": 0,
+		"max_reference_audios": 0, "max_reference_total": 0,
+	}})
+	if limits.ImageMax != 0 || limits.VideoMax != 0 || limits.AudioMax != 0 || limits.TotalMax != 0 {
+		t.Fatalf("explicit zero limits restored defaults: %+v", limits)
+	}
+}
+
+func TestStudioReadinessRequiresAnActuallyBillableDuration(t *testing.T) {
+	unit := int64(2)
+	config := model.AIVideoStudioConfig{
+		Enabled: true, ProviderConfigured: true,
+		Modes:  map[string]bool{"text": true},
+		Limits: map[string]int{"max_concurrency": 3, "timeout_seconds": 900, "max_quantity": 1, "max_duration_768p": 15, "max_duration_2k": 15, "max_reference_images": 8, "max_reference_videos": 3, "max_reference_audios": 3, "max_reference_total": 12},
+		Prices: completeStudioPrices(unit),
+	}
+	config.Prices[3].Enabled = true // 768p_long only, but configured duration stops at 15s.
+	state := studioReadiness(config, &model.AIVideoStudioStore{Ready: true}, nil)
+	if state.BillingReady || state.NewTasksReady {
+		t.Fatalf("unreachable price tier reported ready: %+v", state)
+	}
+}
+
+func TestStudioReadinessClosesReferenceModeWithZeroCapacity(t *testing.T) {
+	unit := int64(2)
+	config := model.AIVideoStudioConfig{
+		Enabled: true, ProviderConfigured: true,
+		Modes:  map[string]bool{"reference": true},
+		Limits: map[string]int{"max_concurrency": 3, "timeout_seconds": 900, "max_quantity": 1, "max_duration_768p": 15, "max_duration_2k": 15, "max_reference_images": 0, "max_reference_videos": 0, "max_reference_audios": 0, "max_reference_total": 0},
+		Prices: completeStudioPrices(unit),
+	}
+	config.Prices[1].Enabled = true
+	state := studioReadiness(config, &model.AIVideoStudioStore{Ready: true}, nil)
+	if state.ModeReadiness["reference"]["enabled"] == true || state.ModeReadiness["reference"]["disabled_reason"] != "参考素材上限未开放" || state.NewTasksReady {
+		t.Fatalf("zero-capacity reference mode reported ready: %+v", state)
+	}
+}
+
+func TestStudioReadyPriceFailsClosedForModeAndTier(t *testing.T) {
+	unit := int64(2)
+	config := model.AIVideoStudioConfig{Prices: completeStudioPrices(unit)}
+	config.Prices[1].Enabled = true
+	draft := model.AIVideoStudioDraft{Mode: "text", Resolution: "768p", Duration: 8}
+	closed := aiVideoStudioReadiness{ModeReadiness: map[string]gin.H{"text": {"enabled": false, "disabled_reason": "素材依赖未就绪"}}}
+	if _, _, ok := studioReadyPrice(config, closed, draft); ok {
+		t.Fatal("closed mode accepted for a new quote or batch")
+	}
+	open := aiVideoStudioReadiness{ModeReadiness: map[string]gin.H{"text": {"enabled": true, "disabled_reason": ""}}}
+	draft.Resolution = "2k"
+	if _, _, ok := studioReadyPrice(config, open, draft); ok {
+		t.Fatal("unpriced tier accepted for a new quote or batch")
 	}
 }

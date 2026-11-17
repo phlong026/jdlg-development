@@ -5,41 +5,26 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"os"
 	"strings"
 	"testing"
 	"time"
-
-	mysql "github.com/go-sql-driver/mysql"
 )
 
 // Explicitly opt in with a disposable loopback-only MySQL schema. This never
 // reads the application's DSN and cannot be pointed at the production database.
 func TestAIVideoStudioMySQLIsolationAndRevisions(t *testing.T) {
-	dsn := os.Getenv("AI_VIDEO_STUDIO_TEST_DSN")
-	if dsn == "" {
-		t.Skip("requires disposable AI_VIDEO_STUDIO_TEST_DSN")
-	}
-	cfg, err := mysql.ParseDSN(dsn)
-	if err != nil || cfg.Net != "tcp" || !strings.HasPrefix(cfg.Addr, "127.0.0.1:") || !strings.HasPrefix(cfg.DBName, "jdlg_studio_test") {
-		t.Fatal("test DSN must use a disposable loopback studio schema")
-	}
-	db, err := sql.Open("mysql", dsn)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
+	db := executionTestDB(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	if err = db.PingContext(ctx); err != nil {
+	if err := db.PingContext(ctx); err != nil {
 		t.Fatal(err)
 	}
 	store := NewAIVideoStudioStore(db)
-	if err = store.InitTables(); err != nil {
+	if err := store.InitTables(); err != nil {
 		t.Fatal(err)
 	}
 	media := NewAIVideoStudioMediaStore(db)
-	if err = media.InitTable(); err != nil {
+	if err := media.InitTable(); err != nil {
 		t.Fatal(err)
 	}
 	config, err := store.Config(ctx, false)
@@ -49,6 +34,9 @@ func TestAIVideoStudioMySQLIsolationAndRevisions(t *testing.T) {
 	draft := AIVideoStudioDraft{UserID: 1001, Name: "可恢复草稿", Mode: "text", References: json.RawMessage(`[]`), Ratio: "16:9", Resolution: "768p", Duration: 4, Quantity: 1}
 	if err = store.CreateDraft(ctx, &draft); err != nil {
 		t.Fatal(err)
+	}
+	if got := defaultAIVideoStudioLimits()["max_concurrency"]; got != 3 {
+		t.Fatalf("default max concurrency=%d, want 3", got)
 	}
 	if draft.ID < 1 || draft.Revision != 1 {
 		t.Fatalf("new draft=%+v", draft)

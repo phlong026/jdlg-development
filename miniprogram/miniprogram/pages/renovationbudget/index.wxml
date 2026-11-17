@@ -1,0 +1,66 @@
+<block wx:if="{{__profileAccessMounted}}">
+<view class="page">
+  <navigation-bar title="造价测算" background="#e6daca" />
+  <scroll-view class="page-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+    <view class="sheet">
+      <view class="sheet-head"><text>房屋信息</text><quote-type-switch kind="renovation" /></view>
+      <text class="field-label">房屋状态</text>
+      <view class="segmented two">
+        <view class="segment {{houseType === 'new' ? 'selected' : ''}}" data-value="new" bindtap="onHouseTypeTap">新房<text wx:if="{{houseType === 'new'}}">✓</text></view>
+        <view class="segment {{houseType === 'old' ? 'selected' : ''}}" data-value="old" bindtap="onHouseTypeTap">旧房改造<text wx:if="{{houseType === 'old'}}">✓</text></view>
+      </view>
+      <text class="field-label">所在地区</text>
+      <picker mode="multiSelector" range="{{regionOptions}}" value="{{regionIndex}}" bindcolumnchange="onRegionColumnChange" bindchange="onRegionChange">
+        <view class="select-field"><text>{{province}} / {{city}}</text><text class="arrow">〉</text></view>
+      </picker>
+      <text class="field-label">装修面积</text>
+      <view class="input-field {{measurement && measurement.mode === 'measured' ? 'readonly' : ''}}"><input type="digit" value="{{area}}" disabled="{{measurement && measurement.mode === 'measured'}}" placeholder="请输入" bindinput="onAreaInput" /><text>㎡</text></view>
+      <view class="measurement-link" bindtap="openMeasurementDrawer"><view><text>空间尺寸</text><text class="measurement-state">{{measurementBasisText}}</text></view><text>›</text></view>
+      <view class="divider"></view>
+      <view class="section-title">房屋几何参数</view>
+      <view class="grid two-col">
+        <view><text class="field-label">面宽</text><view class="input-field"><input type="digit" value="{{width}}" data-field="width" bindinput="onInput" placeholder="请输入"/><text>m</text></view></view>
+        <view><text class="field-label">进深</text><view class="input-field"><input type="digit" value="{{depth}}" data-field="depth" bindinput="onInput" placeholder="请输入"/><text>m</text></view></view>
+        <view><text class="field-label">楼层数</text><view class="input-field"><input type="number" value="{{floorCount}}" bindinput="onFloorCountInput"/><text>层</text></view></view>
+        <view><text class="field-label">层高</text><view class="input-field"><input type="digit" value="{{height}}" data-field="height" bindinput="onInput"/><text>m</text></view></view>
+      </view>
+      <view class="prefill-link" bindtap="onLoad">带入建房参数 <text>›</text></view>
+      <view class="divider"></view>
+      <view class="section-title">户型</view>
+      <view class="grid two-col counters">
+        <view wx:for="{{roomFields}}" wx:key="*this">
+          <text class="field-label">{{roomLabels[item]}}</text>
+          <view class="counter"><button data-field="{{item}}" data-delta="-1" bindtap="onRoomChange">−</button><text>{{rooms[item]}}</text><button data-field="{{item}}" data-delta="1" bindtap="onRoomChange">+</button></view>
+        </view>
+      </view>
+      <view class="floor-link" bindtap="openFloorDrawer">分层设置 <text>›</text></view>
+      <view class="divider"></view>
+      <view class="section-title">室内风格</view>
+      <view class="chips"><view wx:for="{{styleOptions}}" wx:key="*this" class="chip {{style === item ? 'selected' : ''}}" data-value="{{item}}" bindtap="onStyleTap">{{item}}<text wx:if="{{style === item}}"> ✓</text></view></view>
+      <view class="divider"></view>
+      <view class="section-title">装修标准</view>
+      <view class="segmented three"><view wx:for="{{standardOptions}}" wx:key="id" class="segment {{standard === item.id ? 'selected' : ''}}" data-value="{{item.id}}" bindtap="onStandardTap">{{item.name}}<text wx:if="{{standard === item.id}}"> ✓</text></view></view>
+      <button class="primary" loading="{{generating}}" disabled="{{generating}}" bindtap="onGenerateReport">生成报价</button>
+      <view class="hint">参考估算，以实际方案为准</view>
+    </view>
+    <view class="bottom-space"></view>
+  </scroll-view>
+
+  <view class="mask" wx:if="{{floorDrawerVisible}}" bindtap="closeFloorDrawer">
+    <view class="drawer floor-drawer" catchtap="stopPropagation">
+      <view class="drawer-head"><text>分层设置</text><text bindtap="closeFloorDrawer">×</text></view>
+      <view class="floor-total">{{floorCount}}层 · {{area || '--'}}㎡</view>
+      <scroll-view class="floor-tabs" scroll-x><view wx:for="{{floors}}" wx:key="index" class="floor-tab {{activeFloor === index ? 'selected' : ''}}" data-index="{{index}}" bindtap="selectFloor">{{item.name}}</view></scroll-view>
+      <view class="floor-content">
+        <view class="section-title">{{floors[activeFloor].name}} · {{floors[activeFloor].area || '--'}}㎡</view>
+        <text class="field-label">本层面积</text><view class="input-field {{measurement && measurement.mode === 'measured' ? 'readonly' : ''}}"><input type="digit" value="{{floors[activeFloor].area}}" disabled="{{measurement && measurement.mode === 'measured'}}" bindinput="onFloorAreaInput"/><text>㎡</text></view>
+        <text class="field-label">本层层高</text><view class="input-field"><input type="digit" value="{{floors[activeFloor].height}}" placeholder="继承全屋层高" bindinput="onFloorHeightInput"/><text>m</text></view>
+        <view class="floor-room" wx:for="{{roomFields}}" wx:key="*this"><text>{{roomLabels[item]}}</text><view class="counter"><button data-field="{{item}}" data-delta="-1" bindtap="onFloorRoomChange">−</button><text>{{floors[activeFloor].rooms[item]}}</text><button data-field="{{item}}" data-delta="1" bindtap="onFloorRoomChange">+</button></view></view>
+      </view>
+      <button class="primary" bindtap="confirmFloors">确认</button><button class="secondary" bindtap="closeFloorDrawer">返回</button>
+    </view>
+  </view>
+  <renovation-measurement-editor visible="{{measurementDrawerVisible}}" input="{{measurementEditorInput}}" bind:cancel="closeMeasurementDrawer" bind:confirm="onMeasurementConfirm" />
+</view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

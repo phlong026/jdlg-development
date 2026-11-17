@@ -1,0 +1,66 @@
+TAP version 13
+# Subtest: tutorial covers three writing formulas with a copyable courtyard example
+ok 1 - tutorial covers three writing formulas with a copyable courtyard example
+  ---
+  duration_ms: 1.451791
+  ...
+# Subtest: tutorial opens at the requested mode and switches examples without a server request
+ok 2 - tutorial opens at the requested mode and switches examples without a server request
+  ---
+  duration_ms: 0.700167
+  ...
+# Subtest: copy writes only the selected case and reports a recoverable clipboard error
+ok 3 - copy writes only the selected case and reports a recoverable clipboard error
+  ---
+  duration_ms: 0.361792
+  ...
+# Subtest: late clipboard callbacks cannot change another account or a reloaded page
+ok 4 - late clipboard callbacks cannot change another account or a reloaded page
+  ---
+  duration_ms: 0.830416
+  ...
+# Subtest: switching lessons or retrying copy invalidates an earlier clipboard callback
+not ok 5 - switching lessons or retrying copy invalidates an earlier clipboard callback
+  ---
+  duration_ms: 1.501458
+  location: '/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js:90:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + '复制失败，请重试或长按选择文字'
+    - ''
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ''
+  actual: '复制失败，请重试或长按选择文字'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-tutorial.test.js:98:10)
+    Test.runInAsyncScope (node:async_hooks:206:9)
+    Test.run (node:internal/test_runner/test:796:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:526:18)
+    Test.postRun (node:internal/test_runner/test:889:19)
+    Test.run (node:internal/test_runner/test:835:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:526:7)
+  ...
+# Subtest: writing and saved-prompt pages open the contextual tutorial without changing their inputs
+ok 6 - writing and saved-prompt pages open the contextual tutorial without changing their inputs
+  ---
+  duration_ms: 2.021084
+  ...
+# Subtest: tutorial is registered as a private workspace route excluded from tracking
+ok 7 - tutorial is registered as a private workspace route excluded from tracking
+  ---
+  duration_ms: 1.066
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 6
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 52.836042

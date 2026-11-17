@@ -1,0 +1,31 @@
+<view class="report" wx:if="{{report}}">
+  <view class="summary-card" wx:if="{{!detailsExpanded}}">
+    <view class="eyebrow">装修参考总价</view>
+    <view class="total"><text>{{totalWan}}</text><text>万元</text></view>
+    <view class="total-meta">{{totalAmountText}} · {{unitText}}</view>
+    <view class="quantity-basis" wx:if="{{basisText}}">{{basisText}}</view>
+    <view class="chart-row">
+      <view class="ring" style="{{ringStyle}}"><view class="ring-hole"><text>工程费</text><text>{{engineeringText}}</text></view></view>
+      <view class="legend"><view><view class="dot gold"></view><text>主材</text><text>{{materialText}}</text></view><view><view class="dot green"></view><text>辅材</text><text>{{auxiliaryText}}</text></view><view><view class="dot blue"></view><text>人工</text><text>{{laborText}}</text></view></view>
+    </view>
+    <view class="fee-row" wx:for="{{feeRows}}" wx:key="name"><text>{{item.name}}</text><text>{{item.amountText}}</text></view>
+    <view class="inline-actions" wx:if="{{!readonly}}"><text bindtap="onParametersTap">修改参数</text><text bindtap="onFeesTap">附加费用</text></view>
+  </view>
+  <view class="info-card" wx:if="{{readonly && basicInfo.length}}">
+    <view class="info-title">房屋信息</view>
+    <view class="info-grid"><view class="info-item {{item.fullWidth ? 'full' : ''}}" wx:for="{{basicInfo}}" wx:key="label"><text>{{item.label}}</text><text>{{item.value}}</text></view></view>
+  </view>
+  <scroll-view class="space-tabs" wx:if="{{!detailsExpanded}}" scroll-x enhanced show-scrollbar="{{false}}"><view wx:for="{{viewSpaces}}" wx:key="id" class="space-tab {{activeSpace === index ? 'selected' : ''}}" data-index="{{index}}" bindtap="selectSpace">{{item.name}}</view></scroll-view>
+  <view class="space-card" wx:if="{{viewSpaces.length}}">
+    <view class="space-head"><text>{{viewSpaces[activeSpace].name}} · {{viewSpaces[activeSpace].count}}间</text><text>小计 {{viewSpaces[activeSpace].amountText}}</text></view>
+    <view class="group" wx:for="{{viewSpaces[activeSpace].groups}}" wx:key="id" wx:for-item="group" wx:for-index="groupIndex">
+      <view class="group-head" data-index="{{groupIndex}}" bindtap="toggleGroup"><text>{{group.name}}</text><view><text>{{group.amountText}}</text><text class="chevron">{{group.expanded ? '⌃' : '⌄'}}</text></view></view>
+      <view class="items" wx:if="{{group.expanded}}">
+        <view class="table-head"><text>项目</text><text>工程量</text><text>单价(元)</text><text>金额(元)</text></view>
+        <view class="item {{entry.included ? '' : 'excluded'}}" wx:for="{{group.items}}" wx:key="id" wx:for-item="entry" data-item="{{entry}}" bindtap="onItemTap">
+          <view class="item-name"><text class="check">{{entry.included ? '✓' : ''}}</text><text>{{entry.name}}</text></view><text>{{entry.quantityText}}</text><text>{{entry.unitPriceText}}</text><text>{{entry.amountText}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

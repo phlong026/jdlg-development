@@ -1,2 +1,5 @@
 @import "./common.wxss";
-.video { width:100%; border-radius:18rpx; background:#1d1713; }
+.task-heading { margin:8rpx 0 30rpx; }
+.task-title { font-size:34rpx; font-weight:600; }
+.video { display:block; width:100%; margin-top:20rpx; border-radius:12rpx; background:#1d1713; }
+.result-card .row button { margin-top:16rpx; }

@@ -1,0 +1,34 @@
+{
+  "observed_at": "2026-11-17T19:06:53+08:00",
+  "read_only": true,
+  "source_commit": "8467e1cf5b6cda1cf4fd5a560f70f7f9a8f0c8f1",
+  "backend": {
+    "binary": "/www/wwwroot/jiadilingguang/api/applinux",
+    "pid": 1628402,
+    "single_process": true,
+    "disk_sha256": "b4b983a73993aa77300a9aed04161c24bbf08e116bed23891e0270d68941f66d",
+    "running_sha256": "b4b983a73993aa77300a9aed04161c24bbf08e116bed23891e0270d68941f66d"
+  },
+  "admin": {
+    "root": "/www/wwwroot/jiadilingguang/admin",
+    "manifest_matches": 94,
+    "manifest_total": 94,
+    "index_sha256": "d4209649c3ec080860aa90953de0ea7d0645354c49d002b3e0127013a791274a"
+  },
+  "http": {
+    "/api/v1/miniprogram/tracking/config": 200,
+    "/api/v1/miniprogram/workbench/context": 401,
+    "/api/v1/miniprogram/workbench/imports/capabilities": 401,
+    "/admin/": 200,
+    "/health": 404,
+    "tls_verified": true
+  },
+  "disk_free_gb_approx": 50,
+  "prior_private_backups": [
+    "/root/jdlg-six-release-20261116-8467e1c",
+    "/root/jdlg-six-backup-20261116-8467e1c",
+    "/root/jdlg-six-web-backup-20261116-8467e1c"
+  ],
+  "no_authenticated_business_smoke_this_turn": true,
+  "no_production_writes": true
+}

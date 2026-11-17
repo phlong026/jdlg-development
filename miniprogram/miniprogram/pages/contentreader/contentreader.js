@@ -1,20 +1,22 @@
 'use strict';
 const tracking = require('../../utils/tracking/index');
-const api = require('../../utils/tracking/api');
+const trackingApi = require('../../utils/tracking/api');
 const workbenchApi = require('../../utils/phase3-api');
 const { createVideoTracker } = require('../../utils/tracking/video');
 const { buildContentPresentation } = require('../../utils/content-presentation');
-const { resolveProtectedMediaURL } = require('../../utils/protected-media');
+const { resolveProtectedMediaURL: resolveReaderMediaURL } = require('../../utils/protected-media');
 const noteActions = require('../../utils/note-reader-actions');
 const noteInteractions = require('../../utils/note-interactions');
 const ROUTE = 'pages/contentreader/contentreader';
 const INVALID_ENTRY_ERRORS = new Set(['扫码入口无效', '扫码内容不可访问', '内容入口不完整', '合集入口不完整', '合集作品已改变']);
 const SUPPORTED_BODY_FORMATS = new Set(['', 'plain', 'plain_text', 'rich_text', 'article_v2']);
-function clearsVerifiedContent(error) { const status = Number(error && error.statusCode); return [401, 403, 404, 410].includes(status) || [401, 403, 404, 410].includes(Number(error && error.code)) || error && error.code === 'MEDIA_IDENTITY_CHANGED' || INVALID_ENTRY_ERRORS.has(String(error && error.message || '')); }
-function refreshErrorMessage(error) { if (error && error.code === 'CONTENT_INVALID')
-    return error.message; if (error && error.code === 'MEDIA_DOWNLOAD_FAILED')
-    return '素材刷新失败，请检查网络后重试。'; if (error && error.networkError)
-    return '内容刷新失败，网络不可用，请检查连接后重试。'; if (Number(error && error.statusCode) >= 500)
+function readerErrorFields(error) { return error !== null && (typeof error === 'object' || typeof error === 'function') ? error : {}; }
+function readerErrorMessage(error, fallback) { const message = readerErrorFields(error).message; return typeof message === 'string' && message.length > 0 ? message : fallback; }
+function clearsVerifiedContent(error) { const details = readerErrorFields(error), status = Number(details.statusCode); return [401, 403, 404, 410].includes(status) || [401, 403, 404, 410].includes(Number(details.code)) || details.code === 'MEDIA_IDENTITY_CHANGED' || INVALID_ENTRY_ERRORS.has(String(details.message || '')); }
+function refreshErrorMessage(error) { const details = readerErrorFields(error); if (details.code === 'CONTENT_INVALID' && typeof details.message === 'string')
+    return details.message; if (details.code === 'MEDIA_DOWNLOAD_FAILED')
+    return '素材刷新失败，请检查网络后重试。'; if (details.networkError)
+    return '内容刷新失败，网络不可用，请检查连接后重试。'; if (Number(details.statusCode) >= 500)
     return '内容刷新失败，服务暂不可用，请稍后重试。'; return '内容刷新失败，请稍后重试。'; }
 function eventTracks(event) { const value = event && event.currentTarget && event.currentTarget.dataset && event.currentTarget.dataset.tracking; return value !== false && value !== 'false'; }
 function invalidContent(message) { const error = new Error(message); error.code = 'CONTENT_INVALID'; return error; }
@@ -41,6 +43,16 @@ function consentState() {
         return { resolved: false, accepted: false };
     }
 }
+function readerMonotonicNow() {
+    const performance = typeof wx.getPerformance === 'function' ? wx.getPerformance() : null;
+    if (!performance || typeof performance !== 'object')
+        return null;
+    const now = performance.now;
+    if (typeof now !== 'function')
+        return null;
+    const value = now.call(performance);
+    return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
 function presentationOptions(window, galleryIndex, descriptionExpanded) { const safeBottom = window && window.safeArea && window.screenHeight ? Math.max(0, window.screenHeight - window.safeArea.bottom) : 0; return { prefix: 'reader', galleryIndex, descriptionExpanded, fullWidthGallery: true, videoChromeHeight: (Number(window && window.statusBarHeight) || 20) + 44 + 76 + safeBottom }; }
 function nativeShareTitle(value, fallback) { return String(value || fallback || '自有内容').replace(/\s+/g, ' ').trim().slice(0, 80); }
 Page({
@@ -56,7 +68,7 @@ Page({
         this.invalidateNoteInteractions(); this.syncPlayerVisibility(); this.pausePlayers(); },
     onUnload() { if (this.invalidateNoteInteractions)
         this.invalidateNoteInteractions(); if (this.stopObservingTracking)
-        this.stopObservingTracking(); this.loadSequence = (this.loadSequence || 0) + 1; this.posterCapabilitySequence = (this.posterCapabilitySequence || 0) + 1; this.posterOperation = (this.posterOperation || 0) + 1; this.posterCapability = null; this.pageVisible = false; this.pausePlayers(); this.observers.forEach(o => o.disconnect()); this.observers = []; },
+        this.stopObservingTracking(); this.loadSequence = (this.loadSequence || 0) + 1; this.posterCapabilitySequence = (this.posterCapabilitySequence || 0) + 1; this.posterOperation = (this.posterOperation || 0) + 1; this.posterCapability = null; this.pageVisible = false; this.pausePlayers(); this.observers.forEach((observer) => observer.disconnect()); this.observers = []; },
     acceptExternalEntry(options) { this.entryGeneration = (this.entryGeneration || 0) + 1; this.entryAttributionAllowed = true; this.options = options || {}; this.invalidatePosterAvailability(); this.setData({ content: null, contentReady: false, loading: true, presentationView: null, videoStarted: {} }); this.loadContent(); },
     async loadContent() {
         const sequence = (this.loadSequence || 0) + 1;
@@ -72,7 +84,7 @@ Page({
             wx.hideShareMenu();
         this.setData(quiet ? { error: '', videoStarted: {} } : { loading: true, error: '', content: null, media: [], articleBlocks: [], presentationView: null, videoStarted: {}, contentReady: false });
         try {
-            const resolvedOptions = this.managementPreview ? this.options : await api.resolveReaderOptions(this.options);
+            const resolvedOptions = this.managementPreview ? this.options : await trackingApi.resolveReaderOptions(this.options);
             if (sequence !== this.loadSequence)
                 return;
             this.options = { ...resolvedOptions };
@@ -104,7 +116,7 @@ Page({
             }
             if (this.managementPreview && inCollection)
                 throw new Error('合集请从合集管理页预览');
-            const contentRequest = this.managementPreview ? workbenchApi.request(workbenchApi.WORKBENCH + '/contents/' + encodeURIComponent(id) + '/versions/' + version) : api.request(readPath, 'GET', {}, undefined, true);
+            const contentRequest = this.managementPreview ? workbenchApi.request(workbenchApi.WORKBENCH + '/contents/' + encodeURIComponent(id) + '/versions/' + version) : trackingApi.request(readPath, 'GET', {}, undefined, true);
             const [configuration, content] = await Promise.all([configurationPromise, contentRequest]);
             if (inCollection && (content.content_id !== id || Number(content.version) !== version))
                 throw new Error('合集作品已改变');
@@ -122,35 +134,35 @@ Page({
             const window = wx.getWindowInfo ? wx.getWindowInfo() : wx.getSystemInfoSync();
             // 封面与正文一起就绪后再渲染：视频走签名直链可立即流式播放，不再整段下载。
             if (content.cover) {
-                const coverSource = api.mediaURL(content.cover.url);
+                const coverSource = trackingApi.mediaURL(content.cover.url);
                 try {
-                    content.cover = { ...content.cover, url: coverSource ? await resolveProtectedMediaURL(coverSource) : '' };
+                    content.cover = { ...content.cover, url: coverSource ? await resolveReaderMediaURL(coverSource) : '' };
                 }
                 catch (error) {
-                    if (error && error.code === 'MEDIA_IDENTITY_CHANGED')
+                    if (readerErrorFields(error).code === 'MEDIA_IDENTITY_CHANGED')
                         throw error;
                     content.cover = { ...content.cover, url: '' };
                 }
             }
             if (sequence !== this.loadSequence)
                 return;
-            const media = await Promise.all((content.media || []).filter(asset => ['image', 'video'].includes(asset.kind)).map(async (asset) => {
-                const source = api.mediaURL(asset.url);
+            const media = await Promise.all((content.media || []).filter((asset) => ['image', 'video'].includes(asset.kind)).map(async (asset) => {
+                const source = trackingApi.mediaURL(asset.url);
                 if (!/^https:\/\//.test(source || ''))
                     return { ...asset, url: '', preview_error: '素材地址不可用' };
-                if (asset.kind === 'video' && typeof api.signedMediaURL === 'function') {
+                if (asset.kind === 'video' && typeof trackingApi.signedMediaURL === 'function') {
                     try {
-                        const signed = await api.signedMediaURL(asset.media_id);
+                        const signed = await trackingApi.signedMediaURL(asset.media_id);
                         if (signed)
                             return { ...asset, url: signed };
                     }
                     catch (_) { }
                 }
                 try {
-                    return { ...asset, url: await resolveProtectedMediaURL(source) };
+                    return { ...asset, url: await resolveReaderMediaURL(source) };
                 }
                 catch (error) {
-                    if (error && error.code === 'MEDIA_IDENTITY_CHANGED')
+                    if (readerErrorFields(error).code === 'MEDIA_IDENTITY_CHANGED')
                         throw error;
                     return { ...asset, url: '', preview_error: '素材加载失败' };
                 }
@@ -161,7 +173,7 @@ Page({
             assertUsableContent(content, presentationView);
             const articleBlocks = presentationView.blocks;
             const mediaErrors = {};
-            presentationView.media.filter(item => item.preview_error || !item.url).forEach(item => { mediaErrors[item.errorKey] = item.preview_error || '素材暂不可用，请重试。'; });
+            presentationView.media.filter((item) => item.preview_error || !item.url).forEach((item) => { mediaErrors[item.errorKey] = item.preview_error || '素材暂不可用，请重试。'; });
             this.setData({ content, media, articleBlocks, presentationView, mediaErrors, loading: false, contentReady: true }, () => { if (this.managementPreview)
                 return; this.observePlayers(); if (this.pageVisible && wx.showShareMenu)
                 wx.showShareMenu({ menus: ['shareAppMessage', 'shareTimeline'] }); tracking.preheatTimelineShare(this, this.timelineShareValue()); this.refreshPosterAvailability(content, sequence, posterCapabilitySequence); if (presentationView.kind !== 'video' && wx.nextTick)
@@ -169,13 +181,14 @@ Page({
                     this.loadNoteInteractions(); }); });
         }
         catch (error) {
+            const details = readerErrorFields(error);
             if (sequence !== this.loadSequence)
                 return;
             if (quiet && !clearsVerifiedContent(error)) {
                 this.setData({ loading: false, error: refreshErrorMessage(error) });
                 return;
             }
-            this.setData({ loading: false, content: null, media: [], articleBlocks: [], presentationView: null, contentReady: false, error: error && error.code === 'CONTENT_INVALID' ? error.message : '内容暂不可访问，可能已撤回或无权限。请重试。' });
+            this.setData({ loading: false, content: null, media: [], articleBlocks: [], presentationView: null, contentReady: false, error: details.code === 'CONTENT_INVALID' && typeof details.message === 'string' ? details.message : '内容暂不可访问，可能已撤回或无权限。请重试。' });
         }
     },
     loadMoreNoteComments() { return this.loadNoteInteractions(true); },
@@ -201,14 +214,14 @@ Page({
     observePlayers() {
         if (this.stopObservingTracking)
             this.stopObservingTracking();
-        this.observers.forEach(o => o.disconnect());
+        this.observers.forEach((observer) => observer.disconnect());
         this.observers = [];
         this.playerGeneration = (this.playerGeneration || 0) + 1;
         this.players = {};
         this.playerVisible = {};
-        (this.renderedMedia ? this.renderedMedia() : (this.data.media || [])).filter(m => m.kind === 'video').forEach(media => {
+        (this.renderedMedia ? this.renderedMedia() : (this.data.media || [])).filter((media) => media.kind === 'video').forEach((media) => {
             const playerKey = media.playerKey || media.media_id;
-            const player = createVideoTracker({ mono: () => wx.getPerformance().now(), observation: () => tracking.observation ? tracking.observation(this) : null, emit: (type, extra) => tracking.emit(this, type, extra) }, media.media_id, media.domId + '-generation-' + this.playerGeneration);
+            const player = createVideoTracker({ mono: readerMonotonicNow, observation: () => tracking.observation ? tracking.observation(this) : null, emit: (type, extra) => tracking.emit(this, type, extra) }, media.media_id, media.domId + '-generation-' + this.playerGeneration);
             this.players[playerKey] = player;
             // If intersection observation is unsupported, playback remains usable but no claimed watch time.
             if (this.createIntersectionObserver) {
@@ -225,15 +238,15 @@ Page({
         // Subscribe at the SDK boundary so the global consent modal, withdrawal,
         // identity changes and new page views reset the same surviving players.
         if (tracking.observe)
-            this.stopObservingTracking = tracking.observe(this, state => Object.keys(this.players).forEach(id => this.players[id].observe(state)));
+            this.stopObservingTracking = tracking.observe(this, (state) => Object.keys(this.players).forEach(id => this.players[id].observe(state)));
     },
     syncPlayerVisibility() { Object.keys(this.players || {}).forEach(id => this.players[id].visible(!!this.pageVisible && (!!this.playerVisible[id] || this.fullscreenMedia === id) && !this.data.sourceOpen)); },
-    pausePlayers() { (this.renderedMedia ? this.renderedMedia() : (this.data.media || [])).filter(m => m.kind === 'video').forEach(m => { wx.createVideoContext(m.domId, this).pause(); const p = this.players[m.playerKey || m.media_id]; if (p)
+    pausePlayers() { (this.renderedMedia ? this.renderedMedia() : (this.data.media || [])).filter((media) => media.kind === 'video').forEach((media) => { wx.createVideoContext(media.domId, this).pause(); const p = this.players[media.playerKey || media.media_id]; if (p)
         p.state('paused'); }); },
     playContentVideo(event) { const data = event && event.currentTarget && event.currentTarget.dataset || {}, id = String(data.domId || ''), key = String(data.playerKey || ''); if (!id || !key)
         return; this.setData({ videoStarted: { ...this.data.videoStarted, [key]: true } }, () => wx.createVideoContext(id, this).play()); },
     videoState(event) {
-        const key = event.currentTarget.dataset.playerKey || event.currentTarget.dataset.mediaId;
+        const key = (event.currentTarget.dataset.playerKey || event.currentTarget.dataset.mediaId);
         if (event.type === 'play' && key && !this.data.videoStarted[key])
             this.setData({ videoStarted: { ...this.data.videoStarted, [key]: true } });
         if (event.type === 'error') {
@@ -252,13 +265,13 @@ Page({
     videoFullscreen(event) { if (!eventTracks(event))
         return; this.fullscreenMedia = event.detail.fullScreen ? (event.currentTarget.dataset.playerKey || event.currentTarget.dataset.mediaId) : ''; this.syncPlayerVisibility(); },
     videoProgress(event) { if (!eventTracks(event))
-        return; const p = this.players[event.currentTarget.dataset.playerKey || event.currentTarget.dataset.mediaId]; if (p)
+        return; const key = (event.currentTarget.dataset.playerKey || event.currentTarget.dataset.mediaId); const p = this.players[key]; if (p)
         p.progress(event.detail.currentTime, event.detail.duration); },
     videoRate(event) { if (!eventTracks(event))
-        return; const p = this.players[event.currentTarget.dataset.playerKey || event.currentTarget.dataset.mediaId]; if (p)
+        return; const key = (event.currentTarget.dataset.playerKey || event.currentTarget.dataset.mediaId); const p = this.players[key]; if (p)
         p.rate(event.detail.playbackRate); },
     openImage(event) {
-        const media = this.renderedMedia().find(m => m.media_id === event.currentTarget.dataset.mediaId);
+        const media = this.renderedMedia().find((item) => item.media_id === event.currentTarget.dataset.mediaId);
         if (!media || media.kind !== 'image')
             return;
         if (eventTracks(event)) {
@@ -266,7 +279,7 @@ Page({
             tracking.block(this, true);
             this.pausePlayers();
         }
-        const urls = this.renderedMedia().filter(item => item.kind === 'image').map(item => item.url);
+        const urls = this.renderedMedia().filter((item) => item.kind === 'image').map((item) => item.url);
         wx.previewImage({ urls, current: media.url, showmenu: false });
     },
     retryMedia() { this.setData({ mediaErrors: {} }); this.loadContent(); },
@@ -371,7 +384,7 @@ Page({
         }
         catch (error) {
             if (current())
-                wx.showToast({ title: error.message || '分享链接暂不可用', icon: 'none' });
+                wx.showToast({ title: readerErrorMessage(error, '分享链接暂不可用'), icon: 'none' });
         }
         finally {
             if (current())
@@ -538,13 +551,13 @@ Page({
             const tempPath = await new Promise((resolve, reject) => { wx.canvasToTempFilePath({ canvas, success: res => resolve(res.tempFilePath), fail: reject }); });
             if (!current())
                 return;
-            await new Promise((resolve, reject) => wx.saveImageToPhotosAlbum({ filePath: tempPath, success: resolve, fail: () => reject(new Error('保存失败，请授权相册')) }));
+            await new Promise((resolve, reject) => wx.saveImageToPhotosAlbum({ filePath: tempPath, success: () => resolve(), fail: () => reject(new Error('保存失败，请授权相册')) }));
             if (current())
                 wx.showToast({ title: '海报已保存到相册', icon: 'success' });
         }
         catch (error) {
             if (current())
-                wx.showToast({ title: error.message || '海报生成失败', icon: 'none' });
+                wx.showToast({ title: readerErrorMessage(error, '海报生成失败'), icon: 'none' });
         }
         finally {
             if (operation === this.posterOperation)

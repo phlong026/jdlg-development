@@ -1,6 +1,7 @@
 {
   "usingComponents": {
     "navigation-bar": "/components/navigation-bar/navigation-bar",
+    "renovation-report": "/components/renovation-report/index",
     "nickname-guard": "/components/nickname-guard/nickname-guard",
     "login-guard": "/components/login-guard/login-guard"
   },

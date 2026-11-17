@@ -1,0 +1,69 @@
+{
+  "date": "2026-11-17",
+  "baseline": "978cd17",
+  "branch": "feat/ai-video-prompt-polish-20261117",
+  "mini_program": {
+    "total": 1795,
+    "passed": 1791,
+    "failed": 0,
+    "skipped": 4,
+    "ai_video_passed": 100,
+    "new_polish_passed": 17
+  },
+  "admin": {
+    "passed": 786,
+    "failed": 0,
+    "typecheck": "passed",
+    "route_check": "passed",
+    "build": "passed"
+  },
+  "go": {
+    "all_packages": "passed with disposable MySQL enabled",
+    "vet_all_packages": "passed",
+    "polish_model_race": "passed",
+    "route_race": "not verified: existing go-m1cpu CGO initialization crash"
+  },
+  "tracking_routes": {
+    "total": 80,
+    "public": 23,
+    "excluded": 57
+  },
+  "dependency_audit": {
+    "mini_production_vulnerabilities": 0,
+    "admin_production_vulnerabilities": 0,
+    "new_dependencies": 0,
+    "govulncheck": "not installed"
+  },
+  "independent_code_review": {
+    "frontend": "approved after fixes",
+    "backend": "approved after fixes"
+  },
+  "independent_visual_review": "passed",
+  "migration": {
+    "forward_schema": "passed on disposable legacy schema",
+    "logical_rollback": "passed: disabled boolean false and retained reserved task",
+    "data_destruction": false,
+    "schema_commit": "097fe88"
+  },
+  "delivery": {
+    "deployed": false,
+    "mini_program_uploaded": false,
+    "pushed": false,
+    "merged": false,
+    "live_supplier_calls": 0,
+    "paid_calls": 0
+  },
+  "limitations": [
+    "real supplier/model availability not exercised",
+    "physical device, software keyboard and font scaling not exercised",
+    "four existing optional standalone WXML compiler tests skipped"
+  ],
+  "static_checks": {
+    "changed_js_syntax_files": 12,
+    "gofmt": "passed",
+    "generated_js": "passed",
+    "credential_findings": []
+  },
+  "rollback_reverse_patch_check": "passed",
+  "environment_cleanup": "removed only the disposable 127.0.0.1:13317 MySQL test container"
+}

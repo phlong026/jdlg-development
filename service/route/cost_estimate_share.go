@@ -78,7 +78,7 @@ func validCostShareNumber(number, max float64) bool {
 }
 
 func validCostEstimateShare(result model.CostEstimateShareResult) bool {
-	if result.Version != 4 || !validCostShareAmount(result.EstimatedTotalCost, "万元") || !validCostShareAmount(result.EstimatedUnitCost, "元/㎡") {
+	if result.Version != 4 || result.QuoteType != "" || result.Renovation != nil || !validCostShareAmount(result.EstimatedTotalCost, "万元") || !validCostShareAmount(result.EstimatedUnitCost, "元/㎡") {
 		return false
 	}
 	if !(result.TotalLabel == "参考总造价" && result.UnitLabel == "参考单价" || result.TotalLabel == "已测算部分合计" && result.UnitLabel == "已测算部分单价") {
@@ -106,6 +106,17 @@ func validCostEstimateShare(result model.CostEstimateShareResult) bool {
 		}
 	}
 	return true
+}
+
+func validStoredCostEstimateShare(result model.CostEstimateShareResult) bool {
+	switch result.Version {
+	case 4:
+		return validCostEstimateShare(result)
+	case 5:
+		return validRenovationCostEstimateShare(result)
+	default:
+		return false
+	}
 }
 
 func bindCostEstimateShare(c *gin.Context) (model.CostEstimateShareResult, bool) {
@@ -188,7 +199,7 @@ func RegisterCostEstimateShareRoutes(public, auth *gin.RouterGroup, store *model
 			costEstimateShareFailure(c, "read", err)
 			return
 		}
-		if !validCostEstimateShare(snapshot.Result) {
+		if !validStoredCostEstimateShare(snapshot.Result) {
 			costEstimateShareFailure(c, "read", errors.New("stored report schema invalid"))
 			return
 		}

@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	mysql "github.com/go-sql-driver/mysql"
 )
 
 var ErrAIVideoStudioConflict = errors.New("ai video studio revision conflict")
@@ -19,15 +21,35 @@ type AIVideoStudioStore struct {
 
 func NewAIVideoStudioStore(db *sql.DB) *AIVideoStudioStore { return &AIVideoStudioStore{DB: db} }
 
+func defaultAIVideoStudioLimits() map[string]int {
+	return map[string]int{
+		"max_concurrency": 3, "timeout_seconds": 900, "max_quantity": 1,
+		"max_duration_768p": 15, "max_duration_2k": 15,
+		"max_reference_images": 8, "max_reference_videos": 3,
+		"max_reference_audios": 3, "max_reference_total": 12,
+	}
+}
+
 type AIVideoStudioConfig struct {
-	Enabled            bool                 `json:"enabled"`
-	ProviderCode       string               `json:"provider_code"`
-	ProviderConfigured bool                 `json:"provider_configured"`
-	Modes              map[string]bool      `json:"modes"`
-	Limits             map[string]int       `json:"limits"`
-	Prices             []AIVideoStudioPrice `json:"prices"`
-	Version            int64                `json:"version"`
-	UpdatedAt          time.Time            `json:"updated_at"`
+	Enabled            bool                      `json:"enabled"`
+	ProviderCode       string                    `json:"provider_code"`
+	ProviderConfigured bool                      `json:"provider_configured"`
+	Modes              map[string]bool           `json:"modes"`
+	Limits             map[string]int            `json:"limits"`
+	Prices             []AIVideoStudioPrice      `json:"prices"`
+	PromptOptimize     AIVideoStudioPolishConfig `json:"prompt_optimize"`
+	Version            int64                     `json:"version"`
+	UpdatedAt          time.Time                 `json:"updated_at"`
+}
+
+type AIVideoStudioPolishConfig struct {
+	Enabled        bool   `json:"enabled"`
+	Model          string `json:"model"`
+	TimeoutSeconds int    `json:"timeout_seconds"`
+}
+
+func defaultAIVideoStudioPolishConfig() AIVideoStudioPolishConfig {
+	return AIVideoStudioPolishConfig{TimeoutSeconds: 45}
 }
 
 type AIVideoStudioPrice struct {
@@ -108,7 +130,7 @@ func (s *AIVideoStudioStore) InitTables() error {
 		`CREATE TABLE IF NOT EXISTS ai_video_studio_config (
 		 id TINYINT UNSIGNED NOT NULL PRIMARY KEY, enabled BOOLEAN NOT NULL DEFAULT FALSE,
 		 provider_code VARCHAR(64) NOT NULL DEFAULT 'metaso_h3', modes_json JSON NOT NULL,
-		 limits_json JSON NOT NULL, prices_json JSON NOT NULL, version BIGINT UNSIGNED NOT NULL DEFAULT 1,
+		 limits_json JSON NOT NULL, prices_json JSON NOT NULL, prompt_optimize_json JSON NULL, version BIGINT UNSIGNED NOT NULL DEFAULT 1,
 		 updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`,
 		`CREATE TABLE IF NOT EXISTS ai_video_studio_drafts (
@@ -166,11 +188,25 @@ func (s *AIVideoStudioStore) InitTables() error {
 			return fmt.Errorf("init ai video studio schema: %w", err)
 		}
 	}
-	_, err := s.DB.Exec(`INSERT IGNORE INTO ai_video_studio_config (id,modes_json,limits_json,prices_json) VALUES (1,?,?,?)`,
+	if _, err := s.DB.Exec(`ALTER TABLE ai_video_studio_config ADD COLUMN prompt_optimize_json JSON NULL AFTER prices_json`); err != nil {
+		var sqlErr *mysql.MySQLError
+		if !errors.As(err, &sqlErr) || sqlErr.Number != 1060 {
+			return fmt.Errorf("add ai video studio prompt optimize config: %w", err)
+		}
+	}
+	defaultLimits, marshalErr := json.Marshal(defaultAIVideoStudioLimits())
+	if marshalErr != nil {
+		return marshalErr
+	}
+	polish, _ := json.Marshal(defaultAIVideoStudioPolishConfig())
+	_, err := s.DB.Exec(`INSERT IGNORE INTO ai_video_studio_config (id,modes_json,limits_json,prices_json,prompt_optimize_json) VALUES (1,?,?,?,?)`,
 		`{"text":false,"first_frame":false,"first_last_frame":false,"reference":false}`,
-		`{"max_concurrency":1,"timeout_seconds":900,"max_quantity":1,"max_duration_768p":15,"max_duration_2k":15,"max_reference_images":8,"max_reference_videos":3,"max_reference_audios":3,"max_reference_total":12}`,
-		`[]`)
-	return err
+		string(defaultLimits),
+		`[]`, string(polish))
+	if err != nil {
+		return err
+	}
+	return s.InitPolishTables()
 }
 
 func scanAIVideoStudioDraft(scanner interface{ Scan(...interface{}) error }) (*AIVideoStudioDraft, error) {
@@ -324,7 +360,8 @@ func (s *AIVideoStudioStore) DeletePrompt(ctx context.Context, userID, id, expec
 func (s *AIVideoStudioStore) Config(ctx context.Context, providerConfigured bool) (AIVideoStudioConfig, error) {
 	var c AIVideoStudioConfig
 	var modes, limits, prices string
-	if err := s.DB.QueryRowContext(ctx, `SELECT enabled,provider_code,modes_json,limits_json,prices_json,version,updated_at FROM ai_video_studio_config WHERE id=1`).Scan(&c.Enabled, &c.ProviderCode, &modes, &limits, &prices, &c.Version, &c.UpdatedAt); err != nil {
+	var polish sql.NullString
+	if err := s.DB.QueryRowContext(ctx, `SELECT enabled,provider_code,modes_json,limits_json,prices_json,prompt_optimize_json,version,updated_at FROM ai_video_studio_config WHERE id=1`).Scan(&c.Enabled, &c.ProviderCode, &modes, &limits, &prices, &polish, &c.Version, &c.UpdatedAt); err != nil {
 		return c, err
 	}
 	if err := json.Unmarshal([]byte(modes), &c.Modes); err != nil {
@@ -336,6 +373,12 @@ func (s *AIVideoStudioStore) Config(ctx context.Context, providerConfigured bool
 	if err := json.Unmarshal([]byte(prices), &c.Prices); err != nil {
 		return c, err
 	}
+	c.PromptOptimize = defaultAIVideoStudioPolishConfig()
+	if polish.Valid && strings.TrimSpace(polish.String) != "" {
+		if err := json.Unmarshal([]byte(polish.String), &c.PromptOptimize); err != nil {
+			return c, err
+		}
+	}
 	c.ProviderConfigured = providerConfigured
 	return c, nil
 }
@@ -344,7 +387,8 @@ func (s *AIVideoStudioStore) UpdateConfig(ctx context.Context, c AIVideoStudioCo
 	modes, _ := json.Marshal(c.Modes)
 	limits, _ := json.Marshal(c.Limits)
 	prices, _ := json.Marshal(c.Prices)
-	r, err := s.DB.ExecContext(ctx, `UPDATE ai_video_studio_config SET enabled=?,provider_code=?,modes_json=?,limits_json=?,prices_json=?,version=version+1 WHERE id=1 AND version=?`, c.Enabled, strings.TrimSpace(c.ProviderCode), modes, limits, prices, expected)
+	polish, _ := json.Marshal(c.PromptOptimize)
+	r, err := s.DB.ExecContext(ctx, `UPDATE ai_video_studio_config SET enabled=?,provider_code=?,modes_json=?,limits_json=?,prices_json=?,prompt_optimize_json=?,version=version+1 WHERE id=1 AND version=?`, c.Enabled, strings.TrimSpace(c.ProviderCode), modes, limits, prices, polish, expected)
 	if err != nil {
 		return err
 	}
@@ -389,20 +433,24 @@ func (s *AIVideoStudioStore) ListBatchesFiltered(ctx context.Context, userID int
 		return nil, 0, err
 	}
 	queryArgs := append(args, limit, offset)
-	rows, err := s.DB.QueryContext(ctx, `SELECT id,user_id,draft_id,quote_id,mode,status,fee_status,total_stones,error_code,error_message,created_at,updated_at FROM ai_video_studio_batches`+where+` ORDER BY updated_at DESC,id DESC LIMIT ? OFFSET ?`, queryArgs...)
+	rows, err := s.DB.QueryContext(ctx, `SELECT id,user_id,draft_id,quote_id,mode,status,fee_status,total_stones,error_code,error_message,input_snapshot,created_at,updated_at FROM ai_video_studio_batches`+where+` ORDER BY updated_at DESC,id DESC LIMIT ? OFFSET ?`, queryArgs...)
 	if err != nil {
 		return nil, 0, err
 	}
 	defer rows.Close()
 	items := make([]map[string]interface{}, 0)
 	for rows.Next() {
-		var id, quoteID, mode, status, feeStatus, errorCode, errorMessage string
+		var id, quoteID, mode, status, feeStatus, errorCode, errorMessage, snapshot string
 		var rowUserID, draftID, totalStones int64
 		var created, updated time.Time
-		if err := rows.Scan(&id, &rowUserID, &draftID, &quoteID, &mode, &status, &feeStatus, &totalStones, &errorCode, &errorMessage, &created, &updated); err != nil {
+		if err := rows.Scan(&id, &rowUserID, &draftID, &quoteID, &mode, &status, &feeStatus, &totalStones, &errorCode, &errorMessage, &snapshot, &created, &updated); err != nil {
 			return nil, 0, err
 		}
-		items = append(items, map[string]interface{}{"id": id, "batch_id": id, "user_id": rowUserID, "draft_id": draftID, "quote_id": quoteID, "mode": mode, "status": status, "fee_status": feeStatus, "total_stones": totalStones, "error_code": errorCode, "error_message": errorMessage, "created_at": created, "updated_at": updated})
+		var input AIVideoStudioDraft
+		if err := json.Unmarshal([]byte(snapshot), &input); err != nil {
+			return nil, 0, fmt.Errorf("decode ai video studio batch snapshot: %w", err)
+		}
+		items = append(items, map[string]interface{}{"id": id, "batch_id": id, "name": input.Name, "user_id": rowUserID, "draft_id": draftID, "quote_id": quoteID, "mode": mode, "status": status, "fee_status": feeStatus, "total_stones": totalStones, "error_code": errorCode, "error_message": errorMessage, "created_at": created, "updated_at": updated})
 	}
 	return items, total, rows.Err()
 }

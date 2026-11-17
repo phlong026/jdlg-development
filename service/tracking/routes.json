@@ -131,6 +131,18 @@
     "Public": true,
     "Audience": "customer"
   },
+  "pages/renovationbudget/index": {
+    "Title": "装修报价测算",
+    "Type": "form",
+    "Public": true,
+    "Audience": "customer"
+  },
+  "pages/renovationbudget/result": {
+    "Title": "私人装修报价报告",
+    "Type": "excluded",
+    "Public": false,
+    "Audience": "customer"
+  },
   "pages/aicostresult/aicostresult": {
     "Title": "pages/aicostresult/aicostresult",
     "Type": "excluded",
@@ -161,6 +173,8 @@
   "pages/aivideostudio/prompts": {"Title":"AI 视频提示词","Type":"excluded","Public":false,"Audience":"designer"},
   "pages/aivideostudio/records": {"Title":"AI 视频创作记录","Type":"excluded","Public":false,"Audience":"designer"},
   "pages/aivideostudio/detail": {"Title":"AI 视频任务详情","Type":"excluded","Public":false,"Audience":"designer"},
+  "pages/aivideostudio/tutorial": {"Title":"AI 视频提示词教程","Type":"excluded","Public":false,"Audience":"designer"},
+  "pages/aivideostudio/polish": {"Title":"AI 视频提示词润色","Type":"excluded","Public":false,"Audience":"designer"},
   "pages/real/real": {
     "Title": "pages/real/real",
     "Type": "excluded",

@@ -1,0 +1,9 @@
+{
+  "navigationBarTitleText": "AI 润色",
+  "navigationStyle": "custom",
+  "enablePullDownRefresh": false,
+  "usingComponents": {
+    "login-guard": "/components/login-guard/login-guard",
+    "navigation-bar": "/components/navigation-bar/navigation-bar"
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "reverse_patch_check": "passed",
+  "restored_all_changed_files_to_baseline": true,
+  "files_checked": 79,
+  "isolated_copy_removed": true,
+  "production_side_effects": false,
+  "combined_three_commits_checked": true
+}

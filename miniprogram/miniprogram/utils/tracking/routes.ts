@@ -130,6 +130,17 @@ const ROUTES = {
     "readiness": "rendered",
     "collect": true
   },
+  "pages/renovationbudget/index": {
+    "kind": "form",
+    "readiness": "rendered",
+    "collect": true
+  },
+  "pages/renovationbudget/result": {
+    "kind": "excluded",
+    "readiness": "excluded-private-estimate",
+    "collect": false,
+    "exclusionReason": "private-estimate"
+  },
   "pages/aicostshare/aicostshare": {
     "kind": "detail",
     "readiness": "explicit",
@@ -403,7 +414,9 @@ const ROUTES = {
   "pages/aivideostudio/materials": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"},
   "pages/aivideostudio/prompts": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"},
   "pages/aivideostudio/records": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"},
-  "pages/aivideostudio/detail": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"}
+  "pages/aivideostudio/detail": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"},
+  "pages/aivideostudio/tutorial": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"},
+  "pages/aivideostudio/polish": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"}
 };
 function policy(route) { return ROUTES[String(route || '').replace(/^\//, '')] || { collect: false }; }
 function ready(route, data, rendered) {

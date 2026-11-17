@@ -1,0 +1,23 @@
+<block wx:if="{{__profileAccessMounted}}">
+  <navigation-bar class="studio-navigation" title="提示词教程" variant="studio" back="{{true}}" background="#fbfaf7" />
+  <view class="page tutorial-page">
+    <view class="lesson-tabs">
+      <view wx:for="{{modes}}" wx:key="id" class="lesson-tab {{lesson.id === item.id ? 'lesson-tab-active' : ''}}" data-mode="{{item.id}}" bindtap="selectMode" aria-role="button" aria-label="{{item.title}}教程">{{item.title}}</view>
+    </view>
+    <text class="lesson-summary">{{lesson.summary}}</text>
+    <view class="section">
+      <text class="section-title">写作公式</text>
+      <text class="lesson-formula">{{lesson.formula}}</text>
+      <view class="lesson-tips"><text wx:for="{{lesson.tips}}" wx:key="*this">· {{item}}</text></view>
+    </view>
+    <view class="section case-section">
+      <text class="section-title">案例 · {{lesson.example.title}}</text>
+      <view class="case-image-wrap"><image class="case-image" src="/assets/welcome/courtyard.jpg" mode="aspectFill" aria-label="庭院案例参考画面" /><text class="case-image-label">参考画面</text></view>
+      <text wx:if="{{lesson.example.note}}" class="case-note">{{lesson.example.note}}</text>
+      <text class="case-prompt" selectable="{{true}}">{{lesson.example.prompt}}</text>
+      <button class="button copy-example" bindtap="copyExample">复制案例提示词</button>
+      <text wx:if="{{error}}" class="error copy-error">{{error}}</text>
+    </view>
+  </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

@@ -1,0 +1,301 @@
+[
+  {
+    "status": " M",
+    "path": "miniprogram/miniprogram/components/content-presentation/content-presentation.wxml",
+    "kind": "file",
+    "identical_to_live_main": false,
+    "sha256": "385ac20e0d248ad0a21f5536c06f0037aa8dc24d689a3220f5c90ed1529645f0"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/miniprogram/components/content-presentation/content-presentation.wxss",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "e58f403da0bed2ec8be3f31e41dad69eef1ae74c4c9bb28982751677e3bd6c11"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/miniprogram/pages/contentedit/contentedit.js",
+    "kind": "file",
+    "identical_to_live_main": false,
+    "sha256": "dfa638db04f1bfe4686418f621790697df955ab1f8c6bc76088bcc70376e3b10"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/miniprogram/pages/contentedit/contentedit.ts",
+    "kind": "file",
+    "identical_to_live_main": false,
+    "sha256": "aa6135bc1f5a6cc3c15a895b32fed0d9384d63a164bb59953700f586def56811"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/miniprogram/pages/contentedit/contentedit.wxml",
+    "kind": "file",
+    "identical_to_live_main": false,
+    "sha256": "1459aba757a7e7dcdc802c4f1d055752677d4ab34c9fe6ba7f053bab224337b4"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/miniprogram/pages/contentedit/contentedit.wxss",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "6a3837aea82d371fe9bee24532f889e0ad6345bcffee82bccd9887cefc6cc18d"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/miniprogram/pages/contentreader/contentreader.js",
+    "kind": "file",
+    "identical_to_live_main": false,
+    "sha256": "d691125735a2491e92328941dbc64cf06670e0de9c5308f40fedd0ed6dc72e16"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/miniprogram/pages/contentreader/contentreader.ts",
+    "kind": "file",
+    "identical_to_live_main": false,
+    "sha256": "de5b48752344c8a91a3cd2e162a339bffbb9acdb994bee086f43166e0946b96c"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/miniprogram/pages/contentreader/contentreader.wxml",
+    "kind": "file",
+    "identical_to_live_main": false,
+    "sha256": "25b684f11cb7cf4fcc1eb9b9262c0576b36f75f0afb5dbfaf4ac075cbd0e0125"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/miniprogram/pages/my/my.js",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "06c8ab5714874b94cdd2fcf94bb13e99f154ee10559881d0b38bf08b47a65f30"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/miniprogram/pages/my/my.scss",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "da7f04169948bb76556c269b85a03303fd50a3842d4c9b3183c1fb0fe6730cf5"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/miniprogram/pages/my/my.ts",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "291abcee0538c020b86c37803ee61f8b535bfe367f0198917dbad620f9caf782"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/miniprogram/pages/projectnotes/projectnotes-core.js",
+    "kind": "file",
+    "identical_to_live_main": false,
+    "sha256": "b51578a6a34fca309114b325f3092f004a2dbae19d220c6f86a92db850a812f3"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/miniprogram/pages/projectnotes/projectnotes.wxml",
+    "kind": "file",
+    "identical_to_live_main": false,
+    "sha256": "f71f3498649e6933bebb815b0a3f5203fe56ed2f909f44b2eef5555f4e7909e2"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/miniprogram/pages/projectnotes/projectnotes.wxss",
+    "kind": "file",
+    "identical_to_live_main": false,
+    "sha256": "798ce88c47c530acf91ad2d19d8f162638056264232eb74fc2e8f93758f00692"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/miniprogram/utils/ai-stream.js",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "2f5fee04af01ede675ffa814ea30bdf40f2e3706f64b61f0326691b4adce6d25"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/miniprogram/utils/ai-stream.ts",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "9ee8857a9ab00c821c7460e34093149c4a7d00b51ca8116aee5d99f7d9cd69ef"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/miniprogram/utils/content-presentation.js",
+    "kind": "file",
+    "identical_to_live_main": false,
+    "sha256": "8f2e0f5931a7a973d3b4e3cd97c15a0362fe1dc01cf8babb6b1826fb54bd8dd5"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/miniprogram/utils/writing-policy.js",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "6ae29942253bbff56a804079ce5476e9692cfcda9c50dd7178ad81a949366272"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/miniprogram/utils/writing-policy.ts",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "64738585c15f855080afd335e32a35d7e59818dd6b27e6f92e5b5895b6e6c0d2"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/tests/content-ai-resume.test.js",
+    "kind": "file",
+    "identical_to_live_main": false,
+    "sha256": "54a9364d36d1c69aa30524809e66e5bc93a0ce5a1925acb2aee371cf9068459f"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/tests/content-presentation.test.js",
+    "kind": "file",
+    "identical_to_live_main": false,
+    "sha256": "a61e8e394c132cb83070f6789c7279c5e1afd7a7e20f0a71c0bad893c381a20a"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/tests/my-workbench-access.test.js",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "2a6ece256b8c170cfd23e495f043dfe6002c91cbca787405e365e700bf14697c"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/tests/phase3-content-editor-ui.test.js",
+    "kind": "file",
+    "identical_to_live_main": false,
+    "sha256": "e158222c169d0e2515b879bf70d943676e8368109bf3a2b2b2f3eef73acfc8d7"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/tests/phase3-my-layout.test.js",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "2da77cc23ed915cae0459d95f18275af003fa225b29cc10592b14d63f829f8d9"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/tests/phase3-workbench.test.js",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "8249015818a58baa9974d2feaf1e71e0878266838a56823880244c273411942c"
+  },
+  {
+    "status": " M",
+    "path": "miniprogram/tests/private-project-notes.test.js",
+    "kind": "file",
+    "identical_to_live_main": false,
+    "sha256": "e3212f8282eb99850d61a2792c3a64d7cc38c6c8d1ffcc176019632a35324ae4"
+  },
+  {
+    "status": " M",
+    "path": "service/route/content_workbench.go",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "be1ee149903536ca657a293ac37c9245056f566bf4b3771685e7f780887e581c"
+  },
+  {
+    "status": " M",
+    "path": "service/route/content_workbench_test.go",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "3609c26e7bdaf889e6c8988d7107c855bca54070f0c72aec6819c73422c50ef1"
+  },
+  {
+    "status": " M",
+    "path": "service/route/project_notes_test.go",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "bee491d9c69fa006a14a7f9099d1bff81199a5d4d84a5ef90c26d206b430ce0d"
+  },
+  {
+    "status": " M",
+    "path": "service/route/share_tracking.go",
+    "kind": "file",
+    "identical_to_live_main": false,
+    "sha256": "dc1dbf5241a821135df07631ca673e9dbb0d4dd878ae8ee12b5eeb0710371b97"
+  },
+  {
+    "status": " M",
+    "path": "service/tracking/content.go",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "c9774d8bf693fa6e3eac21db520bc2a6f9289892208c263baee8eb7a9dc20f81"
+  },
+  {
+    "status": " M",
+    "path": "service/tracking/content_deletion.go",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "d1a1dadc33331d5780617be35f1e5b169eeb0636efc0fd39355f3df530f94436"
+  },
+  {
+    "status": " M",
+    "path": "service/tracking/content_deletion_test.go",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "c9209657663bdf17b600d2b533a5d2638e990bc6024bc4604a78106c5a3b7872"
+  },
+  {
+    "status": " M",
+    "path": "service/tracking/project_notes.go",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "05fa2296cd1a3be343af1d06d9abbbdde1b9bd5941f68995ddcd3a514463df8b"
+  },
+  {
+    "status": " M",
+    "path": "service/tracking/project_notes_test.go",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "f604c2784300e33272eaf5398a1dcf6b556ec62d40b4cc32af2f2040829e8800"
+  },
+  {
+    "status": " M",
+    "path": "service/tracking/types.go",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "de6405b576292f8c86823d3ee8be70e1062060c4b6037bf61d82408ad97f07ea"
+  },
+  {
+    "status": "??",
+    "path": "docs/phase3/deployment-20261112/",
+    "kind": "directory",
+    "identical_to_live_main": null
+  },
+  {
+    "status": "??",
+    "path": "docs/phase3/workbench-visual-fidelity-20261116/",
+    "kind": "directory",
+    "identical_to_live_main": null
+  },
+  {
+    "status": "??",
+    "path": "miniprogram/tests/ai-stream.test.js",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "1627eecc466e5904fcd658e4c88daa39acee2c09db043f7c1ec3c0e251624a51"
+  },
+  {
+    "status": "??",
+    "path": "service/route/content_author.go",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "b25a702bf9aef95cff59c8c86e0f53e95f77270d43fd6e1177133fc9105c5ddc"
+  },
+  {
+    "status": "??",
+    "path": "service/route/content_author_test.go",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "4e66ba4d0facdfe79e24a18a94e84005fc120503f848f1b97a2e12f280a02ad3"
+  },
+  {
+    "status": "??",
+    "path": "service/tracking/content_author_test.go",
+    "kind": "file",
+    "identical_to_live_main": true,
+    "sha256": "04c36393c286e4576cce0970ac7fdc319f4b54998171fba7cbb38340e2eac8c5"
+  }
+]

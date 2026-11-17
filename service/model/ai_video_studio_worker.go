@@ -26,6 +26,26 @@ type StudioWorker struct {
 	Build    func(context.Context, StudioWorkerTask) (aivideostudio.GenerationRequest, error)
 }
 
+type StudioWorkerError struct {
+	Operation string
+	TaskID    string
+	Cause     error
+}
+
+func (e *StudioWorkerError) Error() string {
+	category := "worker"
+	if errors.Is(e.Cause, context.Canceled) || errors.Is(e.Cause, context.DeadlineExceeded) {
+		category = "context"
+	} else if errors.Is(e.Cause, ErrAIVideoStudioConflict) {
+		category = "conflict"
+	} else if e.Cause != nil {
+		category = "database_or_dependency"
+	}
+	return "operation=" + e.Operation + " task_id=" + e.TaskID + " category=" + category
+}
+
+func (e *StudioWorkerError) Unwrap() error { return e.Cause }
+
 func (s *AIVideoStudioStore) InitWorkerTables() error {
 	_, e := s.DB.Exec(`CREATE TABLE IF NOT EXISTS ai_video_studio_reconciliations(id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,task_id CHAR(36) NOT NULL,action VARCHAR(40) NOT NULL,external_id VARCHAR(191) NOT NULL DEFAULT '',actor_id BIGINT NOT NULL,actor_name VARCHAR(191) NOT NULL,evidence TEXT NOT NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE KEY(task_id,action)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`)
 	return e
@@ -49,15 +69,19 @@ func (s *AIVideoStudioStore) claimStudioTask(ctx context.Context) (*StudioWorker
 	}
 	max := l["max_concurrency"]
 	if max < 1 {
-		max = 1
+		max = defaultAIVideoStudioLimits()["max_concurrency"]
 	}
 	if _, e = tx.ExecContext(ctx, `UPDATE ai_video_studio_tasks SET status='uncertain',error_code='submission_interrupted',lease_owner='',lease_until=NULL WHERE status='submitting' AND (lease_until IS NULL OR lease_until<=NOW()) AND external_id='' AND COALESCE(result_url,'')=''`); e != nil {
 		return nil, e
 	}
-	var active int
+	var active, polishActive int
 	if e = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM ai_video_studio_tasks WHERE status IN ('submitting','submitted','running','uncertain')`).Scan(&active); e != nil {
 		return nil, e
 	}
+	if e = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM ai_video_studio_prompt_tasks WHERE status IN ('submitting','uncertain')`).Scan(&polishActive); e != nil {
+		return nil, e
+	}
+	active += polishActive
 	condition := `((status IN ('submitted','running','uncertain') AND (external_id<>'' OR COALESCE(result_url,'')<>'')) OR (status='submitting' AND (external_id<>'' OR COALESCE(result_url,'')<>'')))`
 	if active < max {
 		condition += ` OR status='queued'`
@@ -152,16 +176,19 @@ func (w *StudioWorker) Step(ctx context.Context) error {
 	}
 	t, e := w.Store.claimStudioTask(ctx)
 	if e != nil {
-		return e
+		return &StudioWorkerError{Operation: "claim", Cause: e}
 	}
 	// Recovery without an external ID cannot be queried; expose its durable hold.
 	if _, e = w.Store.DB.ExecContext(ctx, `UPDATE ai_video_studio_batches b SET status='uncertain' WHERE status IN ('queued','running') AND EXISTS (SELECT 1 FROM ai_video_studio_tasks t WHERE t.batch_id=b.id AND t.status='uncertain')`); e != nil {
-		return e
+		return &StudioWorkerError{Operation: "sync_uncertain_batches", Cause: e}
 	}
 	if t == nil {
 		return nil
 	}
-	return w.processStudioTask(ctx, t)
+	if e = w.processStudioTask(ctx, t); e != nil {
+		return &StudioWorkerError{Operation: "process", TaskID: t.ID, Cause: e}
+	}
+	return nil
 }
 func (w *StudioWorker) processStudioTask(ctx context.Context, t *StudioWorkerTask) error {
 	if t.ResultURL != "" {

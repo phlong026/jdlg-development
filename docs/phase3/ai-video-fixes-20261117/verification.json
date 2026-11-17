@@ -1,0 +1,66 @@
+{
+  "date": "2026-11-17",
+  "baseline": "c4df672",
+  "branch": "fix/ai-video-polish-20261117",
+  "scope": "AI video studio fixes and six-page layout",
+  "mini_program": {
+    "command": "node --test tests/*.test.js",
+    "total": 1771,
+    "passed": 1767,
+    "failed": 0,
+    "skipped": 4,
+    "targeted_total": 76,
+    "targeted_passed": 76,
+    "generated_js_consistency": "passed",
+    "modified_ts_syntax_files": 7,
+    "strict_semantic_types": "not claimed; existing @ts-nocheck",
+    "native_pages": 6
+  },
+  "admin": {
+    "command": "npm test; npm run build",
+    "passed": 780,
+    "failed": 0,
+    "typecheck": "passed",
+    "build": "passed"
+  },
+  "go": {
+    "command": "AI_VIDEO_STUDIO_TEST_DSN=<disposable-loopback-schema> CGO_ENABLED=0 go test ./... -count=1",
+    "full_suite": "passed",
+    "vet": "passed",
+    "linux_amd64_build": "passed"
+  },
+  "mysql": {
+    "engine": "mysql:8.4",
+    "loopback_port": 33079,
+    "test_count": 3,
+    "repetitions": 2,
+    "passed_runs": 6,
+    "isolation": "per-test disposable schema",
+    "residual_test_schemas": 0
+  },
+  "security": {
+    "npm_mini_vulnerabilities": 0,
+    "npm_admin_vulnerabilities": 0,
+    "credential_shaped_added_literals": 0,
+    "new_dependencies": 0,
+    "go_dependency_scan": "not run; govulncheck unavailable"
+  },
+  "review": {
+    "backend_admin": "no unresolved actionable findings",
+    "frontend_behavior": "no unresolved actionable findings; LSP unavailable",
+    "visual": "six pages passed screenshot review"
+  },
+  "delivery": {
+    "server_deployment": false,
+    "mini_program_upload": false,
+    "remote_push": false,
+    "merge": false,
+    "real_paid_generation": false,
+    "production_data_write": false
+  },
+  "not_tested": [
+    "real provider generation and billing",
+    "physical-device keyboard, system font scaling, album and media playback",
+    "Go dependency vulnerability scan"
+  ]
+}

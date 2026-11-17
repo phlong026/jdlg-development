@@ -1,0 +1,55 @@
+{
+  "scope": "reference-placeholder-20261117",
+  "method": "manual comparison against current screenshots and the user's explicit 16:9 plus-placeholder request; visual-verdict skill unavailable",
+  "result": "passed",
+  "geometry": {
+    "fixture_only": true,
+    "empty_add_css_pixels": {
+      "success": true,
+      "width": 368,
+      "height": 207
+    },
+    "selected_preview_css_pixels": {
+      "success": true,
+      "width": 180,
+      "height": 101
+    },
+    "filled_add_css_pixels": {
+      "success": true,
+      "width": 180,
+      "height": 101
+    },
+    "add_opens_material_picker": true,
+    "selected_reference_count": 1,
+    "screenshots": [
+      "reference-add-empty.png",
+      "reference-add-filled.png"
+    ]
+  },
+  "verified": [
+    "empty slot is 16:9 with a central plus only",
+    "selected image/video and add tile use matching 16:9 geometry",
+    "add opens material picker and selected media returns to editor",
+    "settings and fixed generate button remain visible after scrolling",
+    "portrait first/last frame styles retain their 9:16 rule"
+  ],
+  "tests": {
+    "command": "node --test tests/ai-video-studio*.test.js",
+    "passed": 76,
+    "failed": 0
+  },
+  "screenshots": [
+    "reference-add-empty.png",
+    "reference-add-filled.png",
+    "reference-add-settings.png"
+  ],
+  "sha256": {
+    "reference-add-empty.png": "0d2b5e1f11440665162314bc226bf63432a9be417eaf06f263a3d28e1bba404a",
+    "reference-add-filled.png": "b87d80404391309205c7858e56084b1c7351047db2fbdcf3aebc4e60e3104069",
+    "reference-add-settings.png": "8ac10bbcbf1111f1495b12f36ab41de117774319e620827a9b5a047b44980952"
+  },
+  "paid_generation": false,
+  "deployment": false,
+  "physical_device": false,
+  "reverse_patch_check": "passed"
+}

@@ -284,6 +284,8 @@
         "generate",
         "materials",
         "prompts",
+        "tutorial",
+        "polish",
         "records",
         "detail"
       ]
@@ -316,6 +318,13 @@
       "root": "pages/aicost",
       "pages": [
         "aicost"
+      ]
+    },
+    {
+      "root": "pages/renovationbudget",
+      "pages": [
+        "index",
+        "result"
       ]
     },
     {

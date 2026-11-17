@@ -1,0 +1,3998 @@
+
+> app@1.0.0 test
+> npm run check && npm run test:ui
+
+
+> app@1.0.0 check
+> npm run typecheck && npm run check:routes
+
+
+> app@1.0.0 typecheck
+> tsc --noEmit
+
+
+> app@1.0.0 check:routes
+> node scripts/check-routes.mjs
+
+路由 34 条；已检查跳转字面量 159 处；样式作用域 154 处；导航条目 67 个
+路由一致性检查通过
+
+> app@1.0.0 test:ui
+> node --test scripts/*.test.mjs
+
+TAP version 13
+# Subtest: AdminLayout 在内容页头已显示标题时只渲染一个主标题
+ok 1 - AdminLayout 在内容页头已显示标题时只渲染一个主标题
+  ---
+  duration_ms: 247.15375
+  ...
+# Subtest: configuration defaults global concurrency to three without replacing an explicit value
+ok 2 - configuration defaults global concurrency to three without replacing an explicit value
+  ---
+  duration_ms: 121.378417
+  ...
+# Subtest: prompt polish configuration is fail-closed and keeps runtime readiness read-only
+ok 3 - prompt polish configuration is fail-closed and keeps runtime readiness read-only
+  ---
+  duration_ms: 30.987084
+  ...
+# Subtest: saving configuration never echoes runtime readiness or credential state
+ok 4 - saving configuration never echoes runtime readiness or credential state
+  ---
+  duration_ms: 42.111833
+  ...
+# Subtest: management readiness is fail-closed and reports every mode reason
+ok 5 - management readiness is fail-closed and reports every mode reason
+  ---
+  duration_ms: 14.943125
+  ...
+# Subtest: admin API uses the isolated management namespace and optimistic version
+ok 6 - admin API uses the isolated management namespace and optimistic version
+  ---
+  duration_ms: 39.325583
+  ...
+# Subtest: prompt polish tasks use read-only recovery and evidence-based reconciliation endpoints
+ok 7 - prompt polish tasks use read-only recovery and evidence-based reconciliation endpoints
+  ---
+  duration_ms: 9.983083
+  ...
+# Subtest: page exposes fail-closed provider and price states without credential fields
+ok 8 - page exposes fail-closed provider and price states without credential fields
+  ---
+  duration_ms: 0.621958
+  ...
+# Subtest: reconciliation requires a specific task and operator evidence without a fabricated result
+ok 9 - reconciliation requires a specific task and operator evidence without a fabricated result
+  ---
+  duration_ms: 39.3915
+  ...
+# Subtest: prompt polish reconciliation only accepts explicit provider evidence
+ok 10 - prompt polish reconciliation only accepts explicit provider evidence
+  ---
+  duration_ms: 26.734542
+  ...
+# Subtest: prompt polish reconciliation counts Unicode characters consistently with the server
+ok 11 - prompt polish reconciliation counts Unicode characters consistently with the server
+  ---
+  duration_ms: 28.542833
+  ...
+# Subtest: prompt polish configuration requires a model, bounded timeout and per-request positive price
+ok 12 - prompt polish configuration requires a model, bounded timeout and per-request positive price
+  ---
+  duration_ms: 21.783708
+  ...
+# Subtest: management page separates prompt polish tasks and never offers an automatic retry
+ok 13 - management page separates prompt polish tasks and never offers an automatic retry
+  ---
+  duration_ms: 0.924333
+  ...
+# Subtest: configuration stays fail-closed until provider, mode and positive price are ready
+ok 14 - configuration stays fail-closed until provider, mode and positive price are ready
+  ---
+  duration_ms: 23.2095
+  ...
+# Subtest: configuration validates the same numeric bounds as the service
+ok 15 - configuration validates the same numeric bounds as the service
+  ---
+  duration_ms: 16.33225
+  ...
+# Subtest: recharge: initial unverified form cannot overwrite a default payment mode
+ok 16 - recharge: initial unverified form cannot overwrite a default payment mode
+  ---
+  duration_ms: 325.990375
+  ...
+# Subtest: recharge: list/network/permission errors never become empty writable configurations
+ok 17 - recharge: list/network/permission errors never become empty writable configurations
+  ---
+  duration_ms: 504.603125
+  ...
+# Subtest: recharge: existing-record detail failure stays blocked; retry preserves enabled state and account data
+ok 18 - recharge: existing-record detail failure stays blocked; retry preserves enabled state and account data
+  ---
+  duration_ms: 74.79625
+  ...
+# Subtest: recharge: only a successful current absence check enables creating a disabled configuration
+ok 19 - recharge: only a successful current absence check enables creating a disabled configuration
+  ---
+  duration_ms: 115.686209
+  ...
+# Subtest: recharge: a detail returned for another payment mode is blocked
+ok 20 - recharge: a detail returned for another payment mode is blocked
+  ---
+  duration_ms: 131.603458
+  ...
+# Subtest: recharge: A/B out-of-order detail completions cannot change B or save A under B
+ok 21 - recharge: A/B out-of-order detail completions cannot change B or save A under B
+  ---
+  duration_ms: 42.1005
+  ...
+# Subtest: recharge: stale list failure cannot replace a newer successful selection
+ok 22 - recharge: stale list failure cannot replace a newer successful selection
+  ---
+  duration_ms: 96.420583
+  ...
+# Subtest: recharge: cancel invalidates a pending detail and keeps save disabled
+ok 23 - recharge: cancel invalidates a pending detail and keeps save disabled
+  ---
+  duration_ms: 77.764458
+  ...
+# Subtest: recharge: repeated save is single-flight and a failed save retains editable configuration
+ok 24 - recharge: repeated save is single-flight and a failed save retains editable configuration
+  ---
+  duration_ms: 34.523958
+  ...
+# Subtest: membership: selecting B immediately clears A; B failure cannot submit old A data
+ok 25 - membership: selecting B immediately clears A; B failure cannot submit old A data
+  ---
+  duration_ms: 109.912541
+  ...
+# Subtest: membership: retry saves the selected ID and preserves payment, benefit and limit semantics
+ok 26 - membership: retry saves the selected ID and preserves payment, benefit and limit semantics
+  ---
+  duration_ms: 89.600208
+  ...
+# Subtest: membership: A/B out-of-order responses leave B visible and save only B
+ok 27 - membership: A/B out-of-order responses leave B visible and save only B
+  ---
+  duration_ms: 54.2245
+  ...
+# Subtest: membership: stale errors cannot block B, and mismatched response identity cannot enable save
+ok 28 - membership: stale errors cannot block B, and mismatched response identity cannot enable save
+  ---
+  duration_ms: 63.1335
+  ...
+# Subtest: membership: reset invalidates in-flight detail and new plan still uses original validation/defaults
+ok 29 - membership: reset invalidates in-flight detail and new plan still uses original validation/defaults
+  ---
+  duration_ms: 23.803
+  ...
+# Subtest: membership: amount/duration validation and backend deletion rejection remain intact
+ok 30 - membership: amount/duration validation and backend deletion rejection remain intact
+  ---
+  duration_ms: 66.577833
+  ...
+# Subtest: membership: repeated save is single-flight and selection/reset are blocked while saving
+ok 31 - membership: repeated save is single-flight and selection/reset are blocked while saving
+  ---
+  duration_ms: 100.715292
+  ...
+# Subtest: both configuration pages ignore detail responses after unmount
+ok 32 - both configuration pages ignore detail responses after unmount
+  ---
+  duration_ms: 93.444333
+  ...
+# Subtest: membership: StrictMode effect replay keeps the initial new-plan form writable
+ok 33 - membership: StrictMode effect replay keeps the initial new-plan form writable
+  ---
+  duration_ms: 33.103083
+  ...
+# Subtest: configuration delete locks same-frame save/delete/selection and preserves a rejected record
+ok 34 - configuration delete locks same-frame save/delete/selection and preserves a rejected record
+  ---
+  duration_ms: 170.37975
+  ...
+# Subtest: failed configuration lists are unknown rather than confirmed empty and can retry
+ok 35 - failed configuration lists are unknown rather than confirmed empty and can retry
+  ---
+  duration_ms: 138.487583
+  ...
+# Subtest: 客户意向映射包含待判断
+ok 36 - 客户意向映射包含待判断
+  ---
+  duration_ms: 1.03575
+  ...
+# Subtest: 线索记录使用服务端总数并可访问第 101 条，重复翻页不会重复请求
+ok 37 - 线索记录使用服务端总数并可访问第 101 条，重复翻页不会重复请求
+  ---
+  duration_ms: 1028.273958
+  ...
+# Subtest: 线索记录翻页失败时保留当前页并提示失败
+ok 38 - 线索记录翻页失败时保留当前页并提示失败
+  ---
+  duration_ms: 379.293458
+  ...
+# Subtest: 较早客户的迟到响应不能覆盖当前客户的线索记录
+ok 39 - 较早客户的迟到响应不能覆盖当前客户的线索记录
+  ---
+  duration_ms: 306.758041
+  ...
+# Subtest: 线索页客服漏斗："进入客服"标出其中匿名次数，无匿名时不加注
+ok 40 - 线索页客服漏斗："进入客服"标出其中匿名次数，无匿名时不加注
+  ---
+  duration_ms: 267.699416
+  ...
+# Subtest: 总览线索漏斗：传给漏斗图的"进入客服"同样带匿名次数
+ok 41 - 总览线索漏斗：传给漏斗图的"进入客服"同样带匿名次数
+  ---
+  duration_ms: 198.021375
+  ...
+# Subtest: 线索列表：再次留资的线索标"再次留资 · N 天前"，只留资一次的不标
+ok 42 - 线索列表：再次留资的线索标"再次留资 · N 天前"，只留资一次的不标
+  ---
+  duration_ms: 575.115458
+  ...
+# Subtest: 线索工作台提供三类互斥筛选与队列
+ok 43 - 线索工作台提供三类互斥筛选与队列
+  ---
+  duration_ms: 1.518375
+  ...
+# Subtest: 转化完成按服务端 lead_type 进入对应队列
+ok 44 - 转化完成按服务端 lead_type 进入对应队列
+  ---
+  duration_ms: 1.188709
+  ...
+# Subtest: remember option asks the server for a persistent session without storing credentials
+ok 45 - remember option asks the server for a persistent session without storing credentials
+  ---
+  duration_ms: 12.001083
+  ...
+# Subtest: unchecked login requests the ordinary session lifetime
+ok 46 - unchecked login requests the ordinary session lifetime
+  ---
+  duration_ms: 1.891166
+  ...
+# Subtest: existing sessions skip the login form and preserve account scope
+ok 47 - existing sessions skip the login form and preserve account scope
+  ---
+  duration_ms: 61.551834
+  ...
+# Subtest: session checks show progress, while network errors keep retry and password login available
+ok 48 - session checks show progress, while network errors keep retry and password login available
+  ---
+  duration_ms: 13.613292
+  ...
+# Subtest: legacy plaintext credentials are removed and storage failures do not block login
+ok 49 - legacy plaintext credentials are removed and storage failures do not block login
+  ---
+  duration_ms: 27.2005
+  ...
+# Subtest: MobileFold 桌面端原样渲染筛选，不加折叠按钮
+ok 50 - MobileFold 桌面端原样渲染筛选，不加折叠按钮
+  ---
+  duration_ms: 111.795125
+  ...
+# Subtest: MobileFold 手机端默认收起，点开显示，按钮上提示已生效的筛选数
+ok 51 - MobileFold 手机端默认收起，点开显示，按钮上提示已生效的筛选数
+  ---
+  duration_ms: 33.71
+  ...
+# Subtest: MobileFold disabled 时手机端也直接显示（例如还没选用户时的搜索框）
+ok 52 - MobileFold disabled 时手机端也直接显示（例如还没选用户时的搜索框）
+  ---
+  duration_ms: 58.537292
+  ...
+# Subtest: ManagementSearchPanel 手机端只留一行开关：标题、说明、动作、筛选都收起
+ok 53 - ManagementSearchPanel 手机端只留一行开关：标题、说明、动作、筛选都收起
+  ---
+  duration_ms: 24.38925
+  ...
+# Subtest: ManagementSearchPanel 桌面端显示全部：标题、说明、动作、筛选与摘要
+ok 54 - ManagementSearchPanel 桌面端显示全部：标题、说明、动作、筛选与摘要
+  ---
+  duration_ms: 38.552583
+  ...
+# Subtest: recovering one request does not erase a separate failed business data source
+ok 55 - recovering one request does not erase a separate failed business data source
+  ---
+  duration_ms: 15.69875
+  ...
+# Subtest: failure and recovery use the same named source and preserve request route
+ok 56 - failure and recovery use the same named source and preserve request route
+  ---
+  duration_ms: 0.281334
+  ...
+# Subtest: retry success clears its old warning while a new failure replaces only its source
+ok 57 - retry success clears its old warning while a new failure replaces only its source
+  ---
+  duration_ms: 0.215792
+  ...
+# Subtest: 销售分组：总览 · 线索 · 客户，取消商机，落地页是总览
+ok 58 - 销售分组：总览 · 线索 · 客户，取消商机，落地页是总览
+  ---
+  duration_ms: 114.197458
+  ...
+# Subtest: 未接入 CRM 时「客户」卡片灰显但仍可点（与原行为一致）
+ok 59 - 未接入 CRM 时「客户」卡片灰显但仍可点（与原行为一致）
+  ---
+  duration_ms: 196.576625
+  ...
+# Subtest: 客户系统设置只给 platform_admin，其余账号与未知 scope 一律看不到（fail-closed）
+ok 60 - 客户系统设置只给 platform_admin，其余账号与未知 scope 一律看不到（fail-closed）
+  ---
+  duration_ms: 81.126208
+  ...
+# Subtest: 路由：新增 /sales-overview 与 /customer-settings，/opportunities 与旧栏目地址重定向
+ok 61 - 路由：新增 /sales-overview 与 /customer-settings，/opportunities 与旧栏目地址重定向
+  ---
+  duration_ms: 0.673875
+  ...
+# Subtest: 漏斗：最窄不小于 18%，转化率统一按进入客服计算
+ok 62 - 漏斗：最窄不小于 18%，转化率统一按进入客服计算
+  ---
+  duration_ms: 5.419083
+  ...
+# Subtest: 线索跳客户档案：同步到客户 ID 时直达详情，未同步时回退客户列表
+ok 63 - 线索跳客户档案：同步到客户 ID 时直达详情，未同步时回退客户列表
+  ---
+  duration_ms: 3.086541
+  ...
+# Subtest: 客户标签：全部 · 跟进中 · 已成交 · 暂缓 · 无效 · 公海，沿用现有阶段枚举
+ok 64 - 客户标签：全部 · 跟进中 · 已成交 · 暂缓 · 无效 · 公海，沿用现有阶段枚举
+  ---
+  duration_ms: 3.753
+  ...
+# Subtest: 客户系统设置页：非 platform_admin 不渲染任何设置内容
+ok 65 - 客户系统设置页：非 platform_admin 不渲染任何设置内容
+  ---
+  duration_ms: 798.548792
+  ...
+# Subtest: 客户系统设置页：platform_admin 看到三项，默认企微同步，可切换
+ok 66 - 客户系统设置页：platform_admin 看到三项，默认企微同步，可切换
+  ---
+  duration_ms: 124.999708
+  ...
+# Subtest: 客户页不再承载企微同步 / 账号权限 / 小程序线索栏目
+ok 67 - 客户页不再承载企微同步 / 账号权限 / 小程序线索栏目
+  ---
+  duration_ms: 32.338917
+  ...
+# Subtest: 相对时间与公海电话脱敏
+ok 68 - 相对时间与公海电话脱敏
+  ---
+  duration_ms: 4.9455
+  ...
+# Subtest: 公海客户认领前只显示脱敏电话，已在保护期的客户显示完整电话
+ok 69 - 公海客户认领前只显示脱敏电话，已在保护期的客户显示完整电话
+  ---
+  duration_ms: 768.152208
+  ...
+# Subtest: 总览：主管可切团队 / 个人并看到只读接入状态；只有数字与图表，没有新增入口
+ok 70 - 总览：主管可切团队 / 个人并看到只读接入状态；只有数字与图表，没有新增入口
+  ---
+  duration_ms: 112.994834
+  ...
+# Subtest: 总览：企微同步失败或未接入时，主管仍能看到提示
+ok 71 - 总览：企微同步失败或未接入时，主管仍能看到提示
+  ---
+  duration_ms: 198.517583
+  ...
+# Subtest: 总览：顾问没有团队切换，客户数字按本人 ownerId 统计，也不读接入状态
+ok 72 - 总览：顾问没有团队切换，客户数字按本人 ownerId 统计，也不读接入状态
+  ---
+  duration_ms: 73.164375
+  ...
+# Subtest: 三种账号的页面访问：platform_admin 全开，crm 主管/顾问只多一个总览
+ok 73 - 三种账号的页面访问：platform_admin 全开，crm 主管/顾问只多一个总览
+  ---
+  duration_ms: 206.987834
+  ...
+# Subtest: 三种账号的导航：crm 账号只有 总览 · 客户（无线索、无系统设置）
+ok 74 - 三种账号的导航：crm 账号只有 总览 · 客户（无线索、无系统设置）
+  ---
+  duration_ms: 8.884958
+  ...
+# Subtest: 总览：crm 账号不请求线索接口，只显示客户数据；主管可切团队、顾问只看个人
+ok 75 - 总览：crm 账号不请求线索接口，只显示客户数据；主管可切团队、顾问只看个人
+  ---
+  duration_ms: 144.33075
+  ...
+# Subtest: 线索页（CRM 接管且有客户权限）：没有长提示，没有禁用的跟进按钮和勾选框，每条线索直达客户档案
+ok 76 - 线索页（CRM 接管且有客户权限）：没有长提示，没有禁用的跟进按钮和勾选框，每条线索直达客户档案
+  ---
+  duration_ms: 1078.78575
+  ...
+# Subtest: 线索页交接态：详情里也只有去客户档案的链接，没有「记录跟进」
+ok 77 - 线索页交接态：详情里也只有去客户档案的链接，没有「记录跟进」
+  ---
+  duration_ms: 264.389125
+  ...
+# Subtest: 线索页：可写时缓存的「跟进」处理函数，切到交接态后调用也打不开编辑、写不进旧线索
+ok 78 - 线索页：可写时缓存的「跟进」处理函数，切到交接态后调用也打不开编辑、写不进旧线索
+  ---
+  duration_ms: 240.19125
+  ...
+# Subtest: 线索页：CRM 接管但客户权限没就绪时，仍提示原因并保留重新检查
+ok 79 - 线索页：CRM 接管但客户权限没就绪时，仍提示原因并保留重新检查
+  ---
+  duration_ms: 118.2535
+  ...
+# Subtest: 线索页标题栏：有客户权限时显示「＋ 新增线索」，保存后给出客户档案入口
+ok 80 - 线索页标题栏：有客户权限时显示「＋ 新增线索」，保存后给出客户档案入口
+  ---
+  duration_ms: 220.444583
+  ...
+# Subtest: 线索页标题栏：没有客户权限时不显示「新增线索」
+ok 81 - 线索页标题栏：没有客户权限时不显示「新增线索」
+  ---
+  duration_ms: 359.72325
+  ...
+# Subtest: 线索简报与线索阶段：不显示「全量概览 · 更新时间」，阶段卡常开且没有「共 N 条」摘要
+ok 82 - 线索简报与线索阶段：不显示「全量概览 · 更新时间」，阶段卡常开且没有「共 N 条」摘要
+  ---
+  duration_ms: 120.257542
+  ...
+# Subtest: 客服服务漏斗：常开，只留标题和数字，不放备注
+ok 83 - 客服服务漏斗：常开，只留标题和数字，不放备注
+  ---
+  duration_ms: 68.723333
+  ...
+# Subtest: 总览（CRM 接管）：今日待办不再计入无法处理的线索超时，改为待分配客户
+ok 84 - 总览（CRM 接管）：今日待办不再计入无法处理的线索超时，改为待分配客户
+  ---
+  duration_ms: 111.182875
+  ...
+# Subtest: 总览（CRM 接管但本账号没有客户档案权限）：今日待办给出说明，不留空白卡片
+ok 85 - 总览（CRM 接管但本账号没有客户档案权限）：今日待办给出说明，不留空白卡片
+  ---
+  duration_ms: 81.708083
+  ...
+# Subtest: 总览（CRM 接管）：顾问个人口径不显示待分配
+ok 86 - 总览（CRM 接管）：顾问个人口径不显示待分配
+  ---
+  duration_ms: 96.190042
+  ...
+# Subtest: 总览（未接管，旧线索仍可跟进）：保留线索超时未跟进
+ok 87 - 总览（未接管，旧线索仍可跟进）：保留线索超时未跟进
+  ---
+  duration_ms: 55.345917
+  ...
+# Subtest: 客户列表：没有姓名显示「微信用户 \#编号」，没有评级显示「未评级」
+ok 88 - 客户列表：没有姓名显示「微信用户 \#编号」，没有评级显示「未评级」
+  ---
+  duration_ms: 341.506209
+  ...
+# Subtest: 编辑客户资料：昵称框不显示占位名，意向下拉与列表同一套叫法
+ok 89 - 编辑客户资料：昵称框不显示占位名，意向下拉与列表同一套叫法
+  ---
+  duration_ms: 256.073167
+  ...
+# Subtest: CRM CTA revalidates exact mapping before only fixed internal navigation and is single-flight
+ok 90 - CRM CTA revalidates exact mapping before only fixed internal navigation and is single-flight
+  ---
+  duration_ms: 196.457875
+  ...
+# Subtest: CRM CTA suppresses anonymous, no permission and unmapped visitors
+ok 91 - CRM CTA suppresses anonymous, no permission and unmapped visitors
+  ---
+  duration_ms: 169.202666
+  ...
+# Subtest: CRM CTA retains failure for retry and never follows invalid target or revoked source
+ok 92 - CRM CTA retains failure for retry and never follows invalid target or revoked source
+  ---
+  duration_ms: 221.064042
+  ...
+# Subtest: CRM CTA discards late success on owner, identity, permission change or unmount
+ok 93 - CRM CTA discards late success on owner, identity, permission change or unmount
+  ---
+  duration_ms: 199.942084
+  ...
+# Subtest: customer route opens canonical internal ID and close removes only customer parameter
+ok 94 - customer route opens canonical internal ID and close removes only customer parameter
+  ---
+  duration_ms: 562.440625
+  ...
+# Subtest: customer URL back/forward changes exact target; invalid or unauthorized route never mounts drawer
+ok 95 - customer URL back/forward changes exact target; invalid or unauthorized route never mounts drawer
+  ---
+  duration_ms: 368.038834
+  ...
+# Subtest: manual override requires nonblank reason and a future expiry within 30 days
+ok 96 - manual override requires nonblank reason and a future expiry within 30 days
+  ---
+  duration_ms: 0.962708
+  ...
+# Subtest: governance endpoints use exact visitor target and encode unlink ID
+ok 97 - governance endpoints use exact visitor target and encode unlink ID
+  ---
+  duration_ms: 163.64225
+  ...
+# Subtest: manage permission cannot imply CRM, rules, or deletion privileges
+ok 98 - manage permission cannot imply CRM, rules, or deletion privileges
+  ---
+  duration_ms: 83.149083
+  ...
+# Subtest: anonymous and inconsistent signed-in identities cannot map CRM
+ok 99 - anonymous and inconsistent signed-in identities cannot map CRM
+  ---
+  duration_ms: 232.026167
+  ...
+# Subtest: CRM duplicates are blocked synchronously and errors preserve draft with exact target
+ok 100 - CRM duplicates are blocked synchronously and errors preserve draft with exact target
+  ---
+  duration_ms: 95.576542
+  ...
+# Subtest: delete is deliberate per-target confirmation and pending clicks produce one request
+ok 101 - delete is deliberate per-target confirmation and pending clicks produce one request
+  ---
+  duration_ms: 164.647042
+  ...
+# Subtest: unconfirmed deletion response preserves reason and does not mark deleted
+ok 102 - unconfirmed deletion response preserves reason and does not mark deleted
+  ---
+  duration_ms: 25.567209
+  ...
+# Subtest: in-progress deletion keeps the confirmation open and invites an identical retry
+ok 103 - in-progress deletion keeps the confirmation open and invites an identical retry
+  ---
+  duration_ms: 51.584834
+  ...
+# Subtest: missing original rule result is disclosed and overrides do not claim to be original
+ok 104 - missing original rule result is disclosed and overrides do not claim to be original
+  ---
+  duration_ms: 26.722667
+  ...
+# Subtest: original rule metadata is shown alongside manual override when provided
+ok 105 - original rule metadata is shown alongside manual override when provided
+  ---
+  duration_ms: 134.357209
+  ...
+# Subtest: late mutation after unmount never refreshes or deletes another target
+ok 106 - late mutation after unmount never refreshes or deletes another target
+  ---
+  duration_ms: 31.854375
+  ...
+# Subtest: cancelled deletion never writes and retains the reason for deliberate retry
+ok 107 - cancelled deletion never writes and retains the reason for deliberate retry
+  ---
+  duration_ms: 20.352458
+  ...
+# Subtest: changing only an intent level marks draft dirty and stale unmounted button cannot write
+ok 108 - changing only an intent level marks draft dirty and stale unmounted button cannot write
+  ---
+  duration_ms: 16.235584
+  ...
+# Subtest: visitor close and material back navigation retain synchronous governance guards
+ok 109 - visitor close and material back navigation retain synchronous governance guards
+  ---
+  duration_ms: 0.877916
+  ...
+# Subtest: governance requires explicit selection for multiple authorized owners
+ok 110 - governance requires explicit selection for multiple authorized owners
+  ---
+  duration_ms: 136.950459
+  ...
+# Subtest: all private mutations send the selected owner, including unlink without a mixed-list CRM label
+ok 111 - all private mutations send the selected owner, including unlink without a mixed-list CRM label
+  ---
+  duration_ms: 166.334166
+  ...
+# Subtest: a sole authorized owner defaults automatically but missing authorization cannot write
+ok 112 - a sole authorized owner defaults automatically but missing authorization cannot write
+  ---
+  duration_ms: 195.919458
+  ...
+# Subtest: stale owner selection and revoked authorization cannot reuse a ready mutation
+ok 113 - stale owner selection and revoked authorization cannot reuse a ready mutation
+  ---
+  duration_ms: 48.433458
+  ...
+# Subtest: deletion remains available without selecting an annotation owner and sends no owner
+ok 114 - deletion remains available without selecting an annotation owner and sends no owner
+  ---
+  duration_ms: 70.095917
+  ...
+# Subtest: material inline visitors are lazy and preserve accessible expand/collapse state
+ok 115 - material inline visitors are lazy and preserve accessible expand/collapse state
+  ---
+  duration_ms: 630.575875
+  ...
+# Subtest: inline visitor list retains exact material filters and stable return-to-first cursor
+ok 116 - inline visitor list retains exact material filters and stable return-to-first cursor
+  ---
+  duration_ms: 418.315292
+  ...
+# Subtest: inline visitor expands its own readonly sessions and actual page version
+ok 117 - inline visitor expands its own readonly sessions and actual page version
+  ---
+  duration_ms: 261.215167
+  ...
+# Subtest: inline failed read and profile conflict are explicit, fresh retry retains filters
+ok 118 - inline failed read and profile conflict are explicit, fresh retry retains filters
+  ---
+  duration_ms: 235.540042
+  ...
+# Subtest: collapsed/unmounted inline data aborts and late response cannot appear
+ok 119 - collapsed/unmounted inline data aborts and late response cannot appear
+  ---
+  duration_ms: 179.375375
+  ...
+# Subtest: single visible duration is distinct from cumulative and zero never becomes missing
+ok 120 - single visible duration is distinct from cumulative and zero never becomes missing
+  ---
+  duration_ms: 222.040334
+  ...
+# Subtest: inline evidence opens records without toggling an already expanded trail closed
+ok 121 - inline evidence opens records without toggling an already expanded trail closed
+  ---
+  duration_ms: 163.764291
+  ...
+# Subtest: synthetic login uses existing cookie API and current /me wins over the login scope
+ok 122 - synthetic login uses existing cookie API and current /me wins over the login scope
+  ---
+  duration_ms: 929.356583
+  ...
+# Subtest: failed login creates no session marker or successful-login event
+ok 123 - failed login creates no session marker or successful-login event
+  ---
+  duration_ms: 184.29475
+  ...
+# Subtest: a local marker cannot authenticate; expired /me sends every protected revisit to login
+ok 124 - a local marker cannot authenticate; expired /me sends every protected revisit to login
+  ---
+  duration_ms: 263.883667
+  ...
+# Subtest: current management 403 and unavailable /me fail closed with an explicit retry
+ok 125 - current management 403 and unavailable /me fail closed with an explicit retry
+  ---
+  duration_ms: 540.335708
+  ...
+# Subtest: tracking 401 clears live provider state and blocks a late successful /me from resurrecting it
+ok 126 - tracking 401 clears live provider state and blocks a late successful /me from resurrecting it
+  ---
+  duration_ms: 168.655458
+  ...
+# Subtest: tracking multipart upload 401 uses the same expiry path without a forged bearer token
+ok 127 - tracking multipart upload 401 uses the same expiry path without a forged bearer token
+  ---
+  duration_ms: 281.933042
+  ...
+# Subtest: read 403 rejects data without declaring the whole session expired or silently retrying
+ok 128 - read 403 rejects data without declaring the whole session expired or silently retrying
+  ---
+  duration_ms: 170.428375
+  ...
+# Subtest: tracking context denial never mounts records or starts visitor and material reads
+ok 129 - tracking context denial never mounts records or starts visitor and material reads
+  ---
+  duration_ms: 810.714042
+  ...
+# Subtest: identical synthetic user gets identical permission and scope requests at desktop and mobile widths
+ok 130 - identical synthetic user gets identical permission and scope requests at desktop and mobile widths
+  ---
+  duration_ms: 595.167459
+  ...
+# Subtest: crm_only route guard permits the shared tracking route while blocking unrelated admin routes
+ok 131 - crm_only route guard permits the shared tracking route while blocking unrelated admin routes
+  ---
+  duration_ms: 216.708
+  ...
+# Subtest: account change uses verified identity as the protected subtree key and discards old /me completion
+ok 132 - account change uses verified identity as the protected subtree key and discards old /me completion
+  ---
+  duration_ms: 229.728917
+  ...
+# Subtest: logout failure still clears local identity and back-route access
+ok 133 - logout failure still clears local identity and back-route access
+  ---
+  duration_ms: 233.397625
+  ...
+# Subtest: owner filters are encoded and every tracking read carries cookies without sending a session marker as bearer
+ok 134 - owner filters are encoded and every tracking read carries cookies without sending a session marker as bearer
+  ---
+  duration_ms: 224.068708
+  ...
+# Subtest: unmounted tracking context cannot repaint after a late success
+ok 135 - unmounted tracking context cannot repaint after a late success
+  ---
+  duration_ms: 339.771875
+  ...
+# Subtest: HTTP status is preserved with existing messages and request-page provenance
+ok 136 - HTTP status is preserved with existing messages and request-page provenance
+  ---
+  duration_ms: 433.205
+  ...
+# Subtest: a current 403 clears capabilities immediately and refreshes read-only subpermission changes
+ok 137 - a current 403 clears capabilities immediately and refreshes read-only subpermission changes
+  ---
+  duration_ms: 171.799958
+  ...
+# Subtest: context 403 is terminal feedback for that check, never an automatic revalidation loop
+ok 138 - context 403 is terminal feedback for that check, never an automatic revalidation loop
+  ---
+  duration_ms: 250.563333
+  ...
+# Subtest: aborted, old-actor, and old-permission-generation 403 cannot clear current capabilities
+ok 139 - aborted, old-actor, and old-permission-generation 403 cannot clear current capabilities
+  ---
+  duration_ms: 226.929334
+  ...
+# Subtest: real tracking API ignores a late old-actor 403 and aborted 403
+ok 140 - real tracking API ignores a late old-actor 403 and aborted 403
+  ---
+  duration_ms: 365.32925
+  ...
+# Subtest: parallel 403 responses for the same boundary trigger only one context refresh
+ok 141 - parallel 403 responses for the same boundary trigger only one context refresh
+  ---
+  duration_ms: 76.179959
+  ...
+# Subtest: permission hook discards delayed context after A to B to A identity transitions
+ok 142 - permission hook discards delayed context after A to B to A identity transitions
+  ---
+  duration_ms: 255.189708
+  ...
+# Subtest: unmount aborts context and invalidates boundary before any delayed denial
+ok 143 - unmount aborts context and invalidates boundary before any delayed denial
+  ---
+  duration_ms: 131.378417
+  ...
+# Subtest: only a safe verified actor may load or persist tracking view state
+ok 144 - only a safe verified actor may load or persist tracking view state
+  ---
+  duration_ms: 1000.048875
+  ...
+# Subtest: view storage is isolated by verified actor and never imports legacy shared-account state
+ok 145 - view storage is isolated by verified actor and never imports legacy shared-account state
+  ---
+  duration_ms: 113.773458
+  ...
+# Subtest: revoked owner is dropped on restore while authorized filters remain and malformed storage fails safely
+ok 146 - revoked owner is dropped on restore while authorized filters remain and malformed storage fails safely
+  ---
+  duration_ms: 151.956667
+  ...
+# Subtest: malformed permission responses remain retryable errors and never become confirmed denial or authority
+ok 147 - malformed permission responses remain retryable errors and never become confirmed denial or authority
+  ---
+  duration_ms: 1851.426333
+  ...
+# Subtest: main page removes old records while revalidating and remounts after only CRM permission is revoked
+ok 148 - main page removes old records while revalidating and remounts after only CRM permission is revoked
+  ---
+  duration_ms: 230.82575
+  ...
+# Subtest: tracking records restore same-account filters on return but discard withdrawn owner and another account search
+ok 149 - tracking records restore same-account filters on return but discard withdrawn owner and another account search
+  ---
+  duration_ms: 252.653708
+  ...
+# Subtest: main page switches trusted actors without exposing old records during the new context check
+ok 150 - main page switches trusted actors without exposing old records during the new context check
+  ---
+  duration_ms: 170.903417
+  ...
+# Subtest: StrictMode setup cleanup setup rejects the abandoned context and keeps the live denial listener
+ok 151 - StrictMode setup cleanup setup rejects the abandoned context and keeps the live denial listener
+  ---
+  duration_ms: 71.865375
+  ...
+# Subtest: multipart 403 revalidates current access but an old-account upload denial cannot affect the new account
+ok 152 - multipart 403 revalidates current access but an old-account upload denial cannot affect the new account
+  ---
+  duration_ms: 159.28575
+  ...
+# Subtest: repeated denial after one automatic context check stops without a request loop and allows manual recovery
+ok 153 - repeated denial after one automatic context check stops without a request loop and allows manual recovery
+  ---
+  duration_ms: 136.660125
+  ...
+# Subtest: automatic recheck budget belongs to the verified actor and is renewed on account change
+ok 154 - automatic recheck budget belongs to the verified actor and is renewed on account change
+  ---
+  duration_ms: 68.885292
+  ...
+# Subtest: request expiry predicate is internal, leaves current 401 unchanged, and suppresses obsolete expiry only
+ok 155 - request expiry predicate is internal, leaves current 401 unchanged, and suppresses obsolete expiry only
+  ---
+  duration_ms: 141.616333
+  ...
+# Subtest: an old-account or aborted tracking 401 cannot log out the currently verified account
+ok 156 - an old-account or aborted tracking 401 cannot log out the currently verified account
+  ---
+  duration_ms: 124.598083
+  ...
+# Subtest: a late old-account upload 401 leaves the new session intact
+ok 157 - a late old-account upload 401 leaves the new session intact
+  ---
+  duration_ms: 57.694917
+  ...
+# Subtest: the panel states that sync only creates drafts and never publishes
+ok 158 - the panel states that sync only creates drafts and never publishes
+  ---
+  duration_ms: 144.002208
+  ...
+# Subtest: an incomplete configuration is explained and offers no way to run
+ok 159 - an incomplete configuration is explained and offers no way to run
+  ---
+  duration_ms: 210.940125
+  ...
+# Subtest: one click runs one sync, reports the outcome and refreshes the list
+ok 160 - one click runs one sync, reports the outcome and refreshes the list
+  ---
+  duration_ms: 138.187208
+  ...
+# Subtest: a failed run keeps the button and warns that drafts may exist
+ok 161 - a failed run keeps the button and warns that drafts may exist
+  ---
+  duration_ms: 45.321958
+  ...
+# Subtest: the last recorded run, including a failure, is shown when nothing was run now
+ok 162 - the last recorded run, including a failure, is shown when nothing was run now
+  ---
+  duration_ms: 182.799
+  ...
+# Subtest: every reason the server can report has a plain explanation
+ok 163 - every reason the server can report has a plain explanation
+  ---
+  duration_ms: 68.686958
+  ...
+# Subtest: the API calls the sync endpoints, and a run may wait longer than other calls
+ok 164 - the API calls the sync endpoints, and a run may wait longer than other calls
+  ---
+  duration_ms: 174.030833
+  ...
+# Subtest: visitor return to page one replays original as_of and first_cursor, including repeated trips
+ok 165 - visitor return to page one replays original as_of and first_cursor, including repeated trips
+  ---
+  duration_ms: 693.251667
+  ...
+# Subtest: material view pins as_of when returning to page one without first_cursor
+ok 166 - material view pins as_of when returning to page one without first_cursor
+  ---
+  duration_ms: 314.267417
+  ...
+# Subtest: channel view leaves counts snapshot feedback and pagination to its leaderboard
+ok 167 - channel view leaves counts snapshot feedback and pagination to its leaderboard
+  ---
+  duration_ms: 279.866875
+  ...
+# Subtest: channel leaderboard retains the API page snapshot and owns its feedback
+ok 168 - channel leaderboard retains the API page snapshot and owns its feedback
+  ---
+  duration_ms: 88.958042
+  ...
+# Subtest: explicit refresh, range, owner, sort, search, clear, and business changes start fresh snapshots
+ok 169 - explicit refresh, range, owner, sort, search, clear, and business changes start fresh snapshots
+  ---
+  duration_ms: 424.543166
+  ...
+# Subtest: view switches reset cursor while retaining supported identity and omitting customer-only intent
+ok 170 - view switches reset cursor while retaining supported identity and omitting customer-only intent
+  ---
+  duration_ms: 233.386959
+  ...
+# Subtest: failed pagination and page-one retry keep the same snapshot; refresh failure retries fresh
+ok 171 - failed pagination and page-one retry keep the same snapshot; refresh failure retries fresh
+  ---
+  duration_ms: 231.745208
+  ...
+# Subtest: late superseded response cannot change visible data or pollute fresh snapshot
+ok 172 - late superseded response cannot change visible data or pollute fresh snapshot
+  ---
+  duration_ms: 159.4705
+  ...
+# Subtest: content visitor detail returns to first_cursor with original snapshot and passes scope to visitor details
+ok 173 - content visitor detail returns to first_cursor with original snapshot and passes scope to visitor details
+  ---
+  duration_ms: 183.191292
+  ...
+# Subtest: content visitor scope and material changes discard old cursor immediately, with safe failed retries
+ok 174 - content visitor scope and material changes discard old cursor immediately, with safe failed retries
+  ---
+  duration_ms: 138.098084
+  ...
+# Subtest: detail pending response is aborted after scope change and cannot replace current snapshot
+ok 175 - detail pending response is aborted after scope change and cannot replace current snapshot
+  ---
+  duration_ms: 122.305834
+  ...
+# Subtest: detail scope round trips cannot resurrect an earlier page stack or snapshot
+ok 176 - detail scope round trips cannot resurrect an earlier page stack or snapshot
+  ---
+  duration_ms: 172.616708
+  ...
+# Subtest: saved list pagination callbacks cannot inject old tokens after a new filter or refresh, even before render
+ok 177 - saved list pagination callbacks cannot inject old tokens after a new filter or refresh, even before render
+  ---
+  duration_ms: 106.258667
+  ...
+# Subtest: saved material visitor pagination stays invalid after scope round trips
+ok 178 - saved material visitor pagination stays invalid after scope round trips
+  ---
+  duration_ms: 158.676208
+  ...
+# Subtest: material title and visitor inputs submit distinct AND filters, preserve identity and reset snapshot
+ok 179 - material title and visitor inputs submit distinct AND filters, preserve identity and reset snapshot
+  ---
+  duration_ms: 190.579458
+  ...
+# Subtest: visit card opens the visitor detail on that material version with the list snapshot
+ok 180 - visit card opens the visitor detail on that material version with the list snapshot
+  ---
+  duration_ms: 50.593791
+  ...
+# Subtest: batch public-page card (pages/index/index) opens sessions without a material version and preserves filters on pagination/retry
+ok 181 - batch public-page card (pages/index/index) opens sessions without a material version and preserves filters on pagination/retry
+  ---
+  duration_ms: 529.7275
+  ...
+# Subtest: batch public-page card (pages/aicost/aicost) opens sessions without a material version and preserves filters on pagination/retry
+ok 182 - batch public-page card (pages/aicost/aicost) opens sessions without a material version and preserves filters on pagination/retry
+  ---
+  duration_ms: 508.657458
+  ...
+# Subtest: day public-page card (pages/index/index) opens sessions without a material version and preserves filters on pagination/retry
+ok 183 - day public-page card (pages/index/index) opens sessions without a material version and preserves filters on pagination/retry
+  ---
+  duration_ms: 470.791875
+  ...
+# Subtest: day public-page card (pages/aicost/aicost) opens sessions without a material version and preserves filters on pagination/retry
+ok 184 - day public-page card (pages/aicost/aicost) opens sessions without a material version and preserves filters on pagination/retry
+  ---
+  duration_ms: 414.309375
+  ...
+# Subtest: material card and detail material selection send only a paired positive integer version
+ok 185 - material card and detail material selection send only a paired positive integer version
+  ---
+  duration_ms: 409.962541
+  ...
+# Subtest: profile revision conflict offers an explicit fresh snapshot rather than replaying rejected cursor
+ok 186 - profile revision conflict offers an explicit fresh snapshot rather than replaying rejected cursor
+  ---
+  duration_ms: 137.83325
+  ...
+# Subtest: oversized queries offer staged time narrowing and preserve owner material and visitor filters
+ok 187 - oversized queries offer staged time narrowing and preserve owner material and visitor filters
+  ---
+  duration_ms: 234.889917
+  ...
+# Subtest: content visitor profile refresh clears rejected first cursor while retaining content scope
+ok 188 - content visitor profile refresh clears rejected first cursor while retaining content scope
+  ---
+  duration_ms: 129.466209
+  ...
+# Subtest: channel leaderboard labels historical leads accurately and exposes unavailable joins
+ok 189 - channel leaderboard labels historical leads accurately and exposes unavailable joins
+  ---
+  duration_ms: 87.175125
+  ...
+# Subtest: all tracking declarations remain inside the existing route and page root
+ok 190 - all tracking declarations remain inside the existing route and page root
+  ---
+  duration_ms: 6.289333
+  ...
+# Subtest: warm reference palette has readable primary, metric and supporting text contrast
+ok 191 - warm reference palette has readable primary, metric and supporting text contrast
+  ---
+  duration_ms: 54.196709
+  ...
+# Subtest: 320×568: shrinkable filters, cards, and reachable controls
+ok 192 - 320×568: shrinkable filters, cards, and reachable controls
+  ---
+  duration_ms: 74.997542
+  ...
+# Subtest: 320×568: whole landscape/portrait source remains visible
+ok 193 - 320×568: whole landscape/portrait source remains visible
+  ---
+  duration_ms: 45.776375
+  ...
+# Subtest: 320×568: content list stays full width, nested visitors adapt
+ok 194 - 320×568: content list stays full width, nested visitors adapt
+  ---
+  duration_ms: 33.276
+  ...
+# Subtest: 320×568: dialogs scroll within dynamic viewport and safe areas
+ok 195 - 320×568: dialogs scroll within dynamic viewport and safe areas
+  ---
+  duration_ms: 6.021584
+  ...
+# Subtest: 375×667: shrinkable filters, cards, and reachable controls
+ok 196 - 375×667: shrinkable filters, cards, and reachable controls
+  ---
+  duration_ms: 91.043459
+  ...
+# Subtest: 375×667: whole landscape/portrait source remains visible
+ok 197 - 375×667: whole landscape/portrait source remains visible
+  ---
+  duration_ms: 52.069041
+  ...
+# Subtest: 375×667: content list stays full width, nested visitors adapt
+ok 198 - 375×667: content list stays full width, nested visitors adapt
+  ---
+  duration_ms: 81.358959
+  ...
+# Subtest: 375×667: dialogs scroll within dynamic viewport and safe areas
+ok 199 - 375×667: dialogs scroll within dynamic viewport and safe areas
+  ---
+  duration_ms: 4.798333
+  ...
+# Subtest: 390×844: shrinkable filters, cards, and reachable controls
+ok 200 - 390×844: shrinkable filters, cards, and reachable controls
+  ---
+  duration_ms: 41.008084
+  ...
+# Subtest: 390×844: whole landscape/portrait source remains visible
+ok 201 - 390×844: whole landscape/portrait source remains visible
+  ---
+  duration_ms: 27.825667
+  ...
+# Subtest: 390×844: content list stays full width, nested visitors adapt
+ok 202 - 390×844: content list stays full width, nested visitors adapt
+  ---
+  duration_ms: 75.785459
+  ...
+# Subtest: 390×844: dialogs scroll within dynamic viewport and safe areas
+ok 203 - 390×844: dialogs scroll within dynamic viewport and safe areas
+  ---
+  duration_ms: 5.038958
+  ...
+# Subtest: 768×1024: shrinkable filters, cards, and reachable controls
+ok 204 - 768×1024: shrinkable filters, cards, and reachable controls
+  ---
+  duration_ms: 51.700125
+  ...
+# Subtest: 768×1024: whole landscape/portrait source remains visible
+ok 205 - 768×1024: whole landscape/portrait source remains visible
+  ---
+  duration_ms: 50.230667
+  ...
+# Subtest: 768×1024: content list stays full width, nested visitors adapt
+ok 206 - 768×1024: content list stays full width, nested visitors adapt
+  ---
+  duration_ms: 46.452792
+  ...
+# Subtest: 768×1024: dialogs scroll within dynamic viewport and safe areas
+ok 207 - 768×1024: dialogs scroll within dynamic viewport and safe areas
+  ---
+  duration_ms: 19.085458
+  ...
+# Subtest: 1024×768: shrinkable filters, cards, and reachable controls
+ok 208 - 1024×768: shrinkable filters, cards, and reachable controls
+  ---
+  duration_ms: 42.96775
+  ...
+# Subtest: 1024×768: whole landscape/portrait source remains visible
+ok 209 - 1024×768: whole landscape/portrait source remains visible
+  ---
+  duration_ms: 12.978042
+  ...
+# Subtest: 1024×768: content list stays full width, nested visitors adapt
+ok 210 - 1024×768: content list stays full width, nested visitors adapt
+  ---
+  duration_ms: 9.843875
+  ...
+# Subtest: 1024×768: dialogs scroll within dynamic viewport and safe areas
+ok 211 - 1024×768: dialogs scroll within dynamic viewport and safe areas
+  ---
+  duration_ms: 29.768458
+  ...
+# Subtest: 1440×900: shrinkable filters, cards, and reachable controls
+ok 212 - 1440×900: shrinkable filters, cards, and reachable controls
+  ---
+  duration_ms: 15.844584
+  ...
+# Subtest: 1440×900: whole landscape/portrait source remains visible
+ok 213 - 1440×900: whole landscape/portrait source remains visible
+  ---
+  duration_ms: 52.555917
+  ...
+# Subtest: 1440×900: content list stays full width, nested visitors adapt
+ok 214 - 1440×900: content list stays full width, nested visitors adapt
+  ---
+  duration_ms: 15.674208
+  ...
+# Subtest: 1440×900: dialogs scroll within dynamic viewport and safe areas
+ok 215 - 1440×900: dialogs scroll within dynamic viewport and safe areas
+  ---
+  duration_ms: 10.81925
+  ...
+# Subtest: 1024×400: shrinkable filters, cards, and reachable controls
+ok 216 - 1024×400: shrinkable filters, cards, and reachable controls
+  ---
+  duration_ms: 20.3295
+  ...
+# Subtest: 1024×400: whole landscape/portrait source remains visible
+ok 217 - 1024×400: whole landscape/portrait source remains visible
+  ---
+  duration_ms: 20.533334
+  ...
+# Subtest: 1024×400: content list stays full width, nested visitors adapt
+ok 218 - 1024×400: content list stays full width, nested visitors adapt
+  ---
+  duration_ms: 28.394
+  ...
+# Subtest: 1024×400: dialogs scroll within dynamic viewport and safe areas
+ok 219 - 1024×400: dialogs scroll within dynamic viewport and safe areas
+  ---
+  duration_ms: 31.875042
+  ...
+# Subtest: focus, wrapping, error and motion states are visible rather than clipped
+ok 220 - focus, wrapping, error and motion states are visible rather than clipped
+  ---
+  duration_ms: 17.177041
+  ...
+# Subtest: rule validation covers bounds, integer-only input, reason and impossible daily contributions
+ok 221 - rule validation covers bounds, integer-only input, reason and impossible daily contributions
+  ---
+  duration_ms: 1.376291
+  ...
+# Subtest: rules API uses exact scoped endpoints and fixed version/request ID
+ok 222 - rules API uses exact scoped endpoints and fixed version/request ID
+  ---
+  duration_ms: 50.578291
+  ...
+# Subtest: read-only rule access has no write buttons even when can_manage is granted
+ok 223 - read-only rule access has no write buttons even when can_manage is granted
+  ---
+  duration_ms: 241.435542
+  ...
+# Subtest: explicit authorized owner is required even with one owner and unauthorized selection is rejected
+ok 224 - explicit authorized owner is required even with one owner and unauthorized selection is rejected
+  ---
+  duration_ms: 113.8455
+  ...
+# Subtest: scope changes revoke old child callbacks; pending and dirty guards protect owner selection
+ok 225 - scope changes revoke old child callbacks; pending and dirty guards protect owner selection
+  ---
+  duration_ms: 67.45125
+  ...
+# Subtest: permission loss invalidates old scope immediately and replaces editable child with read-only
+ok 226 - permission loss invalidates old scope immediately and replaces editable child with read-only
+  ---
+  duration_ms: 65.859417
+  ...
+# Subtest: save locks duplicate clicks synchronously, pins owner/version and refreshes after server confirmation
+ok 227 - save locks duplicate clicks synchronously, pins owner/version and refreshes after server confirmation
+  ---
+  duration_ms: 188.540875
+  ...
+# Subtest: save failure retains draft, blocks stale retries, and changed version needs explicit reconciliation
+ok 228 - save failure retains draft, blocks stale retries, and changed version needs explicit reconciliation
+  ---
+  duration_ms: 87.717916
+  ...
+# Subtest: read refresh failure cannot manufacture success or erase inputs and can be retried
+ok 229 - read refresh failure cannot manufacture success or erase inputs and can be retried
+  ---
+  duration_ms: 107.3235
+  ...
+# Subtest: wrong owner read and malformed save result are rejected rather than treated as confirmed
+ok 230 - wrong owner read and malformed save result are rejected rather than treated as confirmed
+  ---
+  duration_ms: 131.732875
+  ...
+# Subtest: confirmed mutation remains successful when the subsequent verification read fails
+ok 231 - confirmed mutation remains successful when the subsequent verification read fails
+  ---
+  duration_ms: 119.567292
+  ...
+# Subtest: recompute retries retain request ID and reason after verification; changed reason uses a new ID
+ok 232 - recompute retries retain request ID and reason after verification; changed reason uses a new ID
+  ---
+  duration_ms: 44.310125
+  ...
+# Subtest: recompute refuses unsaved rule input and successful result refreshes records
+ok 233 - recompute refuses unsaved rule input and successful result refreshes records
+  ---
+  duration_ms: 77.360083
+  ...
+# Subtest: unmount and scope invalidation ignore late reads and mutations and block stale actions
+ok 234 - unmount and scope invalidation ignore late reads and mutations and block stale actions
+  ---
+  duration_ms: 128.119583
+  ...
+# Subtest: StrictMode effect replay aborts first read and accepts only the latest response
+ok 235 - StrictMode effect replay aborts first read and accepts only the latest response
+  ---
+  duration_ms: 22.1555
+  ...
+# Subtest: old rendered submit cannot commit obsolete form values
+ok 236 - old rendered submit cannot commit obsolete form values
+  ---
+  duration_ms: 145.922084
+  ...
+# Subtest: evidence displays real metrics thresholds exclusions calculation override and capped source records
+ok 237 - evidence displays real metrics thresholds exclusions calculation override and capped source records
+  ---
+  duration_ms: 20.434917
+  ...
+# Subtest: rule panel shares the single tracking menu and existing guarded dialog
+ok 238 - rule panel shares the single tracking menu and existing guarded dialog
+  ---
+  duration_ms: 0.704625
+  ...
+# Subtest: evidence window query preserves authorized owner and precise as_of while clearing list/content filters
+ok 239 - evidence window query preserves authorized owner and precise as_of while clearing list/content filters
+  ---
+  duration_ms: 0.241041
+  ...
+# Subtest: detail evidence navigation uses its own window and restores list scope without altering owner
+ok 240 - detail evidence navigation uses its own window and restores list scope without altering owner
+  ---
+  duration_ms: 93.253375
+  ...
+# Subtest: page visit renders the customer-readable label and never fetches event-level detail
+ok 241 - page visit renders the customer-readable label and never fetches event-level detail
+  ---
+  duration_ms: 68.082166
+  ...
+# Subtest: session detail pagination replays first cursor and reset after explicit refresh or scope change
+ok 242 - session detail pagination replays first cursor and reset after explicit refresh or scope change
+  ---
+  duration_ms: 73.751791
+  ...
+# Subtest: visitor session detail preserves unknown attribution and share-count semantics
+ok 243 - visitor session detail preserves unknown attribution and share-count semantics
+  ---
+  duration_ms: 337.940208
+  ...
+# Subtest: visitor material panel is lazy until expanded and closes without eagerly fetching all cards
+ok 244 - visitor material panel is lazy until expanded and closes without eagerly fetching all cards
+  ---
+  duration_ms: 424.51975
+  ...
+# Subtest: visited-material pagination preserves first cursor, as_of and owner when returning
+ok 245 - visited-material pagination preserves first cursor, as_of and owner when returning
+  ---
+  duration_ms: 293.468791
+  ...
+# Subtest: revoked material never exposes even a stale cover but trajectory keeps actual version
+ok 246 - revoked material never exposes even a stale cover but trajectory keeps actual version
+  ---
+  duration_ms: 238.000375
+  ...
+# Subtest: failed material reads retain scope for retry and late unmount result cannot render data
+ok 247 - failed material reads retain scope for retry and late unmount result cannot render data
+  ---
+  duration_ms: 257.696375
+  ...
+# Subtest: visited-material profile conflict resets the cursor rather than repeating the rejected snapshot
+ok 248 - visited-material profile conflict resets the cursor rather than repeating the rejected snapshot
+  ---
+  duration_ms: 129.992
+  ...
+# Subtest: 转发面板默认收起，收起时不挂载列表也不发请求
+ok 249 - 转发面板默认收起，收起时不挂载列表也不发请求
+  ---
+  duration_ms: 457.363958
+  ...
+# Subtest: 转发列表拉取一次并继承筛选范围，返回保持 first_cursor/as_of/owner
+ok 250 - 转发列表拉取一次并继承筛选范围，返回保持 first_cursor/as_of/owner
+  ---
+  duration_ms: 357.004375
+  ...
+# Subtest: 转发记录展示素材、渠道与下游流量文案
+ok 251 - 转发记录展示素材、渠道与下游流量文案
+  ---
+  duration_ms: 139.124916
+  ...
+# Subtest: 未知渠道显示未记录而非空白，撤回素材带状态标注
+ok 252 - 未知渠道显示未记录而非空白，撤回素材带状态标注
+  ---
+  duration_ms: 117.13175
+  ...
+# Subtest: 空转发记录显示空态；失败后重试保留筛选
+ok 253 - 空转发记录显示空态；失败后重试保留筛选
+  ---
+  duration_ms: 156.008208
+  ...
+# Subtest: identified accounts without nicknames have a stable account label, anonymous visitors stay anonymous
+ok 254 - identified accounts without nicknames have a stable account label, anonymous visitors stay anonymous
+  ---
+  duration_ms: 1.563541
+  ...
+# Subtest: customer timeline query sends source channel and drops list-only sort
+ok 255 - customer timeline query sends source channel and drops list-only sort
+  ---
+  duration_ms: 3.067625
+  ...
+# Subtest: default range is the last 30 days and channel defaults to all
+ok 256 - default range is the last 30 days and channel defaults to all
+  ---
+  duration_ms: 1.339291
+  ...
+# Subtest: query range feedback renders the recovery action instead of a blind retry
+ok 257 - query range feedback renders the recovery action instead of a blind retry
+  ---
+  duration_ms: 201.622708
+  ...
+# Subtest: source labels follow the timeline rules
+ok 258 - source labels follow the timeline rules
+  ---
+  duration_ms: 0.332042
+  ...
+# Subtest: progress text: capped video with replays, article depth, nothing without data
+ok 259 - progress text: capped video with replays, article depth, nothing without data
+  ---
+  duration_ms: 0.118625
+  ...
+# Subtest: visit time is Beijing month-day within the year and adds the year otherwise
+ok 260 - visit time is Beijing month-day within the year and adds the year otherwise
+  ---
+  duration_ms: 78.682625
+  ...
+# Subtest: visit card shows the five reference modules
+ok 261 - visit card shows the five reference modules
+  ---
+  duration_ms: 150.222083
+  ...
+# Subtest: anonymous visit card falls back without copy, forwarder or lead button
+ok 262 - anonymous visit card falls back without copy, forwarder or lead button
+  ---
+  duration_ms: 73.285167
+  ...
+# Subtest: B-side visitor shows channel badge and no lead conversion
+ok 263 - B-side visitor shows channel badge and no lead conversion
+  ---
+  duration_ms: 41.221292
+  ...
+# Subtest: revoked material keeps the card but shows the safe title
+ok 264 - revoked material keeps the card but shows the safe title
+  ---
+  duration_ms: 14.343291
+  ...
+# Subtest: batch card merges multiple materials and shows visit count
+ok 265 - batch card merges multiple materials and shows visit count
+  ---
+  duration_ms: 13.32375
+  ...
+# Subtest: visit card discloses an oversized progress fallback instead of looking like no progress events
+ok 266 - visit card discloses an oversized progress fallback instead of looking like no progress events
+  ---
+  duration_ms: 139.644708
+  ...
+# Subtest: plain public page cards show the route title and page presentation
+ok 267 - plain public page cards show the route title and page presentation
+  ---
+  duration_ms: 17.654875
+  ...
+# Subtest: day card shows the day badge and cross-session visit count
+ok 268 - day card shows the day badge and cross-session visit count
+  ---
+  duration_ms: 92.582916
+  ...
+# Subtest: API calls the visit timeline endpoint
+ok 269 - API calls the visit timeline endpoint
+  ---
+  duration_ms: 63.5875
+  ...
+# Subtest: detail opened from a visit card never sends a bare content_version to shares or materials
+ok 270 - detail opened from a visit card never sends a bare content_version to shares or materials
+  ---
+  duration_ms: 143.719333
+  ...
+# Subtest: restored source filter outside the allowed list falls back to all sources
+ok 271 - restored source filter outside the allowed list falls back to all sources
+  ---
+  duration_ms: 43.116084
+  ...
+# Subtest: Shanghai natural days cross UTC midnight and use exclusive next-day end
+ok 272 - Shanghai natural days cross UTC midnight and use exclusive next-day end
+  ---
+  duration_ms: 18.53325
+  ...
+# Subtest: custom dates reject impossible, missing and reverse dates; leap day is valid
+ok 273 - custom dates reject impossible, missing and reverse dates; leap day is valid
+  ---
+  duration_ms: 0.414875
+  ...
+# Subtest: query retains identity intent owner channel and authorized search with no client identity override
+ok 274 - query retains identity intent owner channel and authorized search with no client identity override
+  ---
+  duration_ms: 0.177417
+  ...
+# Subtest: media URL rendering rejects executable protocols, cleartext external and embedded credentials
+ok 275 - media URL rendering rejects executable protocols, cleartext external and embedded credentials
+  ---
+  duration_ms: 0.321583
+  ...
+# Subtest: admin media previews use the scoped management route without rewriting external URLs
+ok 276 - admin media previews use the scoped management route without rewriting external URLs
+  ---
+  duration_ms: 0.134458
+  ...
+# Subtest: API uses real requests, scoped prefix, CSRF marker and abort signal
+ok 277 - API uses real requests, scoped prefix, CSRF marker and abort signal
+  ---
+  duration_ms: 108.439375
+  ...
+# Subtest: missing API payload is an error, never a successful empty record list
+ok 278 - missing API payload is an error, never a successful empty record list
+  ---
+  duration_ms: 96.8505
+  ...
+# Subtest: resource hook aborts and ignores late older responses and post-unmount completions
+ok 279 - resource hook aborts and ignores late older responses and post-unmount completions
+  ---
+  duration_ms: 152.753042
+  ...
+# Subtest: UI preserves scope in same-session exploration and separates metrics and identities
+ok 280 - UI preserves scope in same-session exploration and separates metrics and identities
+  ---
+  duration_ms: 1.406958
+  ...
+# Warning: React.jsx: type is invalid -- expected a string (for built-in components) or a class/function (for composite components) but got: undefined. You likely forgot to export your component from the file it's defined in, or you might have mixed up default and named imports.
+# Subtest: editor survives StrictMode remount, saves before preview, invalidates preview on edits
+ok 281 - editor survives StrictMode remount, saves before preview, invalidates preview on edits
+  ---
+  duration_ms: 236.536333
+  ...
+# Subtest: editor prevents duplicate pending saves and retains draft after failure
+ok 282 - editor prevents duplicate pending saves and retains draft after failure
+  ---
+  duration_ms: 69.809709
+  ...
+# Subtest: upload API uses multipart without JSON Content-Type and cookie/CSRF protection
+ok 283 - upload API uses multipart without JSON Content-Type and cookie/CSRF protection
+  ---
+  duration_ms: 84.262791
+  ...
+# Subtest: rich text renders only the explicit persisted format; legacy body remains escaped text
+ok 284 - rich text renders only the explicit persisted format; legacy body remains escaped text
+  ---
+  duration_ms: 70.997791
+  ...
+# Subtest: article_v2 preview keeps interleaved blocks and never interprets document text as HTML
+ok 285 - article_v2 preview keeps interleaved blocks and never interprets document text as HTML
+  ---
+  duration_ms: 36.453417
+  ...
+# Subtest: admin article block editor changes text without losing media, captions or presentation
+ok 286 - admin article block editor changes text without losing media, captions or presentation
+  ---
+  duration_ms: 142.398958
+  ...
+# Subtest: admin social preview places media before a single copy of the full note text
+ok 287 - admin social preview places media before a single copy of the full note text
+  ---
+  duration_ms: 104.958458
+  ...
+# Subtest: admin social preview falls back to top-level presentation for imported content
+ok 288 - admin social preview falls back to top-level presentation for imported content
+  ---
+  duration_ms: 84.451541
+  ...
+# Subtest: article editor downgrades invalid gallery and video shapes before save
+ok 289 - article editor downgrades invalid gallery and video shapes before save
+  ---
+  duration_ms: 50.969542
+  ...
+# Subtest: article cover is separate only when the document does not already reference it
+ok 290 - article cover is separate only when the document does not already reference it
+  ---
+  duration_ms: 130.273625
+  ...
+# Subtest: article_v2 original layout preview binds only authorized media and rejects active markup
+ok 291 - article_v2 original layout preview binds only authorized media and rejects active markup
+  ---
+  duration_ms: 78.727958
+  ...
+# Subtest: editor keeps imported layout body read-only and saves it without flattening
+ok 292 - editor keeps imported layout body read-only and saves it without flattening
+  ---
+  duration_ms: 75.512917
+  ...
+# Subtest: published draft keeps current public version and revokes without publishing unfinished edits
+ok 293 - published draft keeps current public version and revokes without publishing unfinished edits
+  ---
+  duration_ms: 80.756875
+  ...
+# Subtest: unpublished draft and already revoked material do not offer revocation
+ok 294 - unpublished draft and already revoked material do not offer revocation
+  ---
+  duration_ms: 117.740417
+  ...
+# Subtest: draft revoke is single flight and keeps reason/public controls on failure
+ok 295 - draft revoke is single flight and keeps reason/public controls on failure
+  ---
+  duration_ms: 53.046833
+  ...
+# Subtest: account presentation uses authorized nickname and safe avatar but never interprets anonymous as profile
+ok 296 - account presentation uses authorized nickname and safe avatar but never interprets anonymous as profile
+  ---
+  duration_ms: 98.209875
+  ...
+# Subtest: tab autosave is serialized and coalesces intermediate edits to the latest draft
+ok 297 - tab autosave is serialized and coalesces intermediate edits to the latest draft
+  ---
+  duration_ms: 721.556
+  ...
+# Subtest: an invalid newer draft is not replaced or marked saved by the old save response
+ok 298 - an invalid newer draft is not replaced or marked saved by the old save response
+  ---
+  duration_ms: 464.923917
+  ...
+# Subtest: failed autosave retains newest draft and explicit retry saves that draft
+ok 299 - failed autosave retains newest draft and explicit retry saves that draft
+  ---
+  duration_ms: 387.927875
+  ...
+# Subtest: tab no-op does not lock later saves and reopening does not reload over a draft
+ok 300 - tab no-op does not lock later saves and reopening does not reload over a draft
+  ---
+  duration_ms: 352.868
+  ...
+# Subtest: unknown initial tab state cannot be saved and supports a read retry
+ok 301 - unknown initial tab state cannot be saved and supports a read retry
+  ---
+  duration_ms: 345.7175
+  ...
+# Subtest: featured catalog is independent of grid filters and retains both selected IDs
+ok 302 - featured catalog is independent of grid filters and retains both selected IDs
+  ---
+  duration_ms: 351.433917
+  ...
+# Subtest: unknown featured display mode remains visible and needs an explicit supported selection
+ok 303 - unknown featured display mode remains visible and needs an explicit supported selection
+  ---
+  duration_ms: 163.846416
+  ...
+# Subtest: a late catalog response cannot populate a newer featured editor
+ok 304 - a late catalog response cannot populate a newer featured editor
+  ---
+  duration_ms: 342.680375
+  ...
+# Subtest: featured save is single-flight and a failed refresh is reported as already saved
+ok 305 - featured save is single-flight and a failed refresh is reported as already saved
+  ---
+  duration_ms: 307.56175
+  ...
+# Subtest: template page requests use server totals and disclose page-only keyword search
+ok 306 - template page requests use server totals and disclose page-only keyword search
+  ---
+  duration_ms: 331.489958
+  ...
+# Subtest: stale template reads and failures cannot overwrite the latest filter
+ok 307 - stale template reads and failures cannot overwrite the latest filter
+  ---
+  duration_ms: 275.505708
+  ...
+# Subtest: missing metadata stays unknown and the existing rejected status is represented
+ok 308 - missing metadata stays unknown and the existing rejected status is represented
+  ---
+  duration_ms: 218.196167
+  ...
+# Subtest: candidate pagination appends results without losing an unavailable selected ID
+ok 309 - candidate pagination appends results without losing an unavailable selected ID
+  ---
+  duration_ms: 291.212875
+  ...
+# Subtest: failed featured catalog preserves current selection and retries without changing mode
+ok 310 - failed featured catalog preserves current selection and retries without changing mode
+  ---
+  duration_ms: 328.110416
+  ...
+# Subtest: a failed initial template read shows unknown totals instead of an empty result
+ok 311 - a failed initial template read shows unknown totals instead of an empty result
+  ---
+  duration_ms: 331.173417
+  ...
+# Subtest: a page made invalid by a smaller total falls back to the last real page
+ok 312 - a page made invalid by a smaller total falls back to the last real page
+  ---
+  duration_ms: 309.95925
+  ...
+# Subtest: template moderation is single-flight and read failure reports the committed result
+ok 313 - template moderation is single-flight and read failure reports the committed result
+  ---
+  duration_ms: 203.878209
+  ...
+# Subtest: late category move completion cannot close a newer move dialog
+ok 314 - late category move completion cannot close a newer move dialog
+  ---
+  duration_ms: 233.169708
+  ...
+# Subtest: submitted editor fields remain locked while an unrelated row action is pending
+ok 315 - submitted editor fields remain locked while an unrelated row action is pending
+  ---
+  duration_ms: 235.84575
+  ...
+# Subtest: URL templateId locates the exact object outside the current page without writing
+ok 316 - URL templateId locates the exact object outside the current page without writing
+  ---
+  duration_ms: 199.178
+  ...
+# Subtest: invalid templateId values never become a detail request or a name search
+ok 317 - invalid templateId values never become a detail request or a name search
+  ---
+  duration_ms: 1436.218166
+  ...
+# Subtest: URL response ID mismatch or read failure never opens an unrelated object
+ok 318 - URL response ID mismatch or read failure never opens an unrelated object
+  ---
+  duration_ms: 257.496333
+  ...
+# Subtest: late URL lookup cannot replace a newer ID, interrupt add, or update after unmount
+ok 319 - late URL lookup cannot replace a newer ID, interrupt add, or update after unmount
+  ---
+  duration_ms: 232.562334
+  ...
+# Subtest: incomplete successful responses do not become empty template or tab state
+ok 320 - incomplete successful responses do not become empty template or tab state
+  ---
+  duration_ms: 115.639708
+  ...
+# Subtest: an existing rejected status remains selectable when reverting an unsaved status edit
+ok 321 - an existing rejected status remains selectable when reverting an unsaved status edit
+  ---
+  duration_ms: 76.981625
+  ...
+# Subtest: closed and same-ID reopened featured editors reject saved callbacks from the old session
+ok 322 - closed and same-ID reopened featured editors reject saved callbacks from the old session
+  ---
+  duration_ms: 134.031667
+  ...
+# Subtest: a cancelled new featured group cannot be created by its old save callback
+ok 323 - a cancelled new featured group cannot be created by its old save callback
+  ---
+  duration_ms: 118.167625
+  ...
+# Subtest: add and same-ID edit sessions reject old save, upload, change and close callbacks
+ok 324 - add and same-ID edit sessions reject old save, upload, change and close callbacks
+  ---
+  duration_ms: 159.113916
+  ...
+# Subtest: a stale move confirmation cannot submit after cancel or same-ID reopening
+ok 325 - a stale move confirmation cannot submit after cancel or same-ID reopening
+  ---
+  duration_ms: 68.479333
+  ...
+# Subtest: changing URL ID hides the old linked object before effects and rejects its old entry
+ok 326 - changing URL ID hides the old linked object before effects and rejects its old entry
+  ---
+  duration_ms: 78.042875
+  ...
+# Subtest: browser URL changes invalidate old linked entry and save even before rendering
+ok 327 - browser URL changes invalidate old linked entry and save even before rendering
+  ---
+  duration_ms: 92.523458
+  ...
+# Subtest: a linked edit detail response cannot open after the URL target changes
+ok 328 - a linked edit detail response cannot open after the URL target changes
+  ---
+  duration_ms: 86.141459
+  ...
+# Subtest: 模板卡片分类显示中文名：分类表 → 标签配置 → 其他分类，不外露代码
+ok 329 - 模板卡片分类显示中文名：分类表 → 标签配置 → 其他分类，不外露代码
+  ---
+  duration_ms: 209.671583
+  ...
+# Subtest: first add renders without a selection and owns a working upload input
+ok 330 - first add renders without a selection and owns a working upload input
+  ---
+  duration_ms: 830.294
+  ...
+# Subtest: edit-only upload input is mounted, clickable, and saves uploaded images
+ok 331 - edit-only upload input is mounted, clickable, and saves uploaded images
+  ---
+  duration_ms: 439.967042
+  ...
+# Subtest: name-only edit sends no old publication, moderation, pricing, tab or image fields
+ok 332 - name-only edit sends no old publication, moderation, pricing, tab or image fields
+  ---
+  duration_ms: 320.829291
+  ...
+# Subtest: explicit empty tab/description, zero price and false free flag are retained
+ok 333 - explicit empty tab/description, zero price and false free flag are retained
+  ---
+  duration_ms: 316.885833
+  ...
+# Subtest: unchanged edit makes no write, including structured image metadata
+ok 334 - unchanged edit makes no write, including structured image metadata
+  ---
+  duration_ms: 244.022459
+  ...
+# Subtest: closing edit and adding starts fresh; closing add and reopening edit reloads detail
+ok 335 - closing edit and adding starts fresh; closing add and reopening edit reloads detail
+  ---
+  duration_ms: 307.825875
+  ...
+# Subtest: late uploads cannot append to another editor, and upload blocks saving
+ok 336 - late uploads cannot append to another editor, and upload blocks saving
+  ---
+  duration_ms: 270.30075
+  ...
+# Subtest: a late detail request cannot replace an add editor
+ok 337 - a late detail request cannot replace an add editor
+  ---
+  duration_ms: 235.109958
+  ...
+# Subtest: save is synchronous single-flight and a failed save retains the editable draft
+ok 338 - save is synchronous single-flight and a failed save retains the editable draft
+  ---
+  duration_ms: 336.90375
+  ...
+# Subtest: committed save with unavailable read-back closes editor and asks for refresh without resubmitting
+ok 339 - committed save with unavailable read-back closes editor and asks for refresh without resubmitting
+  ---
+  duration_ms: 345.31575
+  ...
+# Subtest: removing the last edit image sends explicit empty image fields
+ok 340 - removing the last edit image sends explicit empty image fields
+  ---
+  duration_ms: 261.910667
+  ...
+# Subtest: featured groups use independent real pages and totals beyond the original first 100
+ok 341 - featured groups use independent real pages and totals beyond the original first 100
+  ---
+  duration_ms: 825.820833
+  ...
+# Subtest: featured: collapse invalidates a pending list and reopen only accepts the fresh response
+ok 342 - featured: collapse invalidates a pending list and reopen only accepts the fresh response
+  ---
+  duration_ms: 498.217666
+  ...
+# Subtest: featured: failed first read and incomplete/wrong-page payloads keep unknown totals
+ok 343 - featured: failed first read and incomplete/wrong-page payloads keep unknown totals
+  ---
+  duration_ms: 338.192583
+  ...
+# Subtest: featured: failed next page never displays prior-page cards as current, refresh failure retains only matching page
+ok 344 - featured: failed next page never displays prior-page cards as current, refresh failure retains only matching page
+  ---
+  duration_ms: 353.785542
+  ...
+# Subtest: featured: last-page deletion returns to the last valid page
+ok 345 - featured: last-page deletion returns to the last valid page
+  ---
+  duration_ms: 387.973125
+  ...
+# Subtest: featured: write completion refreshes the current page instead of the page captured by the editor
+ok 346 - featured: write completion refreshes the current page instead of the page captured by the editor
+  ---
+  duration_ms: 327.615083
+  ...
+# Subtest: featured: successful delete with failed refresh remains explicit and single-flight
+ok 347 - featured: successful delete with failed refresh remains explicit and single-flight
+  ---
+  duration_ms: 252.383292
+  ...
+# Subtest: featured: cached old-page row actions cannot mutate or open after page change or collapse
+ok 348 - featured: cached old-page row actions cannot mutate or open after page change or collapse
+  ---
+  duration_ms: 231.510958
+  ...
+# Subtest: featured: unmount discards pending list and prevents post-write background refresh
+ok 349 - featured: unmount discards pending list and prevents post-write background refresh
+  ---
+  duration_ms: 314.785209
+  ...
+# Subtest: featured: failed writes after unmount do not show alerts on another page
+ok 350 - featured: failed writes after unmount do not show alerts on another page
+  ---
+  duration_ms: 272.89025
+  ...
+# Subtest: AI overview never presents failed/loading data as zero revenue or no failures
+ok 351 - AI overview never presents failed/loading data as zero revenue or no failures
+  ---
+  duration_ms: 49.800917
+  ...
+# Subtest: AI overview refresh hides the previous report until current data is known
+ok 352 - AI overview refresh hides the previous report until current data is known
+  ---
+  duration_ms: 53.755417
+  ...
+# Subtest: audit renders one plain sentence per operation, keeps HTTP details folded and owns its cold-entry search styles
+ok 353 - audit renders one plain sentence per operation, keeps HTTP details folded and owns its cold-entry search styles
+  ---
+  duration_ms: 704.276042
+  ...
+# Subtest: audit filters apply server parameters, same-query search retries, and older results never win
+ok 354 - audit filters apply server parameters, same-query search retries, and older results never win
+  ---
+  duration_ms: 203.80525
+  ...
+# Subtest: audit error, retry, genuine empty and zero are distinct; pagination corrects a shrunken final page
+ok 355 - audit error, retry, genuine empty and zero are distinct; pagination corrects a shrunken final page
+  ---
+  duration_ms: 121.182083
+  ...
+# Subtest: audit ignores malformed/business failure and unmounted requests instead of manufacturing valid rows
+ok 356 - audit ignores malformed/business failure and unmounted requests instead of manufacturing valid rows
+  ---
+  duration_ms: 76.888708
+  ...
+# Subtest: distribution paginates beyond fifty independently, preserving real totals and global stone amounts
+ok 357 - distribution paginates beyond fifty independently, preserving real totals and global stone amounts
+  ---
+  duration_ms: 195.008916
+  ...
+# Subtest: distribution filter changes reset both pages, reject saved page handlers and ignore old responses before render
+ok 358 - distribution filter changes reset both pages, reject saved page handlers and ignore old responses before render
+  ---
+  duration_ms: 118.352458
+  ...
+# Subtest: distribution partial failures preserve other tables and each retry only recovers its own source
+ok 359 - distribution partial failures preserve other tables and each retry only recovers its own source
+  ---
+  duration_ms: 82.3915
+  ...
+# Subtest: distribution newest same-scope reads win and page shrink correction stays isolated to its table
+ok 360 - distribution newest same-scope reads win and page shrink correction stays isolated to its table
+  ---
+  duration_ms: 178.719709
+  ...
+# Subtest: distribution invalid response is a failure, missing total stays unknown and wrong page cannot appear as current
+ok 361 - distribution invalid response is a failure, missing total stays unknown and wrong page cannot appear as current
+  ---
+  duration_ms: 113.806833
+  ...
+# Subtest: distribution unmount ignores every pending module result and saved refresh handlers
+ok 362 - distribution unmount ignores every pending module result and saved refresh handlers
+  ---
+  duration_ms: 68.6705
+  ...
+# Subtest: 分享归因显示素材标题；后端拿分享号兜底的标题显示为「未识别素材」，分享号只留尾号
+ok 363 - 分享归因显示素材标题；后端拿分享号兜底的标题显示为「未识别素材」，分享号只留尾号
+  ---
+  duration_ms: 63.677792
+  ...
+# Subtest: 邀请人排行与奖励明细不把 wx_ 登录名当名字或副标题
+ok 364 - 邀请人排行与奖励明细不把 wx_ 登录名当名字或副标题
+  ---
+  duration_ms: 88.605917
+  ...
+# Subtest: technical task payloads stay in a closed diagnostic section after business actions
+ok 365 - technical task payloads stay in a closed diagnostic section after business actions
+  ---
+  duration_ms: 204.743708
+  ...
+# Subtest: refund copy asks operators to verify records rather than promising every failed task was refunded
+ok 366 - refund copy asks operators to verify records rather than promising every failed task was refunded
+  ---
+  duration_ms: 0.955667
+  ...
+# Subtest: Chinese language and user-detail names are consistent across menus and routes
+ok 367 - Chinese language and user-detail names are consistent across menus and routes
+  ---
+  duration_ms: 4.190542
+  ...
+# Subtest: remaining user detail entry copy uses the same business name and preserves its route
+ok 368 - remaining user detail entry copy uses the same business name and preserves its route
+  ---
+  duration_ms: 1.372791
+  ...
+# Subtest: analytics links use exact template IDs, even when names match and group ID differs
+ok 369 - analytics links use exact template IDs, even when names match and group ID differs
+  ---
+  duration_ms: 606.096458
+  ...
+# Subtest: analytics rejects invalid and unsafe IDs without name, group, or broad-list fallbacks
+ok 370 - analytics rejects invalid and unsafe IDs without name, group, or broad-list fallbacks
+  ---
+  duration_ms: 223.799375
+  ...
+# Subtest: featured case links remain exact when template names are absent
+ok 371 - featured case links remain exact when template names are absent
+  ---
+  duration_ms: 199.623541
+  ...
+# Subtest: creator is explicitly same-name search and missing/system values do not imply designer identity
+ok 372 - creator is explicitly same-name search and missing/system values do not imply designer identity
+  ---
+  duration_ms: 168.847625
+  ...
+# Subtest: analytics copy matches creation-time scopes and does not alter backend query filters
+ok 373 - analytics copy matches creation-time scopes and does not alter backend query filters
+  ---
+  duration_ms: 194.333917
+  ...
+# Subtest: initial and failed reads never look like zero metrics or empty rankings, and retry recovers
+ok 374 - initial and failed reads never look like zero metrics or empty rankings, and retry recovers
+  ---
+  duration_ms: 190.780708
+  ...
+# Subtest: refresh hides old rows, coalesces same-render retries, and failed refresh stays unavailable
+ok 375 - refresh hides old rows, coalesces same-render retries, and failed refresh stays unavailable
+  ---
+  duration_ms: 78.553542
+  ...
+# Subtest: older query success and failure cannot overwrite newer rows, loading state, or feedback
+ok 376 - older query success and failure cannot overwrite newer rows, loading state, or feedback
+  ---
+  duration_ms: 190.37475
+  ...
+# Subtest: batched search then reset starts the reset query even when the final keyword equals initial state
+ok 377 - batched search then reset starts the reset query even when the final keyword equals initial state
+  ---
+  duration_ms: 123.028542
+  ...
+# Subtest: unmount aborts all analytics reads and suppresses late success and failure feedback
+ok 378 - unmount aborts all analytics reads and suppresses late success and failure feedback
+  ---
+  duration_ms: 237.558416
+  ...
+# Subtest: real API validators reject incomplete overview and malformed list payloads instead of substituting zeros/empty
+ok 379 - real API validators reject incomplete overview and malformed list payloads instead of substituting zeros/empty
+  ---
+  duration_ms: 781.5675
+  ...
+# Subtest: successful empty lists and known zero overview remain legitimate data
+ok 380 - successful empty lists and known zero overview remain legitimate data
+  ---
+  duration_ms: 57.798959
+  ...
+# Subtest: unmounted analytics callbacks cannot restart GETs or navigate
+ok 381 - unmounted analytics callbacks cannot restart GETs or navigate
+  ---
+  duration_ms: 151.659333
+  ...
+# Subtest: 分类列显示中文名：模板分类 → Tab 配置 → 其他分类，不外露拼音代码
+ok 382 - 分类列显示中文名：模板分类 → Tab 配置 → 其他分类，不外露拼音代码
+  ---
+  duration_ms: 63.794292
+  ...
+# Subtest: legacy leads standalone: legacy enabled only after explicit global-off session
+ok 383 - legacy leads standalone: legacy enabled only after explicit global-off session
+  ---
+  duration_ms: 802.531584
+  ...
+# Subtest: legacy leads standalone: global CRM takeover with customer access
+ok 384 - legacy leads standalone: global CRM takeover with customer access
+  ---
+  duration_ms: 254.150959
+  ...
+# Subtest: legacy leads standalone: global CRM takeover despite missing account access
+ok 385 - legacy leads standalone: global CRM takeover despite missing account access
+  ---
+  duration_ms: 389.066417
+  ...
+# Subtest: legacy leads standalone: global CRM takeover while context is unavailable
+ok 386 - legacy leads standalone: global CRM takeover while context is unavailable
+  ---
+  duration_ms: 223.4215
+  ...
+# Subtest: legacy leads standalone: context still loading
+ok 387 - legacy leads standalone: context still loading
+  ---
+  duration_ms: 263.960292
+  ...
+# Subtest: legacy leads standalone: session loading
+ok 388 - legacy leads standalone: session loading
+  ---
+  duration_ms: 195.592
+  ...
+# Subtest: legacy leads standalone: session error
+ok 389 - legacy leads standalone: session error
+  ---
+  duration_ms: 246.219542
+  ...
+# Subtest: legacy leads standalone: expired session
+ok 390 - legacy leads standalone: expired session
+  ---
+  duration_ms: 217.385917
+  ...
+# Subtest: legacy leads standalone: unknown global switch
+ok 391 - legacy leads standalone: unknown global switch
+  ---
+  duration_ms: 182.992042
+  ...
+# Subtest: legacy leads standalone: CRM-only account
+ok 392 - legacy leads standalone: CRM-only account
+  ---
+  duration_ms: 216.591709
+  ...
+# Subtest: legacy leads standalone: explicit read-only remains restrictive
+ok 393 - legacy leads standalone: explicit read-only remains restrictive
+  ---
+  duration_ms: 153.50075
+  ...
+# Subtest: legacy leads embedded: legacy enabled only after explicit global-off session
+ok 394 - legacy leads embedded: legacy enabled only after explicit global-off session
+  ---
+  duration_ms: 129.107667
+  ...
+# Subtest: legacy leads embedded: global CRM takeover with customer access
+ok 395 - legacy leads embedded: global CRM takeover with customer access
+  ---
+  duration_ms: 274.461333
+  ...
+# Subtest: legacy leads embedded: global CRM takeover despite missing account access
+ok 396 - legacy leads embedded: global CRM takeover despite missing account access
+  ---
+  duration_ms: 141.439375
+  ...
+# Subtest: legacy leads embedded: global CRM takeover while context is unavailable
+ok 397 - legacy leads embedded: global CRM takeover while context is unavailable
+  ---
+  duration_ms: 209.328583
+  ...
+# Subtest: legacy leads embedded: context still loading
+ok 398 - legacy leads embedded: context still loading
+  ---
+  duration_ms: 241.693291
+  ...
+# Subtest: legacy leads embedded: session loading
+ok 399 - legacy leads embedded: session loading
+  ---
+  duration_ms: 269.505625
+  ...
+# Subtest: legacy leads embedded: session error
+ok 400 - legacy leads embedded: session error
+  ---
+  duration_ms: 183.058084
+  ...
+# Subtest: legacy leads embedded: expired session
+ok 401 - legacy leads embedded: expired session
+  ---
+  duration_ms: 157.030417
+  ...
+# Subtest: legacy leads embedded: unknown global switch
+ok 402 - legacy leads embedded: unknown global switch
+  ---
+  duration_ms: 149.657041
+  ...
+# Subtest: legacy leads embedded: CRM-only account
+ok 403 - legacy leads embedded: CRM-only account
+  ---
+  duration_ms: 192.2695
+  ...
+# Subtest: legacy leads embedded: explicit read-only remains restrictive
+ok 404 - legacy leads embedded: explicit read-only remains restrictive
+  ---
+  duration_ms: 154.3045
+  ...
+# Subtest: legacy batch/detail actions and a saved handler cannot bypass global takeover or session expiration
+ok 405 - legacy batch/detail actions and a saved handler cannot bypass global takeover or session expiration
+  ---
+  duration_ms: 202.981583
+  ...
+# Subtest: 旧地址 tab=leads|sync|access 对平台管理员重定向到新位置，其他账号不跳转
+ok 406 - 旧地址 tab=leads|sync|access 对平台管理员重定向到新位置，其他账号不跳转
+  ---
+  duration_ms: 1573.093167
+  ...
+# Subtest: access: refreshed lists cannot silently rebase an old permission draft after conflict
+ok 407 - access: refreshed lists cannot silently rebase an old permission draft after conflict
+  ---
+  duration_ms: 69.28375
+  ...
+# Subtest: access: explicit reload replaces the draft with the reviewed current permissions
+ok 408 - access: explicit reload replaces the draft with the reviewed current permissions
+  ---
+  duration_ms: 81.311959
+  ...
+# Subtest: access: unavailable latest permissions keep the conflict blocked and preserve the draft
+ok 409 - access: unavailable latest permissions keep the conflict blocked and preserve the draft
+  ---
+  duration_ms: 76.296041
+  ...
+# Subtest: access: non-conflict failures retain the original snapshot even if list reload advances its version
+ok 410 - access: non-conflict failures retain the original snapshot even if list reload advances its version
+  ---
+  duration_ms: 72.306209
+  ...
+# Subtest: access: late success from A cannot close or modify a newer B editor
+ok 411 - access: late success from A cannot close or modify a newer B editor
+  ---
+  duration_ms: 95.100125
+  ...
+# Subtest: access: late failure from A cannot close or modify a newer B editor
+ok 412 - access: late failure from A cannot close or modify a newer B editor
+  ---
+  duration_ms: 60.784083
+  ...
+# Subtest: access: a late latest-version read cannot replace a newer selected account
+ok 413 - access: a late latest-version read cannot replace a newer selected account
+  ---
+  duration_ms: 47.546375
+  ...
+# Subtest: access: changing a platform administrator still requires the existing downgrade confirmation
+ok 414 - access: changing a platform administrator still requires the existing downgrade confirmation
+  ---
+  duration_ms: 64.082875
+  ...
+# Subtest: access: stale submit handlers cannot save A after selecting B or bypass a detected conflict
+ok 415 - access: stale submit handlers cannot save A after selecting B or bypass a detected conflict
+  ---
+  duration_ms: 33.800208
+  ...
+# Subtest: new CRM report: idle Escape invokes the real parent cancel once
+ok 416 - new CRM report: idle Escape invokes the real parent cancel once
+  ---
+  duration_ms: 1241.969083
+  ...
+# Subtest: new CRM report: same-frame submit locks both Escape and cached cancel until rejection
+ok 417 - new CRM report: same-frame submit locks both Escape and cached cancel until rejection
+  ---
+  duration_ms: 441.492834
+  ...
+# Subtest: new CRM report: composition and already-consumed palette keys do not dismiss the report
+ok 418 - new CRM report: composition and already-consumed palette keys do not dismiss the report
+  ---
+  duration_ms: 423.607375
+  ...
+# Subtest: report keyboard: old target and unmounted handlers cannot dismiss the newer editor
+ok 419 - report keyboard: old target and unmounted handlers cannot dismiss the newer editor
+  ---
+  duration_ms: 72.889666
+  ...
+# Subtest: embedded report Escape goes through the real drawer mode guard and retains the detail drawer
+ok 420 - embedded report Escape goes through the real drawer mode guard and retains the detail drawer
+  ---
+  duration_ms: 412.095375
+  ...
+# Subtest: legacy pending close guard: failure unlocks after all same-frame close/reopen attempts are refused
+ok 421 - legacy pending close guard: failure unlocks after all same-frame close/reopen attempts are refused
+  ---
+  duration_ms: 269.920667
+  ...
+# Subtest: legacy pending close guard: success unlocks after all same-frame close/reopen attempts are refused
+ok 422 - legacy pending close guard: success unlocks after all same-frame close/reopen attempts are refused
+  ---
+  duration_ms: 243.298958
+  ...
+# Subtest: customer lead style compilation remains confined to both authorized CRM entrances
+ok 423 - customer lead style compilation remains confined to both authorized CRM entrances
+  ---
+  duration_ms: 33.679333
+  ...
+# Subtest: lead dialog scroll contract at 320×568
+ok 424 - lead dialog scroll contract at 320×568
+  ---
+  duration_ms: 3.417375
+  ...
+# Subtest: lead dialog scroll contract at 768×1024
+ok 425 - lead dialog scroll contract at 768×1024
+  ---
+  duration_ms: 18.986375
+  ...
+# Subtest: lead dialog scroll contract at 769×600
+ok 426 - lead dialog scroll contract at 769×600
+  ---
+  duration_ms: 1.980833
+  ...
+# Subtest: lead dialog scroll contract at 900×500
+ok 427 - lead dialog scroll contract at 900×500
+  ---
+  duration_ms: 0.631833
+  ...
+# Subtest: lead dialog scroll contract at 1200×480
+ok 428 - lead dialog scroll contract at 1200×480
+  ---
+  duration_ms: 0.438417
+  ...
+# Subtest: search can shrink below the previous 260px floor without losing its input width
+ok 429 - search can shrink below the previous 260px floor without losing its input width
+  ---
+  duration_ms: 0.848
+  ...
+# Subtest: /customer-leads 320px: combined CSS keeps only the body scrolling, page CSS first
+ok 430 - /customer-leads 320px: combined CSS keeps only the body scrolling, page CSS first
+  ---
+  duration_ms: 17.261125
+  ...
+# Subtest: /customer-leads 320px: combined CSS keeps only the body scrolling, page CSS last
+ok 431 - /customer-leads 320px: combined CSS keeps only the body scrolling, page CSS last
+  ---
+  duration_ms: 16.678584
+  ...
+# Subtest: /customer-leads 365px: combined CSS keeps only the body scrolling, page CSS first
+ok 432 - /customer-leads 365px: combined CSS keeps only the body scrolling, page CSS first
+  ---
+  duration_ms: 82.928083
+  ...
+# Subtest: /customer-leads 365px: combined CSS keeps only the body scrolling, page CSS last
+ok 433 - /customer-leads 365px: combined CSS keeps only the body scrolling, page CSS last
+  ---
+  duration_ms: 5.656667
+  ...
+# Subtest: /customer-leads 768px: combined CSS keeps only the body scrolling, page CSS first
+ok 434 - /customer-leads 768px: combined CSS keeps only the body scrolling, page CSS first
+  ---
+  duration_ms: 17.331375
+  ...
+# Subtest: /customer-leads 768px: combined CSS keeps only the body scrolling, page CSS last
+ok 435 - /customer-leads 768px: combined CSS keeps only the body scrolling, page CSS last
+  ---
+  duration_ms: 4.988167
+  ...
+# Subtest: /customer-management 320px: combined CSS keeps only the body scrolling, page CSS first
+ok 436 - /customer-management 320px: combined CSS keeps only the body scrolling, page CSS first
+  ---
+  duration_ms: 36.504375
+  ...
+# Subtest: /customer-management 320px: combined CSS keeps only the body scrolling, page CSS last
+ok 437 - /customer-management 320px: combined CSS keeps only the body scrolling, page CSS last
+  ---
+  duration_ms: 9.941542
+  ...
+# Subtest: /customer-management 365px: combined CSS keeps only the body scrolling, page CSS first
+ok 438 - /customer-management 365px: combined CSS keeps only the body scrolling, page CSS first
+  ---
+  duration_ms: 43.132542
+  ...
+# Subtest: /customer-management 365px: combined CSS keeps only the body scrolling, page CSS last
+ok 439 - /customer-management 365px: combined CSS keeps only the body scrolling, page CSS last
+  ---
+  duration_ms: 4.694291
+  ...
+# Subtest: /customer-management 768px: combined CSS keeps only the body scrolling, page CSS first
+ok 440 - /customer-management 768px: combined CSS keeps only the body scrolling, page CSS first
+  ---
+  duration_ms: 38.090083
+  ...
+# Subtest: /customer-management 768px: combined CSS keeps only the body scrolling, page CSS last
+ok 441 - /customer-management 768px: combined CSS keeps only the body scrolling, page CSS last
+  ---
+  duration_ms: 4.627917
+  ...
+# Subtest: mobile specificity override does not leak to another route
+ok 442 - mobile specificity override does not leak to another route
+  ---
+  duration_ms: 2.5515
+  ...
+# Subtest: report edit: 409 retains draft and original version until explicit latest-version review
+ok 443 - report edit: 409 retains draft and original version until explicit latest-version review
+  ---
+  duration_ms: 413.839292
+  ...
+# Subtest: report edit: explicit reload replaces input; failed or redirected latest detail never grants save
+ok 444 - report edit: explicit reload replaces input; failed or redirected latest detail never grants save
+  ---
+  duration_ms: 168.497041
+  ...
+# Subtest: report: duplicate same-frame create submits once and a failing completion callback cannot imply an unsaved write
+ok 445 - report: duplicate same-frame create submits once and a failing completion callback cannot imply an unsaved write
+  ---
+  duration_ms: 174.081959
+  ...
+# Subtest: report: late A write and latest-detail reads cannot populate a later B form or call its saved callback
+ok 446 - report: late A write and latest-detail reads cannot populate a later B form or call its saved callback
+  ---
+  duration_ms: 78.439125
+  ...
+# Subtest: report review: same-frame duplicate review is locked and acknowledged review stays terminal
+ok 447 - report review: same-frame duplicate review is locked and acknowledged review stays terminal
+  ---
+  duration_ms: 145.528959
+  ...
+# Subtest: customer form: explicit review uses latest version, offers reset, and locks duplicate writes
+ok 448 - customer form: explicit review uses latest version, offers reset, and locks duplicate writes
+  ---
+  duration_ms: 498.671875
+  ...
+# Subtest: workflow: transfer keeps the editor snapshot after prop refresh and 409 requires explicit review
+ok 449 - workflow: transfer keeps the editor snapshot after prop refresh and 409 requires explicit review
+  ---
+  duration_ms: 164.530708
+  ...
+# Subtest: workflow merge: source and target versions are both reviewed; target identity mismatch blocks submission
+ok 450 - workflow merge: source and target versions are both reviewed; target identity mismatch blocks submission
+  ---
+  duration_ms: 195.433458
+  ...
+# Subtest: workflow: same-frame duplicate writes are locked and success is not relabeled after a callback failure
+ok 451 - workflow: same-frame duplicate writes are locked and success is not relabeled after a callback failure
+  ---
+  duration_ms: 148.284542
+  ...
+# Subtest: legacy leads: write succeeds then detail read fails, leaving a saved notice and no resubmittable dialog
+ok 452 - legacy leads: write succeeds then detail read fails, leaving a saved notice and no resubmittable dialog
+  ---
+  duration_ms: 422.280708
+  ...
+# Subtest: legacy leads: list refresh failure after acknowledged write never restores the completed editor
+ok 453 - legacy leads: list refresh failure after acknowledged write never restores the completed editor
+  ---
+  duration_ms: 330.988958
+  ...
+# Subtest: customer drawer: acknowledged claim survives detail refresh failure and retry only reads
+ok 454 - customer drawer: acknowledged claim survives detail refresh failure and retry only reads
+  ---
+  duration_ms: 333.185292
+  ...
+# Subtest: pool capability: machine clock 2025-01-01 never grants an unverified claim
+ok 455 - pool capability: machine clock 2025-01-01 never grants an unverified claim
+  ---
+  duration_ms: 405.840125
+  ...
+# Subtest: pool capability: machine clock 2030-01-01 never grants an unverified claim
+ok 456 - pool capability: machine clock 2030-01-01 never grants an unverified claim
+  ---
+  duration_ms: 433.70975
+  ...
+# Subtest: pool capability: server pool-query evidence is tied to the exact customer and cannot pass through a merged redirect
+ok 457 - pool capability: server pool-query evidence is tied to the exact customer and cannot pass through a merged redirect
+  ---
+  duration_ms: 328.492834
+  ...
+# Subtest: pool capability: late A detail cannot reopen claim or transfer pool evidence after selecting B
+ok 458 - pool capability: late A detail cannot reopen claim or transfer pool evidence after selecting B
+  ---
+  duration_ms: 328.614667
+  ...
+# Subtest: pool rows attach server-query evidence only while their own query result is current
+ok 459 - pool rows attach server-query evidence only while their own query result is current
+  ---
+  duration_ms: 349.898042
+  ...
+# Subtest: session cache: reset clears badges and rejects late publication, including the same user logging in again
+ok 460 - session cache: reset clears badges and rejects late publication, including the same user logging in again
+  ---
+  duration_ms: 5.267125
+  ...
+# Subtest: session provider: logout, refresh and failed me checks invalidate overview counts immediately
+ok 461 - session provider: logout, refresh and failed me checks invalidate overview counts immediately
+  ---
+  duration_ms: 25.054834
+  ...
+# Subtest: session cache: a pending A overview cannot populate B page data or navigation badges
+ok 462 - session cache: a pending A overview cannot populate B page data or navigation badges
+  ---
+  duration_ms: 280.551583
+  ...
+# Subtest: push retry: same-frame duplicate clicks submit once; acknowledged retry stays removed after read failure
+ok 463 - push retry: same-frame duplicate clicks submit once; acknowledged retry stays removed after read failure
+  ---
+  duration_ms: 107.374542
+  ...
+# Subtest: push retry: failures release only their own lock and a successful refresh clears the old error
+ok 464 - push retry: failures release only their own lock and a successful refresh clears the old error
+  ---
+  duration_ms: 94.222375
+  ...
+# Subtest: notice seen and sync retry both reject same-frame duplicate handlers
+ok 465 - notice seen and sync retry both reject same-frame duplicate handlers
+  ---
+  duration_ms: 132.234708
+  ...
+# Subtest: statistics: embedded high-intent count uses the pending queue and the long scope explanation is gone
+ok 466 - statistics: embedded high-intent count uses the pending queue and the long scope explanation is gone
+  ---
+  duration_ms: 146.2895
+  ...
+# Subtest: statistics: standalone user filter says the queue numbers above are global
+ok 467 - statistics: standalone user filter says the queue numbers above are global
+  ---
+  duration_ms: 118.632042
+  ...
+# Subtest: statistics: the high-intent queue counts only leads still to follow up
+ok 468 - statistics: the high-intent queue counts only leads still to follow up
+  ---
+  duration_ms: 6.249291
+  ...
+# Subtest: statistics: initial overview failure is unavailable, never a confirmed zero
+ok 469 - statistics: initial overview failure is unavailable, never a confirmed zero
+  ---
+  duration_ms: 91.169916
+  ...
+# Subtest: unmount: late report/workflow writes and push status reads cannot write state or invoke completion
+ok 470 - unmount: late report/workflow writes and push status reads cannot write state or invoke completion
+  ---
+  duration_ms: 221.378791
+  ...
+# Subtest: pool evidence expires after a successful claim changes the customer version
+ok 471 - pool evidence expires after a successful claim changes the customer version
+  ---
+  duration_ms: 133.51
+  ...
+# Subtest: report target switching is blocked before the new target form initialization effect runs
+ok 472 - report target switching is blocked before the new target form initialization effect runs
+  ---
+  duration_ms: 32.412458
+  ...
+# Subtest: legacy save detail completion after logout never refreshes the new session or writes after unmount
+ok 473 - legacy save detail completion after logout never refreshes the new session or writes after unmount
+  ---
+  duration_ms: 102.40825
+  ...
+# Subtest: standalone overview labels distinguish full pending totals from today new records
+ok 474 - standalone overview labels distinguish full pending totals from today new records
+  ---
+  duration_ms: 26.495292
+  ...
+# Subtest: sync accepted writes cannot replay through an old handler while its refresh fails
+ok 475 - sync accepted writes cannot replay through an old handler while its refresh fails
+  ---
+  duration_ms: 52.018625
+  ...
+# Subtest: pool evidence cannot grant claim or release for terminal/excluded won state even at the same version
+ok 476 - pool evidence cannot grant claim or release for terminal/excluded won state even at the same version
+  ---
+  duration_ms: 177.807458
+  ...
+# Subtest: pool evidence cannot grant claim or release for terminal/excluded archived state even at the same version
+ok 477 - pool evidence cannot grant claim or release for terminal/excluded archived state even at the same version
+  ---
+  duration_ms: 139.673708
+  ...
+# Subtest: pool evidence cannot grant claim or release for terminal/excluded pending state even at the same version
+ok 478 - pool evidence cannot grant claim or release for terminal/excluded pending state even at the same version
+  ---
+  duration_ms: 169.781292
+  ...
+# Subtest: report edit: a server ownership rejection preserves the draft and requires a fresh review
+ok 479 - report edit: a server ownership rejection preserves the draft and requires a fresh review
+  ---
+  duration_ms: 20.789791
+  ...
+# Subtest: legacy post-save refresh uses the newest query even before its replacement effect runs
+ok 480 - legacy post-save refresh uses the newest query even before its replacement effect runs
+  ---
+  duration_ms: 57.421083
+  ...
+# Subtest: legacy query identity rejects an older read between render and the next filter effect
+ok 481 - legacy query identity rejects an older read between render and the next filter effect
+  ---
+  duration_ms: 64.74625
+  ...
+# Subtest: drawer shared gate: pending edit cannot close, cancel or reopen to submit again
+ok 482 - drawer shared gate: pending edit cannot close, cancel or reopen to submit again
+  ---
+  duration_ms: 103.603417
+  ...
+# Subtest: drawer shared gate: pending report cannot close, cancel or reopen to submit again
+ok 483 - drawer shared gate: pending report cannot close, cancel or reopen to submit again
+  ---
+  duration_ms: 102.745916
+  ...
+# Subtest: drawer shared gate: workflow writes block detail Escape, header, mode switch and pool navigation
+ok 484 - drawer shared gate: workflow writes block detail Escape, header, mode switch and pool navigation
+  ---
+  duration_ms: 111.215
+  ...
+# Subtest: drawer shared gate: claim owns the same pending lock through header, Escape and pool exits
+ok 485 - drawer shared gate: claim owns the same pending lock through header, Escape and pool exits
+  ---
+  duration_ms: 100.440375
+  ...
+# Subtest: drawer shared gate: forced unmount ignores late completion while the lease releases exactly once
+ok 486 - drawer shared gate: forced unmount ignores late completion while the lease releases exactly once
+  ---
+  duration_ms: 84.414792
+  ...
+# Subtest: drawer identity: returned protected B for requested A exposes no edit, workflow or claim entry
+ok 487 - drawer identity: returned protected B for requested A exposes no edit, workflow or claim entry
+  ---
+  duration_ms: 78.303417
+  ...
+# Subtest: drawer identity: returned pool B for requested A exposes no edit, workflow or claim entry
+ok 488 - drawer identity: returned pool B for requested A exposes no edit, workflow or claim entry
+  ---
+  duration_ms: 65.602458
+  ...
+# Subtest: drawer identity: cached real edit child cannot write while reloading or after a merged redirect
+ok 489 - drawer identity: cached real edit child cannot write while reloading or after a merged redirect
+  ---
+  duration_ms: 56.199167
+  ...
+# Subtest: drawer identity: cached real report child cannot write while reloading or after a merged redirect
+ok 490 - drawer identity: cached real report child cannot write while reloading or after a merged redirect
+  ---
+  duration_ms: 51.479125
+  ...
+# Subtest: drawer identity: cached real workflow child cannot write while reloading or after a merged redirect
+ok 491 - drawer identity: cached real workflow child cannot write while reloading or after a merged redirect
+  ---
+  duration_ms: 45.943166
+  ...
+# Subtest: drawer identity: cached claim cannot follow a canonical redirect or a new selection
+ok 492 - drawer identity: cached claim cannot follow a canonical redirect or a new selection
+  ---
+  duration_ms: 63.731958
+  ...
+# Subtest: designer list distinguishes initial loading, failure, retry recovery and a successful empty result
+ok 493 - designer list distinguishes initial loading, failure, retry recovery and a successful empty result
+  ---
+  duration_ms: 198.90375
+  ...
+# Subtest: missing designer summary or individual metrics stay unknown while real zero remains zero
+ok 494 - missing designer summary or individual metrics stay unknown while real zero remains zero
+  ---
+  duration_ms: 36.7175
+  ...
+# Subtest: late list success or failure cannot replace the new scope, selection, loading or recovery state
+ok 495 - late list success or failure cannot replace the new scope, selection, loading or recovery state
+  ---
+  duration_ms: 26.539167
+  ...
+# Subtest: filter handlers invalidate old list success and write handlers before rerender or effects
+ok 496 - filter handlers invalidate old list success and write handlers before rerender or effects
+  ---
+  duration_ms: 159.632041
+  ...
+# Subtest: a failed refresh removes previously actionable designers and does not manufacture zero statistics
+ok 497 - a failed refresh removes previously actionable designers and does not manufacture zero statistics
+  ---
+  duration_ms: 10.71875
+  ...
+# Subtest: write completion refreshes only current filters and preserves a newer selected designer
+ok 498 - write completion refreshes only current filters and preserves a newer selected designer
+  ---
+  duration_ms: 40.172042
+  ...
+# Subtest: write completion superseded by another filter cannot commit its refresh or reload the old detail
+ok 499 - write completion superseded by another filter cannot commit its refresh or reload the old detail
+  ---
+  duration_ms: 29.1495
+  ...
+# Subtest: same-target writes reload matching details, block repeated submissions and recover after scoped inline failure
+ok 500 - same-target writes reload matching details, block repeated submissions and recover after scoped inline failure
+  ---
+  duration_ms: 51.823541
+  ...
+# Subtest: write failures are scoped to the original selection and filter generation
+ok 501 - write failures are scoped to the original selection and filter generation
+  ---
+  duration_ms: 25.330417
+  ...
+# Subtest: unmount suppresses list/detail/write results, errors, refreshes, and state cleanup
+ok 502 - unmount suppresses list/detail/write results, errors, refreshes, and state cleanup
+  ---
+  duration_ms: 27.993667
+  ...
+# Subtest: designer pagination uses server total with 20-row requests and keeps global statistics distinct
+ok 503 - designer pagination uses server total with 20-row requests and keeps global statistics distinct
+  ---
+  duration_ms: 5.899875
+  ...
+# Subtest: each designer filter, keyword search and reset returns pagination to page one
+ok 504 - each designer filter, keyword search and reset returns pagination to page one
+  ---
+  duration_ms: 60.609916
+  ...
+# Subtest: a shrinking final designer page automatically reloads its valid predecessor after a write
+ok 505 - a shrinking final designer page automatically reloads its valid predecessor after a write
+  ---
+  duration_ms: 5.915458
+  ...
+# Subtest: late page results cannot restore an old page and a pending write refreshes the current page
+ok 506 - late page results cannot restore an old page and a pending write refreshes the current page
+  ---
+  duration_ms: 7.470833
+  ...
+# Subtest: missing total leaves pagination unavailable instead of treating the current slice as all results
+ok 507 - missing total leaves pagination unavailable instead of treating the current slice as all results
+  ---
+  duration_ms: 3.329917
+  ...
+# Subtest: write completion reloads the same target in a newer current scope without restoring its old filters
+ok 508 - write completion reloads the same target in a newer current scope without restoring its old filters
+  ---
+  duration_ms: 9.525625
+  ...
+# Subtest: request generation guards overlapping refreshes even when their filters are identical
+ok 509 - request generation guards overlapping refreshes even when their filters are identical
+  ---
+  duration_ms: 96.410209
+  ...
+# Subtest: unmount during a successful write refresh suppresses subsequent details and final cleanup
+ok 510 - unmount during a successful write refresh suppresses subsequent details and final cleanup
+  ---
+  duration_ms: 5.22225
+  ...
+# Subtest: same-ID list status changes invalidate detail actions until refreshed details arrive
+ok 511 - same-ID list status changes invalidate detail actions until refreshed details arrive
+  ---
+  duration_ms: 53.17925
+  ...
+# Subtest: same-ID list refresh retains unchanged details but replaces a pending pre-refresh detail request
+ok 512 - same-ID list refresh retains unchanged details but replaces a pending pre-refresh detail request
+  ---
+  duration_ms: 6.929
+  ...
+# PASS slow A / fast B: A cannot overwrite B; displayed B action targets only B
+# PASS A succeeded / B failed: A clears immediately, stale A handler is blocked, B failure is local and retryable
+# PASS late A error cannot replace B success or its loading/error state
+# PASS response identity mismatch hides all write controls instead of binding them to the selected list row
+# PASS finishing A action after selecting B keeps B selected and does not start an obsolete A detail reload
+# PASS unmount invalidates pending detail requests
+# PASS same-frame repeated visibility/service handlers each issue exactly one write request
+# Subtest: Designer selection cannot display or write another user after asynchronous responses
+ok 513 - Designer selection cannot display or write another user after asynchronous responses
+  ---
+  duration_ms: 154.52225
+  ...
+# Subtest: 设计师列表与详情不把 wx_ 登录名当名字
+ok 514 - 设计师列表与详情不把 wx_ 登录名当名字
+  ---
+  duration_ms: 5.090375
+  ...
+# Subtest: 设计师真实 profile 昵称保留 wx_ 前缀，列表登录名兜底仍隐藏
+ok 515 - 设计师真实 profile 昵称保留 wx_ 前缀，列表登录名兜底仍隐藏
+  ---
+  duration_ms: 2.528125
+  ...
+# Subtest: modal-content: gets a named dialog, neutral focus, and Escape through the original close
+ok 516 - modal-content: gets a named dialog, neutral focus, and Escape through the original close
+  ---
+  duration_ms: 44.063958
+  ...
+# Subtest: cert-drawer: gets a named dialog, neutral focus, and Escape through the original close
+ok 517 - cert-drawer: gets a named dialog, neutral focus, and Escape through the original close
+  ---
+  duration_ms: 1.738209
+  ...
+# Subtest: order-drawer: gets a named dialog, neutral focus, and Escape through the original close
+ok 518 - order-drawer: gets a named dialog, neutral focus, and Escape through the original close
+  ---
+  duration_ms: 1.487583
+  ...
+# Subtest: aip-modal: gets a named dialog, neutral focus, and Escape through the original close
+ok 519 - aip-modal: gets a named dialog, neutral focus, and Escape through the original close
+  ---
+  duration_ms: 9.457
+  ...
+# Subtest: aca-modal: gets a named dialog, neutral focus, and Escape through the original close
+ok 520 - aca-modal: gets a named dialog, neutral focus, and Escape through the original close
+  ---
+  duration_ms: 19.563042
+  ...
+# Subtest: aca-preview: gets a named dialog, neutral focus, and Escape through the original close
+ok 521 - aca-preview: gets a named dialog, neutral focus, and Escape through the original close
+  ---
+  duration_ms: 1.474042
+  ...
+# Subtest: two equal-z certification dialogs close only the last layer and restore its trigger
+ok 522 - two equal-z certification dialogs close only the last layer and restore its trigger
+  ---
+  duration_ms: 3.907583
+  ...
+# Subtest: a refund modal wins over a later-in-DOM order drawer by z-index
+ok 523 - a refund modal wins over a later-in-DOM order drawer by z-index
+  ---
+  duration_ms: 4.164625
+  ...
+# Subtest: disabled or aria-disabled close consumes Escape without closing a lower layer
+ok 524 - disabled or aria-disabled close consumes Escape without closing a lower layer
+  ---
+  duration_ms: 4.095916
+  ...
+# Subtest: an enabled close with a submission guard retains the original callback semantics
+ok 525 - an enabled close with a submission guard retains the original callback semantics
+  ---
+  duration_ms: 21.637375
+  ...
+# Subtest: Tab cycles within the top dialog and skips hidden, disabled, and negative-tabindex controls
+ok 526 - Tab cycles within the top dialog and skips hidden, disabled, and negative-tabindex controls
+  ---
+  duration_ms: 3.53625
+  ...
+# Subtest: an empty or confirmation-only dialog starts on its container, not the destructive action
+ok 527 - an empty or confirmation-only dialog starts on its container, not the destructive action
+  ---
+  duration_ms: 1.611583
+  ...
+# Subtest: autofocus is preserved and focus returns to the actual opener
+ok 528 - autofocus is preserved and focus returns to the actual opener
+  ---
+  duration_ms: 7.989458
+  ...
+# Subtest: expanding details inside an existing dialog preserves current focus and return target
+ok 529 - expanding details inside an existing dialog preserves current focus and return target
+  ---
+  duration_ms: 34.189125
+  ...
+# Subtest: removing both dialog layers restores the connected original opener
+ok 530 - removing both dialog layers restores the connected original opener
+  ---
+  duration_ms: 35.409625
+  ...
+# Subtest: the production palette Escape closes once, leaves the modal open, and restores its focus
+ok 531 - the production palette Escape closes once, leaves the modal open, and restores its focus
+  ---
+  duration_ms: 51.36275
+  ...
+# Subtest: the production palette traps Tab above a mobile sidebar and stops Escape reaching it
+ok 532 - the production palette traps Tab above a mobile sidebar and stops Escape reaching it
+  ---
+  duration_ms: 69.714625
+  ...
+# Subtest: palette cleanup restores focus for backdrop dismissal and skips detached route openers
+ok 533 - palette cleanup restores focus for backdrop dismissal and skips detached route openers
+  ---
+  duration_ms: 124.519042
+  ...
+# Subtest: existing labels survive and cleanup removes listeners/observer without old-page focus
+ok 534 - existing labels survive and cleanup removes listeners/observer without old-page focus
+  ---
+  duration_ms: 1.134959
+  ...
+# Subtest: scope covers the reviewed 24 routes without taking over unrelated pages
+ok 535 - scope covers the reviewed 24 routes without taking over unrelated pages
+  ---
+  duration_ms: 1.553875
+  ...
+# Subtest: /templates: generic modal gets focus trapping and guarded Escape
+ok 536 - /templates: generic modal gets focus trapping and guarded Escape
+  ---
+  duration_ms: 7.89375
+  ...
+# Subtest: /inspirations: generic modal gets focus trapping and guarded Escape
+ok 537 - /inspirations: generic modal gets focus trapping and guarded Escape
+  ---
+  duration_ms: 3.031084
+  ...
+# Subtest: /support-tickets: generic modal gets focus trapping and guarded Escape
+ok 538 - /support-tickets: generic modal gets focus trapping and guarded Escape
+  ---
+  duration_ms: 48.016583
+  ...
+# Subtest: /utility-tools: generic modal gets focus trapping and guarded Escape
+ok 539 - /utility-tools: generic modal gets focus trapping and guarded Escape
+  ---
+  duration_ms: 3.875125
+  ...
+# Subtest: /oss: generic modal gets focus trapping and guarded Escape
+ok 540 - /oss: generic modal gets focus trapping and guarded Escape
+  ---
+  duration_ms: 5.306333
+  ...
+# Subtest: /customer-leads: only the top legacy lead layer closes, returns focus, and yields to the palette
+ok 541 - /customer-leads: only the top legacy lead layer closes, returns focus, and yields to the palette
+  ---
+  duration_ms: 36.489333
+  ...
+# Subtest: /customer-management: only the top legacy lead layer closes, returns focus, and yields to the palette
+ok 542 - /customer-management: only the top legacy lead layer closes, returns focus, and yields to the palette
+  ---
+  duration_ms: 80.700833
+  ...
+# Subtest: CRM self-managed drawer is excluded and keeps focus/keys above a legacy lead dialog
+ok 543 - CRM self-managed drawer is excluded and keeps focus/keys above a legacy lead dialog
+  ---
+  duration_ms: 1.844416
+  ...
+# Subtest: shared keyboard keeps the real pending legacy editor open and cannot reopen a duplicate write
+ok 544 - shared keyboard keeps the real pending legacy editor open and cannot reopen a duplicate write
+  ---
+  duration_ms: 576.276417
+  ...
+# Subtest: 显示名：昵称 → 脱敏手机号 → 微信用户 \#ID
+ok 545 - 显示名：昵称 → 脱敏手机号 → 微信用户 \#ID
+  ---
+  duration_ms: 2.553458
+  ...
+# Subtest: 显示名：display_name 是后端拿用户名兜底的值，wx_ 开头时同样不展示
+ok 546 - 显示名：display_name 是后端拿用户名兜底的值，wx_ 开头时同样不展示
+  ---
+  duration_ms: 0.340208
+  ...
+# Subtest: 显示名：人工设置的登录名（非 wx_）仍可作为最后的名字
+ok 547 - 显示名：人工设置的登录名（非 wx_）仍可作为最后的名字
+  ---
+  duration_ms: 0.171791
+  ...
+# Subtest: 手机号脱敏：11 位保留前 3 后 4
+ok 548 - 手机号脱敏：11 位保留前 3 后 4
+  ---
+  duration_ms: 0.746375
+  ...
+# Subtest: AI 场景代码换成中文名，未知代码保持原样
+ok 549 - AI 场景代码换成中文名，未知代码保持原样
+  ---
+  duration_ms: 0.338542
+  ...
+# Subtest: 任务状态与模型：failed 显示失败，模型只区分主力/备用服务
+ok 550 - 任务状态与模型：failed 显示失败，模型只区分主力/备用服务
+  ---
+  duration_ms: 0.201959
+  ...
+# Subtest: 长编号只显示后 6 位，短编号原样
+ok 551 - 长编号只显示后 6 位，短编号原样
+  ---
+  duration_ms: 1.635791
+  ...
+# Subtest: 工单与告警里的任务描述翻成中文
+ok 552 - 工单与告警里的任务描述翻成中文
+  ---
+  duration_ms: 0.721208
+  ...
+# Subtest: 线索来源显示中文，未知来源不外露代码
+ok 553 - 线索来源显示中文，未知来源不外露代码
+  ---
+  duration_ms: 0.254708
+  ...
+# Subtest: membershipOperations：用户名统一走 formatUserName，不把 wx_ 登录名当名字或副标题
+ok 554 - membershipOperations：用户名统一走 formatUserName，不把 wx_ 登录名当名字或副标题
+  ---
+  duration_ms: 0.865417
+  ...
+# Subtest: virtualPay：用户名统一走 formatUserName，不把 wx_ 登录名当名字或副标题
+ok 555 - virtualPay：用户名统一走 formatUserName，不把 wx_ 登录名当名字或副标题
+  ---
+  duration_ms: 0.297625
+  ...
+# Subtest: AI 定价表：成本列标为「近 7 日成本」，不再出现空的「场景标识」
+ok 556 - AI 定价表：成本列标为「近 7 日成本」，不再出现空的「场景标识」
+  ---
+  duration_ms: 0.340334
+  ...
+# Subtest: 审查补充：用户手写的工单内容不被误改，只翻译能确认的代码
+ok 557 - 审查补充：用户手写的工单内容不被误改，只翻译能确认的代码
+  ---
+  duration_ms: 0.16425
+  ...
+# Subtest: 审查补充：display_name 只是后端拿登录名兜底时，不抢在手机号前面
+ok 558 - 审查补充：display_name 只是后端拿登录名兜底时，不抢在手机号前面
+  ---
+  duration_ms: 0.241542
+  ...
+# Subtest: 真实 profile 昵称不按生成登录名的前缀隐藏
+ok 559 - 真实 profile 昵称不按生成登录名的前缀隐藏
+  ---
+  duration_ms: 0.162792
+  ...
+# Subtest: inspiration upload only updates its original editor and never starts remaining files after cancel
+ok 560 - inspiration upload only updates its original editor and never starts remaining files after cancel
+  ---
+  duration_ms: 609.31725
+  ...
+# Subtest: inspiration same-ID reopen, late upload failure and stale image/delete/save handlers cannot touch a newer draft
+ok 561 - inspiration same-ID reopen, late upload failure and stale image/delete/save handlers cannot touch a newer draft
+  ---
+  duration_ms: 293.264417
+  ...
+# Subtest: inspiration uploads enforce nine-image cap before network and keep same-frame duplicate submissions single-flight
+ok 562 - inspiration uploads enforce nine-image cap before network and keep same-frame duplicate submissions single-flight
+  ---
+  duration_ms: 150.688417
+  ...
+# Subtest: inspiration upload merges into the latest draft; removed images stay removed and partial failures preserve completed uploads
+ok 563 - inspiration upload merges into the latest draft; removed images stay removed and partial failures preserve completed uploads
+  ---
+  duration_ms: 212.024916
+  ...
+# Subtest: inspiration edit detail is cancelable, identity checked and isolated from slow A/new B or add dialog
+ok 564 - inspiration edit detail is cancelable, identity checked and isolated from slow A/new B or add dialog
+  ---
+  duration_ms: 84.972166
+  ...
+# Subtest: inspiration save freezes target/payload, suppresses duplicates, survives cancel/reopen and keeps failed drafts retryable
+ok 565 - inspiration save freezes target/payload, suppresses duplicates, survives cancel/reopen and keeps failed drafts retryable
+  ---
+  duration_ms: 153.910459
+  ...
+# Subtest: inspiration new drafts retain existing default status and first-image cover ordering
+ok 566 - inspiration new drafts retain existing default status and first-image cover ordering
+  ---
+  duration_ms: 215.30075
+  ...
+# Subtest: inspiration approve/reject/delete preserve existing protocols and are mutually exclusive before rerender
+ok 567 - inspiration approve/reject/delete preserve existing protocols and are mutually exclusive before rerender
+  ---
+  duration_ms: 124.693125
+  ...
+# Subtest: inspiration server pagination preserves filters, resets on filter changes and ignores old scope success/failure
+ok 568 - inspiration server pagination preserves filters, resets on filter changes and ignores old scope success/failure
+  ---
+  duration_ms: 110.117375
+  ...
+# Subtest: inspiration list failure is unknown, retry recovers, and empty last page moves to valid server page
+ok 569 - inspiration list failure is unknown, retry recovers, and empty last page moves to valid server page
+  ---
+  duration_ms: 166.455666
+  ...
+# Subtest: inspiration old mutation completion refreshes current filters, never its captured filters
+ok 570 - inspiration old mutation completion refreshes current filters, never its captured filters
+  ---
+  duration_ms: 168.612
+  ...
+# Subtest: inspiration unmount drops late list/detail/upload/write results without UI updates or follow-up reads
+ok 571 - inspiration unmount drops late list/detail/upload/write results without UI updates or follow-up reads
+  ---
+  duration_ms: 514.300333
+  ...
+# Subtest: inspiration native picker button invokes only the hidden input and respects the upload lock before rerender
+ok 572 - inspiration native picker button invokes only the hidden input and respects the upload lock before rerender
+  ---
+  duration_ms: 109.00325
+  ...
+# Subtest: inspiration picker cannot bypass canceled sessions, detail failures, nine-image limit or pending save
+ok 573 - inspiration picker cannot bypass canceled sessions, detail failures, nine-image limit or pending save
+  ---
+  duration_ms: 37.894375
+  ...
+# Subtest: KPI contract rejects the original clickable div
+ok 574 - KPI contract rejects the original clickable div
+  ---
+  duration_ms: 129.794375
+  ...
+# Subtest: both interactive AI KPI cards are native buttons with their original routes
+ok 575 - both interactive AI KPI cards are native buttons with their original routes
+  ---
+  duration_ms: 83.121458
+  ...
+# Subtest: order exception KPI is a native button and preserves its idempotent filter action
+ok 576 - order exception KPI is a native button and preserves its idempotent filter action
+  ---
+  duration_ms: 127.274958
+  ...
+# Subtest: native KPI buttons keep inherited typography, alignment, hover and visible keyboard focus
+ok 577 - native KPI buttons keep inherited typography, alignment, hover and visible keyboard focus
+  ---
+  duration_ms: 429.907917
+  ...
+# Subtest: 手机订单卡片只显示中文类型、场景中文名和昵称
+ok 578 - 手机订单卡片只显示中文类型、场景中文名和昵称
+  ---
+  duration_ms: 172.307916
+  ...
+# Subtest: 桌面表格同样替换分类、场景代码和用户名
+ok 579 - 桌面表格同样替换分类、场景代码和用户名
+  ---
+  duration_ms: 136.16975
+  ...
+# Subtest: 订单详情的标题、分类和用户也走同一套中文显示
+ok 580 - 订单详情的标题、分类和用户也走同一套中文显示
+  ---
+  duration_ms: 18.145167
+  ...
+# Subtest: all preview dismissal controls close immediately and ignore late success or failure without a refund
+ok 581 - all preview dismissal controls close immediately and ignore late success or failure without a refund
+  ---
+  duration_ms: 411.562458
+  ...
+# Subtest: loaded preview cancellation is read-only, and reopening starts a fresh preview
+ok 582 - loaded preview cancellation is read-only, and reopening starts a fresh preview
+  ---
+  duration_ms: 6.973625
+  ...
+# Subtest: latest A/B preview wins; stale finally cannot clear the newer loading state
+ok 583 - latest A/B preview wins; stale finally cannot clear the newer loading state
+  ---
+  duration_ms: 19.881042
+  ...
+# Subtest: current preview failure is local, non-actionable, retryable for the same order, and dismissible
+ok 584 - current preview failure is local, non-actionable, retryable for the same order, and dismissible
+  ---
+  duration_ms: 6.2875
+  ...
+# Subtest: changing or closing order detail invalidates pending preview responses
+ok 585 - changing or closing order detail invalidates pending preview responses
+  ---
+  duration_ms: 17.337125
+  ...
+# Subtest: unmount prevents pending preview success, failure, and finally from writing state
+ok 586 - unmount prevents pending preview success, failure, and finally from writing state
+  ---
+  duration_ms: 8.643292
+  ...
+# Subtest: existing balance eligibility, reason prompt, membership impact, and submission lock remain intact
+ok 587 - existing balance eligibility, reason prompt, membership impact, and submission lock remain intact
+  ---
+  duration_ms: 186.795875
+  ...
+# Subtest: financial explanations are native touch/keyboard disclosures with original formulas and fee context
+ok 588 - financial explanations are native touch/keyboard disclosures with original formulas and fee context
+  ---
+  duration_ms: 11.262583
+  ...
+# Subtest: a preview response for another order is rejected locally before it can become refundable
+ok 589 - a preview response for another order is rejected locally before it can become refundable
+  ---
+  duration_ms: 12.325875
+  ...
+# Subtest: the final production refund handler independently rejects a mismatched current preview
+ok 590 - the final production refund handler independently rejects a mismatched current preview
+  ---
+  duration_ms: 7.162292
+  ...
+# Subtest: saved refund handlers cannot submit after switching orders or reopening the same order
+ok 591 - saved refund handlers cannot submit after switching orders or reopening the same order
+  ---
+  duration_ms: 27.338292
+  ...
+# Subtest: two calls to the same refund handler before any render submit exactly once and cannot dismiss it
+ok 592 - two calls to the same refund handler before any render submit exactly once and cannot dismiss it
+  ---
+  duration_ms: 38.052
+  ...
+# Subtest: list and URL detail loads share latest-request ownership across success, failure, and entry changes
+ok 593 - list and URL detail loads share latest-request ownership across success, failure, and entry changes
+  ---
+  duration_ms: 291.01925
+  ...
+# Subtest: closing a loading detail through every control or URL removal prevents late response resurrection
+ok 594 - closing a loading detail through every control or URL removal prevents late response resurrection
+  ---
+  duration_ms: 185.044625
+  ...
+# Subtest: a failed or wrong-ID detail clears old actions and retries only the currently requested order
+ok 595 - a failed or wrong-ID detail clears old actions and retries only the currently requested order
+  ---
+  duration_ms: 33.973792
+  ...
+# Subtest: unmount invalidates both list and URL detail requests without state writes
+ok 596 - unmount invalidates both list and URL detail requests without state writes
+  ---
+  duration_ms: 11.970458
+  ...
+# Subtest: finishing refund A cannot refresh A over a newly selected detail B
+ok 597 - finishing refund A cannot refresh A over a newly selected detail B
+  ---
+  duration_ms: 27.887583
+  ...
+# Subtest: slow detail A cannot replace fast detail B after both production handlers have completed
+ok 598 - slow detail A cannot replace fast detail B after both production handlers have completed
+  ---
+  duration_ms: 18.24125
+  ...
+# Subtest: a failed refund releases the synchronous lock and permits one deliberate retry
+ok 599 - a failed refund releases the synchronous lock and permits one deliberate retry
+  ---
+  duration_ms: 14.143083
+  ...
+# PASS unchanged price / note-only change closes without request or a fake version
+# PASS empty, negative, fractional, non-finite and unsafe values cannot reach confirmation
+# PASS changed pricing retains two-step confirmation; later value or note edits reset it; payload stays unchanged
+# PASS returning to original price removes confirmation; zero remains a valid new price
+# PASS history rollback separates actual current price 10 from target 5 and submits only after second confirmation
+# PASS history failure is explicit, not an empty list; retry transitions through loading to real records
+# PASS only successful empty history reports no records and preserves initial-version semantics
+# PASS closing history cancels result application, preventing stale response updates
+# PASS saving disables submission and dismissal; failed save retains the intended value and is retryable
+# PASS A confirmation cannot submit B after props change; target-specific key/reset and fresh B confirmation are required
+# PASS two direct confirmation-handler calls before rerender produce only one pricing request
+# PASS same-frame stale close is locked; late save A completion cannot notify or close replacement B
+# PASS unmounted old pricing modal cannot close the parent replacement through late onSaved
+# Subtest: AI pricing keeps confirmation, version and retry states consistent
+ok 600 - AI pricing keeps confirmation, version and retry states consistent
+  ---
+  duration_ms: 149.720375
+  ...
+# Subtest: pricing business details remain visible without scene identifiers and advanced settings have a direct entry
+ok 601 - pricing business details remain visible without scene identifiers and advanced settings have a direct entry
+  ---
+  duration_ms: 3.868208
+  ...
+# Subtest: remaining CSS is imported once after prior responsive rules and keeps an explicit non-CRM route allowlist
+ok 602 - remaining CSS is imported once after prior responsive rules and keeps an explicit non-CRM route allowlist
+  ---
+  duration_ms: 91.344875
+  ...
+# Subtest: /templates: lazy styles are isolated; table scroll parents exclude headings and actions
+ok 603 - /templates: lazy styles are isolated; table scroll parents exclude headings and actions
+  ---
+  duration_ms: 499.20775
+  ...
+# Subtest: /utility-tools: lazy styles are isolated; table scroll parents exclude headings and actions
+ok 604 - /utility-tools: lazy styles are isolated; table scroll parents exclude headings and actions
+  ---
+  duration_ms: 97.8935
+  ...
+# Subtest: /inspirations: lazy styles are isolated; table scroll parents exclude headings and actions
+ok 605 - /inspirations: lazy styles are isolated; table scroll parents exclude headings and actions
+  ---
+  duration_ms: 96.331542
+  ...
+# Subtest: /designer-center: lazy styles are isolated; table scroll parents exclude headings and actions
+ok 606 - /designer-center: lazy styles are isolated; table scroll parents exclude headings and actions
+  ---
+  duration_ms: 258.704667
+  ...
+# Subtest: /support-tickets: lazy styles are isolated; table scroll parents exclude headings and actions
+ok 607 - /support-tickets: lazy styles are isolated; table scroll parents exclude headings and actions
+  ---
+  duration_ms: 187.373458
+  ...
+# Subtest: /risk-control: lazy styles are isolated; table scroll parents exclude headings and actions
+ok 608 - /risk-control: lazy styles are isolated; table scroll parents exclude headings and actions
+  ---
+  duration_ms: 85.575333
+  ...
+# Subtest: /distribution: lazy styles are isolated; table scroll parents exclude headings and actions
+ok 609 - /distribution: lazy styles are isolated; table scroll parents exclude headings and actions
+  ---
+  duration_ms: 50.985292
+  ...
+# Subtest: /content-analytics: lazy styles are isolated; table scroll parents exclude headings and actions
+ok 610 - /content-analytics: lazy styles are isolated; table scroll parents exclude headings and actions
+  ---
+  duration_ms: 67.827458
+  ...
+# Subtest: /report-center: lazy styles are isolated; table scroll parents exclude headings and actions
+ok 611 - /report-center: lazy styles are isolated; table scroll parents exclude headings and actions
+  ---
+  duration_ms: 14.484958
+  ...
+# Subtest: /oss: lazy styles are isolated; table scroll parents exclude headings and actions
+ok 612 - /oss: lazy styles are isolated; table scroll parents exclude headings and actions
+  ---
+  duration_ms: 83.663542
+  ...
+# Subtest: /logs: lazy styles are isolated; table scroll parents exclude headings and actions
+ok 613 - /logs: lazy styles are isolated; table scroll parents exclude headings and actions
+  ---
+  duration_ms: 79.101667
+  ...
+# Subtest: width matrix keeps long statistics shrinkable and primary/inline/upload controls at least 44px
+ok 614 - width matrix keeps long statistics shrinkable and primary/inline/upload controls at least 44px
+  ---
+  duration_ms: 2275.226042
+  ...
+# Subtest: filters cover 769/800/900 as well as mobile; fixed-content cards and inputs have shrink paths
+ok 615 - filters cover 769/800/900 as well as mobile; fixed-content cards and inputs have shrink paths
+  ---
+  duration_ms: 173.518375
+  ...
+# Subtest: dedicated table regions scroll before observer initialization and do not make whole panels scroll
+ok 616 - dedicated table regions scroll before observer initialization and do not make whole panels scroll
+  ---
+  duration_ms: 43.235959
+  ...
+# Subtest: sticky applies only to verified risk/support/OSS action columns and never hides any data column
+ok 617 - sticky applies only to verified risk/support/OSS action columns and never hides any data column
+  ---
+  duration_ms: 35.374209
+  ...
+# Subtest: short-screen modal rules keep header/footer outside body scroll and explicitly override the old mobile !important rule
+ok 618 - short-screen modal rules keep header/footer outside body scroll and explicitly override the old mobile !important rule
+  ---
+  duration_ms: 452.4095
+  ...
+# Subtest: template preview controls remain discoverable by touch and keyboard focus without hover
+ok 619 - template preview controls remain discoverable by touch and keyboard focus without hover
+  ---
+  duration_ms: 2.011667
+  ...
+# Subtest: production table observer handles width matrix, resize, route replacement and cleanup
+ok 620 - production table observer handles width matrix, resize, route replacement and cleanup
+  ---
+  duration_ms: 24.213791
+  ...
+# Subtest: inspiration and OSS file pickers expose native keyboard buttons rather than unfocusable upload labels
+ok 621 - inspiration and OSS file pickers expose native keyboard buttons rather than unfocusable upload labels
+  ---
+  duration_ms: 9.516208
+  ...
+# Subtest: utility titles and previews have their own shrink/wrap rules without hiding publish status
+ok 622 - utility titles and previews have their own shrink/wrap rules without hiding publish status
+  ---
+  duration_ms: 37.591167
+  ...
+# Subtest: template and utility editors scroll through a div body; the fieldset only carries the disabled state
+ok 623 - template and utility editors scroll through a div body; the fieldset only carries the disabled state
+  ---
+  duration_ms: 16.964125
+  ...
+# Subtest: inspirations toolbar stacks on phones so search, filters and actions each get a full row
+ok 624 - inspirations toolbar stacks on phones so search, filters and actions each get a full row
+  ---
+  duration_ms: 12.93075
+  ...
+# Subtest: narrow-screen fixes for pricing header, AI pricing notice, CRM tabs and long-text table columns
+ok 625 - narrow-screen fixes for pricing header, AI pricing notice, CRM tabs and long-text table columns
+  ---
+  duration_ms: 65.038708
+  ...
+# Subtest: list cells clamp long free text with the full value in title, CRM tabs show an edge cue, share dialog header stays sticky
+ok 626 - list cells clamp long free text with the full value in title, CRM tabs show an edge cue, share dialog header stays sticky
+  ---
+  duration_ms: 15.988584
+  ...
+# Subtest: OSS current-page selection uses identities, partial state, and clears on same-sized replacement
+ok 627 - OSS current-page selection uses identities, partial state, and clears on same-sized replacement
+  ---
+  duration_ms: 593.102125
+  ...
+# Subtest: OSS page, keyword, type, source, reset and refresh all invalidate selections before old handlers can submit
+ok 628 - OSS page, keyword, type, source, reset and refresh all invalidate selections before old handlers can submit
+  ---
+  duration_ms: 683.020709
+  ...
+# Subtest: OSS slow list successes and failures cannot replace newer scope or clear its loading state
+ok 629 - OSS slow list successes and failures cannot replace newer scope or clear its loading state
+  ---
+  duration_ms: 48.618333
+  ...
+# Subtest: OSS failed list is unavailable, retry recovers its own error and only successful empty list says empty
+ok 630 - OSS failed list is unavailable, retry recovers its own error and only successful empty list says empty
+  ---
+  duration_ms: 147.891
+  ...
+# Subtest: OSS business errors and missing payloads are failures, while a successful nullable empty list remains compatible
+ok 631 - OSS business errors and missing payloads are failures, while a successful nullable empty list remains compatible
+  ---
+  duration_ms: 89.22525
+  ...
+# Subtest: OSS confirmation names exactly the submitted frozen files; repeat batch and single handlers are mutually exclusive
+ok 632 - OSS confirmation names exactly the submitted frozen files; repeat batch and single handlers are mutually exclusive
+  ---
+  duration_ms: 96.84025
+  ...
+# Subtest: OSS 207 partial delete refreshes the list, reports counts, and keeps only failed items selected for retry
+ok 633 - OSS 207 partial delete refreshes the list, reports counts, and keeps only failed items selected for retry
+  ---
+  duration_ms: 108.820958
+  ...
+# Subtest: OSS cancel, failed delete retry, single identity confirmation and changed-scope completion remain safe
+ok 634 - OSS cancel, failed delete retry, single identity confirmation and changed-scope completion remain safe
+  ---
+  duration_ms: 119.339167
+  ...
+# Subtest: OSS scope changes during confirmation cancel submission and unmounted list responses are ignored
+ok 635 - OSS scope changes during confirmation cancel submission and unmounted list responses are ignored
+  ---
+  duration_ms: 87.135333
+  ...
+# Subtest: report rate fields format 0/1/0.5 explicitly; null/string and non-rate values keep their original meaning
+ok 636 - report rate fields format 0/1/0.5 explicitly; null/string and non-rate values keep their original meaning
+  ---
+  duration_ms: 103.52975
+  ...
+# Subtest: report export freezes actual successful dates, rejects unapplied dates and an old handler before render
+ok 637 - report export freezes actual successful dates, rejects unapplied dates and an old handler before render
+  ---
+  duration_ms: 112.111166
+  ...
+# Subtest: report reversed dates show inline validation and cannot fetch or export even by direct handlers
+ok 638 - report reversed dates show inline validation and cannot fetch or export even by direct handlers
+  ---
+  duration_ms: 49.909584
+  ...
+# Subtest: report loading and failure never expose old export, zeros or false empty data; retry recovers
+ok 639 - report loading and failure never expose old export, zeros or false empty data; retry recovers
+  ---
+  duration_ms: 78.87525
+  ...
+# Subtest: report type and period late responses cannot mismatch the table, summary, label and export
+ok 640 - report type and period late responses cannot mismatch the table, summary, label and export
+  ---
+  duration_ms: 52.079458
+  ...
+# Subtest: report draft edits during loading invalidate late success; same-scope repeated requests only apply newest
+ok 641 - report draft edits during loading invalidate late success; same-scope repeated requests only apply newest
+  ---
+  duration_ms: 24.81625
+  ...
+# Subtest: report mismatched response or missing actual dates cannot be exported; unmount drops pending responses
+ok 642 - report mismatched response or missing actual dates cannot be exported; unmount drops pending responses
+  ---
+  duration_ms: 156.455
+  ...
+# Subtest: OSS deleting the sole second-page file corrects 21→20 to page one with cleared selection
+ok 643 - OSS deleting the sole second-page file corrects 21→20 to page one with cleared selection
+  ---
+  duration_ms: 73.579875
+  ...
+# Subtest: OSS shrinking an out-of-range list to zero recovers page one and ignores obsolete page corrections
+ok 644 - OSS shrinking an out-of-range list to zero recovers page one and ignores obsolete page corrections
+  ---
+  duration_ms: 68.282459
+  ...
+# Subtest: OSS native picker opens without posting; upload lock blocks duplicate change and picker activation until retry
+ok 645 - OSS native picker opens without posting; upload lock blocks duplicate change and picker activation until retry
+  ---
+  duration_ms: 36.185917
+  ...
+# Subtest: OSS canceled/reopened picker sessions reject old picker, change and close handlers before and after render
+ok 646 - OSS canceled/reopened picker sessions reject old picker, change and close handlers before and after render
+  ---
+  duration_ms: 43.04775
+  ...
+# Subtest: OSS pending upload synchronously blocks close, overlay dismissal, reopen, duplicate change and picker; failure allows retry
+ok 647 - OSS pending upload synchronously blocks close, overlay dismissal, reopen, duplicate change and picker; failure allows retry
+  ---
+  duration_ms: 21.200625
+  ...
+# Subtest: OSS upload completion refreshes current filters rather than its original list closure
+ok 648 - OSS upload completion refreshes current filters rather than its original list closure
+  ---
+  duration_ms: 91.28175
+  ...
+# Subtest: OSS unmount silences late upload success, business failure and network rejection without closing, updating or refreshing
+ok 649 - OSS unmount silences late upload success, business failure and network rejection without closing, updating or refreshing
+  ---
+  duration_ms: 131.19975
+  ...
+# Subtest: report 累计收入带单位：按灵石数显示并标注单位
+ok 650 - report 累计收入带单位：按灵石数显示并标注单位
+  ---
+  duration_ms: 31.03075
+  ...
+# Subtest: /dashboard: lazy-loaded styles cannot change another page
+ok 651 - /dashboard: lazy-loaded styles cannot change another page
+  ---
+  duration_ms: 467.279
+  ...
+# Subtest: /users: lazy-loaded styles cannot change another page
+ok 652 - /users: lazy-loaded styles cannot change another page
+  ---
+  duration_ms: 469.998875
+  ...
+# Subtest: /user-workbench: lazy-loaded styles cannot change another page
+ok 653 - /user-workbench: lazy-loaded styles cannot change another page
+  ---
+  duration_ms: 435.696083
+  ...
+# Subtest: /designer-center: lazy-loaded styles cannot change another page
+ok 654 - /designer-center: lazy-loaded styles cannot change another page
+  ---
+  duration_ms: 121.990375
+  ...
+# Subtest: /certification: lazy-loaded styles cannot change another page
+ok 655 - /certification: lazy-loaded styles cannot change another page
+  ---
+  duration_ms: 146.647375
+  ...
+# Subtest: /membership-operations: lazy-loaded styles cannot change another page
+ok 656 - /membership-operations: lazy-loaded styles cannot change another page
+  ---
+  duration_ms: 84.554916
+  ...
+# Subtest: /recharge: lazy-loaded styles cannot change another page
+ok 657 - /recharge: lazy-loaded styles cannot change another page
+  ---
+  duration_ms: 263.895375
+  ...
+# Subtest: /virtualpay: lazy-loaded styles cannot change another page
+ok 658 - /virtualpay: lazy-loaded styles cannot change another page
+  ---
+  duration_ms: 63.764625
+  ...
+# Subtest: /pricing-config: lazy-loaded styles cannot change another page
+ok 659 - /pricing-config: lazy-loaded styles cannot change another page
+  ---
+  duration_ms: 38.949875
+  ...
+# Subtest: /recharge-config: lazy-loaded styles cannot change another page
+ok 660 - /recharge-config: lazy-loaded styles cannot change another page
+  ---
+  duration_ms: 67.40025
+  ...
+# Subtest: /membership-plans: lazy-loaded styles cannot change another page
+ok 661 - /membership-plans: lazy-loaded styles cannot change another page
+  ---
+  duration_ms: 16.759583
+  ...
+# Subtest: /ai-overview: lazy-loaded styles cannot change another page
+ok 662 - /ai-overview: lazy-loaded styles cannot change another page
+  ---
+  duration_ms: 68.179334
+  ...
+# Subtest: /ai-tasks: lazy-loaded styles cannot change another page
+ok 663 - /ai-tasks: lazy-loaded styles cannot change another page
+  ---
+  duration_ms: 85.564667
+  ...
+# Subtest: /ai-content-audits: lazy-loaded styles cannot change another page
+ok 664 - /ai-content-audits: lazy-loaded styles cannot change another page
+  ---
+  duration_ms: 22.720334
+  ...
+# Subtest: /ai-tools: lazy-loaded styles cannot change another page
+ok 665 - /ai-tools: lazy-loaded styles cannot change another page
+  ---
+  duration_ms: 56.609625
+  ...
+# Subtest: /ai-pricing: lazy-loaded styles cannot change another page
+ok 666 - /ai-pricing: lazy-loaded styles cannot change another page
+  ---
+  duration_ms: 86.449167
+  ...
+# Subtest: /ai-config: lazy-loaded styles cannot change another page
+ok 667 - /ai-config: lazy-loaded styles cannot change another page
+  ---
+  duration_ms: 26.11775
+  ...
+# Subtest: /ai-video-studio: lazy-loaded styles cannot change another page
+ok 668 - /ai-video-studio: lazy-loaded styles cannot change another page
+  ---
+  duration_ms: 19.837584
+  ...
+# Subtest: every in-scope table has a dedicated scroll parent, not its heading/action panel
+ok 669 - every in-scope table has a dedicated scroll parent, not its heading/action panel
+  ---
+  duration_ms: 240.124041
+  ...
+# Subtest: mobile AI rank cards carry real labels for all three business values
+ok 670 - mobile AI rank cards carry real labels for all three business values
+  ---
+  duration_ms: 39.172542
+  ...
+# Subtest: mobile list actions stay reachable without dropping financial or status columns
+ok 671 - mobile list actions stay reachable without dropping financial or status columns
+  ---
+  duration_ms: 26.26525
+  ...
+# Subtest: AI split-card ranks shrink above the mobile breakpoint rather than keeping fixed column widths
+ok 672 - AI split-card ranks shrink above the mobile breakpoint rather than keeping fixed column widths
+  ---
+  duration_ms: 23.015042
+  ...
+# Subtest: risk tables request real pages independently, show server totals and fixed ten-row page size
+ok 673 - risk tables request real pages independently, show server totals and fixed ten-row page size
+  ---
+  duration_ms: 674.4385
+  ...
+# Subtest: search/Enter and reset apply to all tables, reset all pages and leave the global overview independent
+ok 674 - search/Enter and reset apply to all tables, reset all pages and leave the global overview independent
+  ---
+  duration_ms: 369.052667
+  ...
+# Subtest: one failed table never hides successful modules; scoped retry recovers only its own failure source
+ok 675 - one failed table never hides successful modules; scoped retry recovers only its own failure source
+  ---
+  duration_ms: 202.864375
+  ...
+# Subtest: loading, genuine zero, failed overview and successful empty tables remain distinct
+ok 676 - loading, genuine zero, failed overview and successful empty tables remain distinct
+  ---
+  duration_ms: 137.351958
+  ...
+# Subtest: malformed list/count/page/item responses fail explicitly instead of looking empty, then retry normally
+ok 677 - malformed list/count/page/item responses fail explicitly instead of looking empty, then retry normally
+  ---
+  duration_ms: 1162.510291
+  ...
+# Subtest: missing or malformed global metrics are unknown while list data remains usable
+ok 678 - missing or malformed global metrics are unknown while list data remains usable
+  ---
+  duration_ms: 224.970833
+  ...
+# Subtest: filters immediately invalidate old success/failure and old pagination/retry handlers before rendering
+ok 679 - filters immediately invalidate old success/failure and old pagination/retry handlers before rendering
+  ---
+  duration_ms: 51.437708
+  ...
+# Subtest: shrinking totals correct only the affected table to a valid last page and retain its keyword
+ok 680 - shrinking totals correct only the affected table to a valid last page and retain its keyword
+  ---
+  duration_ms: 36.368333
+  ...
+# Subtest: refresh preserves each page/filter, clears only recovered sources and supports repeated retries
+ok 681 - refresh preserves each page/filter, clears only recovered sources and supports repeated retries
+  ---
+  duration_ms: 62.004708
+  ...
+# Subtest: Strict Mode replay and unmount ignore every late request without state updates, reports or corrective reads
+ok 682 - Strict Mode replay and unmount ignore every late request without state updates, reports or corrective reads
+  ---
+  duration_ms: 153.087792
+  ...
+# Subtest: alert types navigate only to supported read-only destinations and unknown types never fall back to tasks
+ok 683 - alert types navigate only to supported read-only destinations and unknown types never fall back to tasks
+  ---
+  duration_ms: 52.772833
+  ...
+# Subtest: copy accurately separates all-time device rows, seven-day alerts, global overview and search scopes
+ok 684 - copy accurately separates all-time device rows, seven-day alerts, global overview and search scopes
+  ---
+  duration_ms: 49.381959
+  ...
+# Subtest: risk pagination and errors stay route-scoped, wrapping and accessible without global styles
+ok 685 - risk pagination and errors stay route-scoped, wrapping and accessible without global styles
+  ---
+  duration_ms: 149.975041
+  ...
+# Subtest: 风险告警写成一句话：不外露任务号、状态码、访客键和 wx_ 登录名
+ok 686 - 风险告警写成一句话：不外露任务号、状态码、访客键和 wx_ 登录名
+  ---
+  duration_ms: 45.95625
+  ...
+# Subtest: 设备 ID 只显示尾号，完整值放在提示里
+ok 687 - 设备 ID 只显示尾号，完整值放在提示里
+  ---
+  duration_ms: 32.208708
+  ...
+# Subtest: table guard catches the original conditional text defect
+ok 688 - table guard catches the original conditional text defect
+  ---
+  duration_ms: 6.349334
+  ...
+# Subtest: all page table rows keep literal/conditional text inside cells
+ok 689 - all page table rows keep literal/conditional text inside cells
+  ---
+  duration_ms: 794.179166
+  ...
+# Subtest: order drawer follows dynamic height and gives its body the scroll area
+ok 690 - order drawer follows dynamic height and gives its body the scroll area
+  ---
+  duration_ms: 1.234709
+  ...
+# Subtest: pricing and review dialogs have bounded height, scrollable body and stable actions
+ok 691 - pricing and review dialogs have bounded height, scrollable body and stable actions
+  ---
+  duration_ms: 19.040375
+  ...
+# Subtest: certification drawer keeps review actions reachable in the safe area
+ok 692 - certification drawer keeps review actions reachable in the safe area
+  ---
+  duration_ms: 1.278875
+  ...
+# Subtest: refund and review confirmations stay above their underlying drawers
+ok 693 - refund and review confirmations stay above their underlying drawers
+  ---
+  duration_ms: 0.3625
+  ...
+# Subtest: custom modal fixes are scoped to registered admin routes
+ok 694 - custom modal fixes are scoped to registered admin routes
+  ---
+  duration_ms: 1.010542
+  ...
+# Subtest: modal fixes are loaded by the application
+ok 695 - modal fixes are loaded by the application
+  ---
+  duration_ms: 0.334625
+  ...
+# Subtest: active and focused links scroll inside their own strip without moving vertical/page scroll
+ok 696 - active and focused links scroll inside their own strip without moving vertical/page scroll
+  ---
+  duration_ms: 2.039667
+  ...
+# Subtest: oversized links align their beginning and non-overflowing strips do not move
+ok 697 - oversized links align their beginning and non-overflowing strips do not move
+  ---
+  duration_ms: 0.499125
+  ...
+# Subtest: overflow controls reflect left, middle, and right edges
+ok 698 - overflow controls reflect left, middle, and right edges
+  ---
+  duration_ms: 0.915833
+  ...
+# Subtest: component reveals active route, exposes labeled controls, and supports keyboard focus
+ok 699 - component reveals active route, exposes labeled controls, and supports keyboard focus
+  ---
+  duration_ms: 1.849833
+  ...
+# Subtest: scroll buttons respect reduced motion and resize updates overflow cues
+ok 700 - scroll buttons respect reduced motion and resize updates overflow cues
+  ---
+  duration_ms: 0.967834
+  ...
+# Subtest: support dialogs define their own viewport overlay, independent of previously visited pages
+ok 701 - support dialogs define their own viewport overlay, independent of previously visited pages
+  ---
+  duration_ms: 1.331875
+  ...
+# Subtest: support dialog scroll belongs to its body while the title and action area remain in the flex column
+ok 702 - support dialog scroll belongs to its body while the title and action area remain in the flex column
+  ---
+  duration_ms: 0.319125
+  ...
+# Subtest: both support dialogs have separate names and labeled close controls
+ok 703 - both support dialogs have separate names and labeled close controls
+  ---
+  duration_ms: 163.891542
+  ...
+# Subtest: support: loading/error/empty are distinct, retry clears the failure
+ok 704 - support: loading/error/empty are distinct, retry clears the failure
+  ---
+  duration_ms: 645.303209
+  ...
+# Subtest: support: real pagination and filter reset, repeated same filter still reloads
+ok 705 - support: real pagination and filter reset, repeated same filter still reloads
+  ---
+  duration_ms: 393.407417
+  ...
+# Subtest: support: old list response cannot replace a newer filter
+ok 706 - support: old list response cannot replace a newer filter
+  ---
+  duration_ms: 276.387791
+  ...
+# Subtest: support: A detail response cannot replace later B
+ok 707 - support: A detail response cannot replace later B
+  ---
+  duration_ms: 138.017833
+  ...
+# Subtest: support: assignment and status refresh preserve unsaved note
+ok 708 - support: assignment and status refresh preserve unsaved note
+  ---
+  duration_ms: 197.081708
+  ...
+# Subtest: support: note save acknowledges only its snapshot and preserves later typing
+ok 709 - support: note save acknowledges only its snapshot and preserves later typing
+  ---
+  duration_ms: 109.219167
+  ...
+# Subtest: support: write succeeds but reread fails; no duplicate write or false failure
+ok 710 - support: write succeeds but reread fails; no duplicate write or false failure
+  ---
+  duration_ms: 133.994167
+  ...
+# Subtest: support: pending note lock blocks duplicate, close and switching target
+ok 711 - support: pending note lock blocks duplicate, close and switching target
+  ---
+  duration_ms: 114.346667
+  ...
+# Subtest: support: dismiss dirty note has explicit keep/discard behavior
+ok 712 - support: dismiss dirty note has explicit keep/discard behavior
+  ---
+  duration_ms: 118.750958
+  ...
+# Subtest: support: created ticket stays successful after list failure; duplicate and close are locked
+ok 713 - support: created ticket stays successful after list failure; duplicate and close are locked
+  ---
+  duration_ms: 82.807667
+  ...
+# Subtest: support: same-frame sync is issued once and successful refresh cannot look like write failure
+ok 714 - support: same-frame sync is issued once and successful refresh cannot look like write failure
+  ---
+  duration_ms: 64.520042
+  ...
+# Subtest: support: unmounted pending mutation cannot trigger new reads
+ok 715 - support: unmounted pending mutation cannot trigger new reads
+  ---
+  duration_ms: 119.673833
+  ...
+# Subtest: support: old save handler cannot submit after closing and reopening the same ticket
+ok 716 - support: old save handler cannot submit after closing and reopening the same ticket
+  ---
+  duration_ms: 108.785917
+  ...
+# Subtest: support: a now-empty last page returns to the last valid page
+ok 717 - support: a now-empty last page returns to the last valid page
+  ---
+  duration_ms: 57.44625
+  ...
+# Subtest: support: source status uses business labels and original values remain in collapsed diagnostics
+ok 718 - support: source status uses business labels and original values remain in collapsed diagnostics
+  ---
+  duration_ms: 56.660083
+  ...
+# Subtest: support: cancelled create handler cannot submit or act on a reopened draft
+ok 719 - support: cancelled create handler cannot submit or act on a reopened draft
+  ---
+  duration_ms: 74.038125
+  ...
+# Subtest: support: stale assignment/status/close handlers cannot operate after same-ID reopen
+ok 720 - support: stale assignment/status/close handlers cannot operate after same-ID reopen
+  ---
+  duration_ms: 84.751792
+  ...
+# Subtest: support: mismatched detail identity is blocked before any action can target it
+ok 721 - support: mismatched detail identity is blocked before any action can target it
+  ---
+  duration_ms: 107.830458
+  ...
+# Subtest: 工单列表把系统生成的任务工单翻成中文：任务号尾号、失败、场景中文名、备用服务、用户显示名
+ok 722 - 工单列表把系统生成的任务工单翻成中文：任务号尾号、失败、场景中文名、备用服务、用户显示名
+  ---
+  duration_ms: 55.760834
+  ...
+# Subtest: loading a video detail cannot create an image support ticket through the footer
+ok 723 - loading a video detail cannot create an image support ticket through the footer
+  ---
+  duration_ms: 799.759875
+  ...
+# Subtest: slow task A cannot replace fast task B or send B actions using A detail
+ok 724 - slow task A cannot replace fast task B or send B actions using A detail
+  ---
+  duration_ms: 261.822083
+  ...
+# Subtest: task response identity includes both type and id before any detail action
+ok 725 - task response identity includes both type and id before any detail action
+  ---
+  duration_ms: 286.700125
+  ...
+# Subtest: closing task detail invalidates its response rather than reopening it or retaining actions
+ok 726 - closing task detail invalidates its response rather than reopening it or retaining actions
+  ---
+  duration_ms: 109.957416
+  ...
+# Subtest: certification loading and failed detail cannot be approved from unverified material
+ok 727 - certification loading and failed detail cannot be approved from unverified material
+  ---
+  duration_ms: 64.972792
+  ...
+# Subtest: certification close A/open B cannot display late A user material under B
+ok 728 - certification close A/open B cannot display late A user material under B
+  ---
+  duration_ms: 94.305875
+  ...
+# Subtest: certification late reveal A cannot overwrite B or clear its pending reveal state
+ok 729 - certification late reveal A cannot overwrite B or clear its pending reveal state
+  ---
+  duration_ms: 85.189
+  ...
+# Subtest: certification revealed fields remain in their drawer and never replace masked list rows
+ok 730 - certification revealed fields remain in their drawer and never replace masked list rows
+  ---
+  duration_ms: 35.292875
+  ...
+# Subtest: certification wrong detail ID cannot become reviewable material
+ok 731 - certification wrong detail ID cannot become reviewable material
+  ---
+  duration_ms: 49.207917
+  ...
+# Subtest: certification duplicate review calls in one render submit once and finishing A never closes B
+ok 732 - certification duplicate review calls in one render submit once and finishing A never closes B
+  ---
+  duration_ms: 45.766375
+  ...
+# Subtest: task and certification detail responses do not write after unmount
+ok 733 - task and certification detail responses do not write after unmount
+  ---
+  duration_ms: 134.60125
+  ...
+# Subtest: URL selection with the same numeric task ID still isolates image from video requests and actions
+ok 734 - URL selection with the same numeric task ID still isolates image from video requests and actions
+  ---
+  duration_ms: 53.385125
+  ...
+# Subtest: failed task detail stays local and retries the explicit video target without defaulting to image
+ok 735 - failed task detail stays local and retries the explicit video target without defaulting to image
+  ---
+  duration_ms: 52.340625
+  ...
+# Subtest: stale task success or failure cannot clear a newer loading state or replace its result
+ok 736 - stale task success or failure cannot clear a newer loading state or replace its result
+  ---
+  duration_ms: 139.021417
+  ...
+# Subtest: stale task action callbacks cannot write after switching or reopening the same task
+ok 737 - stale task action callbacks cannot write after switching or reopening the same task
+  ---
+  duration_ms: 145.270625
+  ...
+# Subtest: task ticket creation is single-flight and late A success cannot navigate away from B
+ok 738 - task ticket creation is single-flight and late A success cannot navigate away from B
+  ---
+  duration_ms: 71.980292
+  ...
+# Subtest: task ticket failure stays with the current task and releases the lock for one retry
+ok 739 - task ticket failure stays with the current task and releases the lock for one retry
+  ---
+  duration_ms: 103.988
+  ...
+# Subtest: quick disposition locks same-frame calls and keeps the original ticket protocol when A finishes under B
+ok 740 - quick disposition locks same-frame calls and keeps the original ticket protocol when A finishes under B
+  ---
+  duration_ms: 40.433125
+  ...
+# Subtest: retry retains its original image task payload, is single-flight, and never closes newer task B
+ok 741 - retry retains its original image task payload, is single-flight, and never closes newer task B
+  ---
+  duration_ms: 50.748292
+  ...
+# Subtest: certification reveal validates its response ID, locks duplicate calls, and retries locally
+ok 742 - certification reveal validates its response ID, locks duplicate calls, and retries locally
+  ---
+  duration_ms: 27.992292
+  ...
+# Subtest: certification late reveal cannot leak into a reopened instance of the same application
+ok 743 - certification late reveal cannot leak into a reopened instance of the same application
+  ---
+  duration_ms: 32.959375
+  ...
+# Subtest: certification reject still requires a trimmed reason and failed review preserves it for deliberate retry
+ok 744 - certification reject still requires a trimmed reason and failed review preserves it for deliberate retry
+  ---
+  duration_ms: 69.025083
+  ...
+# Subtest: certification stale review and reveal handlers cannot act on the previous application
+ok 745 - certification stale review and reveal handlers cannot act on the previous application
+  ---
+  duration_ms: 33.482834
+  ...
+# Subtest: certification uses current response status and never reviews a record that is no longer pending
+ok 746 - certification uses current response status and never reviews a record that is no longer pending
+  ---
+  duration_ms: 31.582208
+  ...
+# Subtest: certification detail and reveal failures from A do not change B loading or errors
+ok 747 - certification detail and reveal failures from A do not change B loading or errors
+  ---
+  duration_ms: 30.596917
+  ...
+# Subtest: certification detail failure can retry the same target and then enable its original approval action
+ok 748 - certification detail failure can retry the same target and then enable its original approval action
+  ---
+  duration_ms: 40.33825
+  ...
+# Subtest: certification reveal and review responses never write state after unmount
+ok 749 - certification reveal and review responses never write state after unmount
+  ---
+  duration_ms: 143.812541
+  ...
+# Subtest: empty task rows span the actual rendered header for image failed, other image queues, and video
+ok 750 - empty task rows span the actual rendered header for image failed, other image queues, and video
+  ---
+  duration_ms: 128.580125
+  ...
+# Subtest: initial video URL with status loads only video rows and keeps subsequent detail and ticket types consistent
+ok 751 - initial video URL with status loads only video rows and keeps subsequent detail and ticket types consistent
+  ---
+  duration_ms: 59.524084
+  ...
+# Subtest: switching image to video invalidates the old list and cannot display or act on its late image rows
+ok 752 - switching image to video invalidates the old list and cannot display or act on its late image rows
+  ---
+  duration_ms: 69.317125
+  ...
+# Subtest: switching away from an already rendered image list clears its old rows until video is ready
+ok 753 - switching away from an already rendered image list clears its old rows until video is ready
+  ---
+  duration_ms: 29.527375
+  ...
+# Subtest: late backfill completion after switching to video cannot reload image rows or misroute a ticket
+ok 754 - late backfill completion after switching to video cannot reload image rows or misroute a ticket
+  ---
+  duration_ms: 29.857791
+  ...
+# Subtest: backfill completion also respects a changed generation when the user returns from video to image
+ok 755 - backfill completion also respects a changed generation when the user returns from video to image
+  ---
+  duration_ms: 26.047166
+  ...
+# Subtest: backfill still refreshes an unchanged image context and preserves its original API limit and result text
+ok 756 - backfill still refreshes an unchanged image context and preserves its original API limit and result text
+  ---
+  duration_ms: 20.671667
+  ...
+# Subtest: backfill success and failure after unmount cannot set feedback, notify, or start another list request
+ok 757 - backfill success and failure after unmount cannot set feedback, notify, or start another list request
+  ---
+  duration_ms: 43.52825
+  ...
+# Subtest: AI 任务列表：任务号只显示后 6 位，模型只说主力/备用服务，用户不显示 wx_ 登录名
+ok 758 - AI 任务列表：任务号只显示后 6 位，模型只说主力/备用服务，用户不显示 wx_ 登录名
+  ---
+  duration_ms: 22.330875
+  ...
+# Subtest: 全局排版变量：标题 20、分区 16、正文 14、辅助 12、大数字 24；按钮 40（手机 44）、圆角 12、卡片 16、主色 139,94,60
+ok 759 - 全局排版变量：标题 20、分区 16、正文 14、辅助 12、大数字 24；按钮 40（手机 44）、圆角 12、卡片 16、主色 139,94,60
+  ---
+  duration_ms: 1.5495
+  ...
+# Subtest: 样式里的字号只用排版档位：不小于 12px、没有半像素
+ok 760 - 样式里的字号只用排版档位：不小于 12px、没有半像素
+  ---
+  duration_ms: 7.003
+  ...
+# Subtest: 组件内联样式也不写小于 12px 或半像素的字号
+ok 761 - 组件内联样式也不写小于 12px 或半像素的字号
+  ---
+  duration_ms: 12.055959
+  ...
+# Subtest: 分享访问记录的主色与全站一致
+ok 762 - 分享访问记录的主色与全站一致
+  ---
+  duration_ms: 0.490958
+  ...
+# Subtest: 按钮与卡片的高度、圆角、主色由全局规则统一
+ok 763 - 按钮与卡片的高度、圆角、主色由全局规则统一
+  ---
+  duration_ms: 0.388708
+  ...
+# Subtest: 一级页标题统一由 PageTitle 渲染：布局层兜底，自带页头的页面也用同一个组件
+ok 764 - 一级页标题统一由 PageTitle 渲染：布局层兜底，自带页头的页面也用同一个组件
+  ---
+  duration_ms: 1.290375
+  ...
+# PASS ban failure is visible inside the modal, keeps target/reason and retries without a page-load error
+# PASS pending ban stays locked through cancel, backdrop, close and reopen; failure retains its target and reason
+# PASS same-frame stale close and reopening cannot unlock pending unban; success releases the lock
+# PASS unban remains allowed with an optional explanation and uses the original API payload
+# PASS merge precheck errors preserve both IDs, retry locally and remove old comparison when IDs change
+# PASS a cancelled precheck cannot populate a reopened dialog with another pair of accounts
+# PASS same-frame duplicate ban and merge-precheck handlers each issue exactly one request
+# Subtest: User operation failures stay local, preserve retry inputs and cannot leak into a later dialog
+ok 765 - User operation failures stay local, preserve retry inputs and cannot leak into a later dialog
+  ---
+  duration_ms: 145.226792
+  ...
+# Subtest: 用户列表显示名：昵称 → 脱敏手机号 → 微信用户 \#ID，列表不展示 wx_ 登录名
+ok 766 - 用户列表显示名：昵称 → 脱敏手机号 → 微信用户 \#ID，列表不展示 wx_ 登录名
+  ---
+  duration_ms: 19.162833
+  ...
+# PASS slow A / fast B: late primary A cannot replace the selected B account
+# PASS A success / B failure clears A immediately, blocks stale A actions and retries the intended B
+# PASS summary failure never becomes zero finance or empty membership; successful profile/certification survive and summary retry recovers
+# PASS certification failure is unknown until a successful empty retry establishes no certification
+# PASS permission failure is not treated as unverified and cannot be saved from an uninitialized form
+# PASS late A module success and failure cannot alter B data or B module error states
+# PASS a missing summary payload is explicitly unavailable rather than a successful empty result
+# PASS duplicate same-frame stone handler is locked; completing A write after selecting B never reloads A
+# Subtest: User detail isolates selections and distinguishes failed modules from true empty or zero data
+ok 767 - User detail isolates selections and distinguishes failed modules from true empty or zero data
+  ---
+  duration_ms: 158.6815
+  ...
+# Subtest: 用户详情：最近访问、同设备账号、头部标签不外露 wx_ 登录名，任务场景与用户类型显示中文
+ok 768 - 用户详情：最近访问、同设备账号、头部标签不外露 wx_ 登录名，任务场景与用户类型显示中文
+  ---
+  duration_ms: 18.792
+  ...
+# Subtest: utility: real pagination and server filters reset to page one
+ok 769 - utility: real pagination and server filters reset to page one
+  ---
+  duration_ms: 438.619167
+  ...
+# Subtest: utility API adapter sends 1/0 for published filters and omits unknown
+ok 770 - utility API adapter sends 1/0 for published filters and omits unknown
+  ---
+  duration_ms: 10.364708
+  ...
+# Subtest: utility: old filter/page responses cannot replace the current page or its loading state
+ok 771 - utility: old filter/page responses cannot replace the current page or its loading state
+  ---
+  duration_ms: 114.283417
+  ...
+# Subtest: utility: failed first load stays unknown, malformed or wrong-page responses are not empty success
+ok 772 - utility: failed first load stays unknown, malformed or wrong-page responses are not empty success
+  ---
+  duration_ms: 114.701792
+  ...
+# Subtest: utility: failed refresh preserves known results; failed new page does not relabel old rows
+ok 773 - utility: failed refresh preserves known results; failed new page does not relabel old rows
+  ---
+  duration_ms: 83.259
+  ...
+# Subtest: utility: last page disappearing returns to valid page after delete
+ok 774 - utility: last page disappearing returns to valid page after delete
+  ---
+  duration_ms: 65.984625
+  ...
+# Subtest: utility: detail cancellation and a newer add editor isolate late detail success/error
+ok 775 - utility: detail cancellation and a newer add editor isolate late detail success/error
+  ---
+  duration_ms: 113.585125
+  ...
+# Subtest: utility: mismatched detail is blocked rather than editing another ID
+ok 776 - utility: mismatched detail is blocked rather than editing another ID
+  ---
+  duration_ms: 38.444584
+  ...
+# Subtest: utility: newer details win out of order including same-ID reopen
+ok 777 - utility: newer details win out of order including same-ID reopen
+  ---
+  duration_ms: 58.751958
+  ...
+# Subtest: utility: create retains published=true and locks duplicate save/close/form changes until settled
+ok 778 - utility: create retains published=true and locks duplicate save/close/form changes until settled
+  ---
+  duration_ms: 58.576167
+  ...
+# Subtest: utility: failed save preserves draft and retries explicitly, including cleared optional fields
+ok 779 - utility: failed save preserves draft and retries explicitly, including cleared optional fields
+  ---
+  duration_ms: 66.446541
+  ...
+# Subtest: utility: cancelled create/edit callbacks cannot save, change or close same-ID reopened editor
+ok 780 - utility: cancelled create/edit callbacks cannot save, change or close same-ID reopened editor
+  ---
+  duration_ms: 81.391667
+  ...
+# Subtest: utility: committed save plus failed refresh closes editor and never invites a duplicate write
+ok 781 - utility: committed save plus failed refresh closes editor and never invites a duplicate write
+  ---
+  duration_ms: 29.666875
+  ...
+# Subtest: utility: completion refreshes latest filters and stale write refresh cannot override newer navigation
+ok 782 - utility: completion refreshes latest filters and stale write refresh cannot override newer navigation
+  ---
+  duration_ms: 51.317458
+  ...
+# Subtest: utility: delete is synchronous single flight, cancellation writes nothing, failure keeps row
+ok 783 - utility: delete is synchronous single flight, cancellation writes nothing, failure keeps row
+  ---
+  duration_ms: 31.767708
+  ...
+# Subtest: utility: unmount suppresses late reads and successful writes do not trigger background refresh
+ok 784 - utility: unmount suppresses late reads and successful writes do not trigger background refresh
+  ---
+  duration_ms: 85.790334
+  ...
+# Subtest: utility: old-page edit/delete and pagination callbacks cannot act after filters change
+ok 785 - utility: old-page edit/delete and pagination callbacks cannot act after filters change
+  ---
+  duration_ms: 38.647375
+  ...
+# Subtest: utility: an incomplete detail publish state cannot silently publish while changing a title
+ok 786 - utility: an incomplete detail publish state cannot silently publish while changing a title
+  ---
+  duration_ms: 67.169916
+  ...
+1..786
+# tests 786
+# suites 0
+# pass 786
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 13633.674125

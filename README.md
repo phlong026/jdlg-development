@@ -49,12 +49,13 @@ npm run build
 
 ```sh
 cd ../miniprogram
+npm run typecheck
 node --test tests/*.test.js
 npm run check:tracking
 npm run check:tracking-routes
 ```
 
-阅读页现在对生命周期参数进行真实 TypeScript 检查，`npm run build:tracking` 与 `npm run check:tracking` 使用后台锁定的 TypeScript 编译器生成和校验该页 JS；其余兼容页面保持现有确定性构建。此处与鉴权签名构建复用同一编译运行时，无新增依赖。执行前沿用上面的后台锁定安装步骤；上传使用提交中的 JS 产物。
+`npm run typecheck` 按小程序现有严格配置执行完整 TypeScript 语义检查，CI同步执行。`npm run build:tracking` 与 `npm run check:tracking` 负责生成和核对 JS；生成产物检查与类型检查分别执行。两者与鉴权签名构建复用后台锁定的编译运行时，无新增依赖。执行前沿用上面的后台锁定安装步骤；上传使用提交中的 JS 产物。修复范围及验证记录见[小程序类型检查修复](docs/miniprogram-typecheck-20261117.md)。
 
 需要本机微信 WXML 编译器的用例在缺少编译器时会明确跳过，可通过 `WXML_COMPILER` 指定编译器后执行。CI 的 `Admin quality` 同时执行全量小程序回归及 `npm audit --audit-level=high`，发现高危或严重依赖告警时失败；原有追踪专项与 Go 检查继续执行。
 
@@ -73,3 +74,14 @@ npm run check:tracking-routes
 客户跟踪逐次访问列表的页面、统计口径、本人权限、验证和回滚说明见[实施说明](docs/phase3/customer-visit-feed-20261114/README.md)。
 
 剩余分支统一主线、媒体自适应和本地证据见[本轮实施记录](docs/phase3/unify-main-20261113/implementation-status.md)。
+
+## 装修报价（2026-11-17，本地实现）
+
+新增独立装修预算，复用建房预算的登录规则。入口在建房表单右上角，原建房计价、账户缓存和 v4 分享保持兼容。
+
+- [功能、校验与回滚](docs/renovation-budget/README.md)
+- [动态算量公式与估算配置](docs/renovation-budget/dynamic-quantities.md)
+- [历史v1参考价格清单](docs/renovation-budget/pricing-reference.md)
+- [v5 分享接口](docs/renovation-budget-share-api-20261117.md)
+
+使用既有依赖运行 `cd miniprogram && npm run check:tracking && npm run check:tracking-routes && npm run test:renovation`。无本地依赖时，可将 `REPORT_TEST_NODE_MODULES` 指向已有后台依赖目录；不需要为此新增依赖。

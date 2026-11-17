@@ -1,0 +1,145 @@
+TAP version 13
+# Subtest: paid polish persists its original idempotency key and recovers through read-only lookup
+ok 1 - paid polish persists its original idempotency key and recovers through read-only lookup
+  ---
+  duration_ms: 3.4755
+  ...
+# Subtest: pending polish is account scoped and blocks replacement quotes without a second request
+ok 2 - pending polish is account scoped and blocks replacement quotes without a second request
+  ---
+  duration_ms: 0.597958
+  ...
+# Subtest: reading an old terminal task cannot clear a newer pending quote without a task id
+ok 3 - reading an old terminal task cannot clear a newer pending quote without a task id
+  ---
+  duration_ms: 0.590041
+  ...
+# Subtest: editor only creates a polish task after a visible matching price is confirmed twice
+ok 4 - editor only creates a polish task after a visible matching price is confirmed twice
+  ---
+  duration_ms: 2.807417
+  ...
+# Subtest: pending polish is checked before any draft write or revision change
+ok 5 - pending polish is checked before any draft write or revision change
+  ---
+  duration_ms: 0.905416
+  ...
+# Subtest: price refresh and definitive failure restore automatic video quote preparation
+ok 6 - price refresh and definitive failure restore automatic video quote preparation
+  ---
+  duration_ms: 0.916958
+  ...
+# Subtest: quote network failure does not create or persist an unknown paid polish task
+not ok 7 - quote network failure does not create or persist an unknown paid polish task
+  ---
+  duration_ms: 1.463958
+  location: '/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-polish.test.js:128:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    true !== false
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-polish.test.js:136:10)
+    async Test.run (node:internal/test_runner/test:797:9)
+    async Test.processPendingSubtests (node:internal/test_runner/test:526:7)
+  ...
+# Subtest: pending recovery adopts the task snapshot after revision-only autoquote but rejects different draft content
+not ok 8 - pending recovery adopts the task snapshot after revision-only autoquote but rejects different draft content
+  ---
+  duration_ms: 1.476542
+  location: '/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-polish.test.js:141:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    + actual - expected
+
+    + '同一内容'
+    - '同一内容的结果'
+           ^
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: '同一内容的结果'
+  actual: '同一内容'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-polish.test.js:151:10)
+    async Test.run (node:internal/test_runner/test:797:9)
+    async Test.processPendingSubtests (node:internal/test_runner/test:526:7)
+  ...
+# Subtest: editor serializes polishing with save, quote and video submission and pauses hidden writes
+ok 9 - editor serializes polishing with save, quote and video submission and pauses hidden writes
+  ---
+  duration_ms: 0.809417
+  ...
+# Subtest: adoption callback changes only the matching prompt and invalidates the video quote
+ok 10 - adoption callback changes only the matching prompt and invalidates the video quote
+  ---
+  duration_ms: 1.005875
+  ...
+# Subtest: stale adoption is rejected after local edit, material change or account switch
+ok 11 - stale adoption is rejected after local edit, material change or account switch
+  ---
+  duration_ms: 0.759791
+  ...
+# Subtest: polish page polls read-only, edits the result and emits adoption without generating video
+ok 12 - polish page polls read-only, edits the result and emits adoption without generating video
+  ---
+  duration_ms: 0.723583
+  ...
+# Subtest: same polish page object rejects account A callbacks after loading account B
+ok 13 - same polish page object rejects account A callbacks after loading account B
+  ---
+  duration_ms: 0.474625
+  ...
+# Subtest: cancel hidden callback cannot leave the next visible session permanently cancelling
+ok 14 - cancel hidden callback cannot leave the next visible session permanently cancelling
+  ---
+  duration_ms: 0.695583
+  ...
+# Subtest: successful cancel clears busy before a failing reload
+not ok 15 - successful cancel clears busy before a failing reload
+  ---
+  duration_ms: 0.549666
+  location: '/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-polish.test.js:248:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    true !== false
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: false
+  actual: true
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-polish.test.js:254:10)
+    async Test.run (node:internal/test_runner/test:797:9)
+    async Test.processPendingSubtests (node:internal/test_runner/test:526:7)
+  ...
+# Subtest: result length counts Unicode code points without splitting emoji or silently truncating
+ok 16 - result length counts Unicode code points without splitting emoji or silently truncating
+  ---
+  duration_ms: 0.768125
+  ...
+# Subtest: uncertain polish task remains query-only and cannot be adopted
+ok 17 - uncertain polish task remains query-only and cannot be adopted
+  ---
+  duration_ms: 0.453333
+  ...
+1..17
+# tests 17
+# suites 0
+# pass 14
+# fail 3
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 67.594208

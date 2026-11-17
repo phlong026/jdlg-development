@@ -1,11 +1,25 @@
 <block wx:if="{{__profileAccessMounted}}">
-<navigation-bar title="创作素材" back="{{true}}" background="#fbfaf7" /><view class="page">
-<view class="hero"><text class="hero-title">创作素材</text><text class="hero-copy">仅展示当前账号有权使用的素材。音频上传通道配置完成前，可选择已登记音频。</text></view>
-<view class="toolbar"><input class="input" value="{{keyword}}" bindinput="onKeyword" placeholder="搜索素材"/><button class="button-secondary" bindtap="search">搜索</button></view>
-<view class="chips type-tabs"><text wx:for="{{types}}" wx:key="value" class="chip {{mediaType === item.value ? 'chip-active' : ''}}" data-value="{{item.value}}" bindtap="selectType">{{item.label}}</text></view>
-<view class="upload-row"><button class="button-secondary" data-type="image" bindtap="chooseUpload" disabled="{{uploading || !imageUploadEnabled}}">上传图片</button><button class="button-secondary" data-type="video" bindtap="chooseUpload" disabled="{{uploading || !mediaUploadEnabled}}">上传视频</button><button class="button-secondary" bindtap="chooseAudio" disabled="{{uploading || !mediaUploadEnabled}}">上传音频</button></view><text wx:if="{{mediaDisabledReason}}" class="meta">{{mediaDisabledReason}}</text><view wx:if="{{uploading}}" class="row"><text class="progress grow">上传 {{uploadProgress}}%，服务端将校验真实类型与时长</text><text class="danger" bindtap="cancelUpload">取消</text></view>
-<view wx:if="{{loading}}" class="state">正在加载素材…</view><view wx:elif="{{error}}" class="card state error"><text>{{error}}</text><button class="button-secondary" bindtap="load">重试</button></view>
-<view wx:elif="{{!items.length}}" class="card state">当前分类暂无素材，可上传本人拥有或已获授权的文件。</view>
-<view wx:for="{{items}}" wx:key="media_id" class="card row" data-index="{{index}}" bindtap="choose"><image wx:if="{{item.preview_url && item.media_type === 'image'}}" class="media-thumb" src="{{item.preview_url}}" mode="aspectFill"/><view wx:else class="media-thumb state">{{item.type_label}}</view><view class="grow"><text class="title">{{item.name || '未命名素材'}}</text><text class="meta">{{item.type_label}}{{item.duration ? ' · ' + item.duration + ' 秒' : ''}}</text></view><text wx:if="{{selectMode}}" class="badge">选择</text></view>
-<button wx:if="{{hasMore}}" class="button-secondary" bindtap="loadMore" loading="{{loadingMore}}">加载更多</button>
-</view></block><login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />
+  <navigation-bar class="studio-navigation" title="我的素材" variant="studio" back="{{true}}" background="#fbfaf7" />
+  <view class="page">
+    <view class="toolbar"><input class="input" value="{{keyword}}" bindinput="onKeyword" placeholder="搜索素材" confirm-type="search" bindconfirm="search"/><button class="text-button" bindtap="search">搜索</button></view>
+    <view wx:if="{{types.length > 1}}" class="chips type-tabs"><text wx:for="{{types}}" wx:key="value" class="chip {{mediaType === item.value ? 'chip-active' : ''}}" data-value="{{item.value}}" bindtap="selectType">{{item.label}}</text></view>
+    <view wx:if="{{imageUploadEnabled || (!allowedType && mediaUploadEnabled)}}" class="upload-row"><button class="button-secondary" data-type="image" bindtap="chooseUpload" disabled="{{uploading || !imageUploadEnabled}}">上传图片</button><button wx:if="{{!allowedType}}" class="button-secondary" data-type="video" bindtap="chooseUpload" disabled="{{uploading || !mediaUploadEnabled}}">上传视频</button><button wx:if="{{!allowedType}}" class="button-secondary" bindtap="chooseAudio" disabled="{{uploading || !mediaUploadEnabled}}">上传音频</button></view>
+    <text wx:if="{{mediaDisabledReason && !selectMode}}" class="meta">上传暂不可用</text>
+    <view wx:if="{{capabilitiesError}}" class="section-error"><text>上传能力读取失败</text><text class="text-link" bindtap="loadCapabilities">重试</text></view>
+    <view wx:if="{{uploading}}" class="row upload-progress"><text class="grow">上传 {{uploadProgress}}%</text><text class="danger" bindtap="cancelUpload">取消</text></view>
+    <view wx:if="{{loading}}" class="state">加载中…</view>
+    <view wx:elif="{{error}}" class="state error"><text>{{error}}</text><button class="button-secondary" bindtap="load">重试</button></view>
+    <view wx:elif="{{!items.length}}" class="state">暂无素材</view>
+    <view wx:for="{{items}}" wx:key="media_id" class="card material-row">
+      <view class="media-preview" data-index="{{index}}" bindtap="preview" aria-role="button" aria-label="预览{{item.name || item.type_label}}">
+        <image wx:if="{{item.preview_url && item.media_type === 'image'}}" class="media-thumb" src="{{item.preview_url}}" mode="aspectFill" />
+        <view wx:else class="media-thumb media-placeholder"><text wx:if="{{item.media_type === 'audio'}}">{{loadingAudioID === item.media_id ? '…' : (playingAudioID === item.media_id ? 'Ⅱ' : '▷')}}</text><text wx:else>▷</text></view>
+      </view>
+      <view class="grow material-name" data-index="{{index}}" bindtap="preview"><text class="title">{{item.name || '未命名素材'}}</text><text class="meta">{{item.type_label}}{{item.duration ? ' · ' + item.duration + ' 秒' : ''}}</text></view>
+      <button wx:if="{{selectMode}}" class="select-button" data-index="{{index}}" bindtap="choose">选用</button>
+    </view>
+    <text wx:if="{{previewError}}" class="error preview-error">{{previewError}}</text>
+    <button wx:if="{{hasMore}}" class="button-secondary" bindtap="loadMore" loading="{{loadingMore}}">加载更多</button>
+  </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

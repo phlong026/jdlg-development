@@ -1,0 +1,62 @@
+.switch-wrap {
+  position: relative;
+  z-index: 12;
+  display: inline-flex;
+}
+
+.switch-button {
+  min-width: 182rpx;
+  height: 64rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10rpx;
+  padding: 0 18rpx;
+  box-sizing: border-box;
+  border: 1px solid rgba(185, 143, 92, 0.58);
+  border-radius: 14rpx;
+  color: #553927;
+  background: linear-gradient(135deg, #fff9ee, #f9ead1);
+  font-size: 25rpx;
+  font-weight: 700;
+}
+
+.arrow {
+  color: #a36e25;
+  font-size: 27rpx;
+  transition: transform 0.16s;
+}
+
+.arrow.open {
+  transform: rotate(180deg);
+}
+
+.menu {
+  position: absolute;
+  top: 72rpx;
+  right: 0;
+  width: 220rpx;
+  overflow: hidden;
+  padding: 8rpx;
+  border: 1px solid rgba(185, 143, 92, 0.3);
+  border-radius: 16rpx;
+  background: #fffaf3;
+  box-shadow: 0 14rpx 34rpx rgba(61, 41, 28, 0.2);
+}
+
+.menu-item {
+  height: 70rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16rpx;
+  border-radius: 10rpx;
+  color: #553927;
+  font-size: 26rpx;
+}
+
+.menu-item.selected {
+  color: #a56d1f;
+  background: #f8e8cf;
+  font-weight: 750;
+}

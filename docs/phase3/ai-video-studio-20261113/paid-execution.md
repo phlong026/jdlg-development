@@ -61,6 +61,6 @@
 
 ## 验收边界
 
-自动化、隔离 MySQL 和模拟器证据记录在验证文件；真实供应商生成、真实灵石余额、真机下载和生产发布是独立验收。未取得独立秘塔凭据之前，不宣称完成真实供应商联调。AI 润色和完整项目笔记选择器仍在原任务书未完成范围，未因本次补齐生成/扣费而自动通过。
+自动化、隔离 MySQL 和模拟器证据记录在验证文件；真实供应商生成、真实灵石余额、真机下载和生产发布是独立验收。未取得独立秘塔凭据之前，不宣称完成真实供应商联调。AI 润色仍未实现；项目笔记选择器已在后续代码补齐，不能继续沿用早期“入口未完成”的状态。最新修复和验证见 [2026-11-17 修复记录](../ai-video-fixes-20261117/README.md)。
 
 协议依据：[秘塔接入说明](https://metaso.cn/minimax-h3/new-api-guide)、[秘塔原生插件源码](https://github.com/meta-sota/ComfyUI-MiniMaxH3-API/blob/main/api_client.py)。数据库并发依据：[MySQL 8.4 锁定读取](https://dev.mysql.com/doc/refman/8.4/en/innodb-locking-reads.html)。未公开承诺的提交、取消和 URL 有效期按保守策略处理。

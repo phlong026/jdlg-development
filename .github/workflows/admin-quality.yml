@@ -48,6 +48,10 @@ jobs:
 
       # The mini-program runtime tests resolve TypeScript and Sass from the
       # locked background dependencies installed above, without WeChat secrets.
+      - name: Check all mini-program TypeScript types
+        working-directory: miniprogram
+        run: npm run typecheck
+
       - name: Run complete mini-program regression tests
         working-directory: miniprogram
         run: node --test tests/*.test.js

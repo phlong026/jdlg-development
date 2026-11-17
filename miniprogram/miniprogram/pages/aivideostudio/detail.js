@@ -6,7 +6,7 @@ const modeText = mode => ({ text: '文生视频', first_frame: '首帧图生', f
 
 Page({
   data: { loading: true, error: '', batch: null, snapshot: {}, results: [], statusLabel: '', adoptingResultID: '', cancelling: false, noteAdoptionOpen: false, adoptionStep: 'project', adoptionProjects: [], adoptionNotes: [], adoptionPositions: [], adoptionPosition: 0, adoptionCursor: '', adoptionLoading: false, adoptionError: '', adoptionProject: null, adoptionTarget: null, adoptionPending: false },
-  onLoad(options) { this.id = options.batch_id; this._token = String(wx.getStorageSync('token') || ''); this._visible = true; this.load(); },
+  onLoad(options) { this._sessionEpoch = (this._sessionEpoch || 0) + 1; this._unloaded = false; this.id = options.batch_id; this._token = String(wx.getStorageSync('token') || ''); this._visible = true; this.setData({ cancelling: false, adoptingResultID: '' }); this.load(); },
   onShow() {
     const token = String(wx.getStorageSync('token') || '');
     if (token !== this._token) {
@@ -21,7 +21,9 @@ Page({
   onHide() { this.closeNoteAdoption(); this._contentAdoptionAttempt = null; this.setData({ adoptingResultID: '' }); this._visible = false; this._epoch = (this._epoch || 0) + 1; this.stopPolling(); this.abortDownload(); },
   onUnload() { this._unloaded = true; this.onHide(); },
   current(epoch) { return !this._unloaded && this._token === String(wx.getStorageSync('token') || '') && (epoch === undefined || epoch === this._epoch); },
-  abortDownload() { if (this._downloadTask && this._downloadTask.abort) this._downloadTask.abort(); this._downloadTask = null; },
+  session() { return { epoch: this._sessionEpoch, token: this._token }; },
+  ownsSession(session) { return !!session && session.epoch === this._sessionEpoch && session.token === this._token && this.current(); },
+  abortDownload() { if (this._downloadTask) { if (this._downloadTask.abort) this._downloadTask.abort(); if (typeof wx.hideLoading === 'function') wx.hideLoading(); } this._downloadTask = null; this._downloadAttempt = null; },
   stopPolling() { if (this._pollTimer) clearTimeout(this._pollTimer); this._pollTimer = null; },
   schedulePoll() {
     this.stopPolling();
@@ -34,7 +36,8 @@ Page({
     this.stopPolling();
     const epoch = this._epoch = (this._epoch || 0) + 1;
     if (!this.id) { this.setData({ loading: false, error: '任务标识无效' }); return; }
-    this.setData(silent === true ? { error: '' } : { loading: true, error: '' });
+    const quiet = silent === true;
+    this.setData(quiet ? { error: '' } : { loading: true, error: '' });
     try {
       const batch = await api.getBatch(this.id);
       if (!this.current(epoch)) return;
@@ -50,52 +53,60 @@ Page({
   },
   async cancelQueued() {
     if (this.data.cancelling || !(this.data.batch || {}).can_cancel) return;
+    const session = this.session();
     this.setData({ cancelling: true, error: '' });
     try {
       await api.cancelBatch(this.id);
-      if (this.current()) await this.load(true);
-    } catch (error) { if (this.current()) this.setData({ error: error.message || '取消失败，任务可能已开始，请刷新状态' }); }
-    finally { if (this.current()) this.setData({ cancelling: false }); }
+      if (this.ownsSession(session)) await this.load(true);
+    } catch (error) { if (this.ownsSession(session)) this.setData({ error: error.message || '取消失败，任务可能已开始，请刷新状态' }); }
+    finally { if (this.ownsSession(session)) this.setData({ cancelling: false }); }
   },
   async play(event) {
-    const index = Number(event.currentTarget.dataset.index), item = this.data.results[index];
+    const session = this.session();
+    const item = this.data.results[Number(event.currentTarget.dataset.index)], resultID = item && item.result_id;
+    if (!resultID) return;
     try {
-      const value = await api.playback(item.result_id);
-      if (!this.current()) return;
-      const results = this.data.results.slice(), url = String(value.url || value.playback_url || '');
-      results[index] = Object.assign({}, item, { playback_url: url.startsWith('/') ? api.ORIGIN + url : url });
+      const value = await api.playback(resultID);
+      if (!this.ownsSession(session)) return;
+      const results = this.data.results.slice(), index = results.findIndex(row => row.result_id === resultID), url = String(value.url || value.playback_url || '');
+      if (index < 0) return;
+      results[index] = Object.assign({}, results[index], { playback_url: url.startsWith('/') ? api.ORIGIN + url : url });
       this.setData({ results, error: '' });
-    } catch (error) { if (this.current()) this.setData({ error: error.message || '播放地址获取失败' }); }
+    } catch (error) { if (this.ownsSession(session)) this.setData({ error: error.message || '播放地址获取失败' }); }
   },
   download(event) {
-    const index = Number(event.currentTarget.dataset.index), item = this.data.results[index], token = this._token;
+    const session = this.session(), index = Number(event.currentTarget.dataset.index), item = this.data.results[index];
     if (!item.playback_url) return;
     this.abortDownload(); wx.showLoading({ title: '正在下载' });
-    this._downloadTask = wx.downloadFile({
+    const attempt = {}; this._downloadAttempt = attempt;
+    const task = wx.downloadFile({
       url: item.playback_url,
       success: response => {
+        if (!this.ownsSession(session) || this._downloadAttempt !== attempt) return;
         this._downloadTask = null; wx.hideLoading();
-        if (!this.current() || token !== String(wx.getStorageSync('token') || '')) return;
-        if (response.statusCode !== 200) { this.setData({ error: '视频下载失败，请刷新播放地址后重试' }); return; }
+        if (response.statusCode !== 200) { this._downloadAttempt = null; this.setData({ error: '视频下载失败，请刷新播放地址后重试' }); return; }
         wx.saveVideoToPhotosAlbum({
           filePath: response.tempFilePath,
-          success: () => { if (this.current() && token === String(wx.getStorageSync('token') || '')) wx.showToast({ title: '已保存到相册', icon: 'success' }); },
-          fail: error => { if (this.current() && token === String(wx.getStorageSync('token') || '')) this.setData({ error: /auth deny|authorize/i.test(String(error && error.errMsg || '')) ? '未获得相册权限，请在设置中允许后重试' : '保存相册失败，请重试' }); },
+          success: () => { if (this.ownsSession(session) && this._downloadAttempt === attempt) { this._downloadAttempt = null; wx.showToast({ title: '已保存到相册', icon: 'success' }); } },
+          fail: error => { if (this.ownsSession(session) && this._downloadAttempt === attempt) { this._downloadAttempt = null; this.setData({ error: /auth deny|authorize/i.test(String(error && error.errMsg || '')) ? '未获得相册权限，请在设置中允许后重试' : '保存相册失败，请重试' }); } },
         });
       },
-      fail: error => { this._downloadTask = null; wx.hideLoading(); if (this.current() && !/abort/i.test(String(error && error.errMsg || ''))) this.setData({ error: '网络下载失败，请重试' }); },
+      fail: error => { if (!this.ownsSession(session) || this._downloadAttempt !== attempt) return; this._downloadTask = null; this._downloadAttempt = null; wx.hideLoading(); if (!/abort/i.test(String(error && error.errMsg || ''))) this.setData({ error: '网络下载失败，请重试' }); },
     });
+    attempt.task = task; this._downloadTask = task;
   },
   async retain(event) {
-    const index = Number(event.currentTarget.dataset.index), item = this.data.results[index];
-    if (item.retained) return;
+    const session = this.session();
+    const item = this.data.results[Number(event.currentTarget.dataset.index)], resultID = item && item.result_id;
+    if (!resultID || item.retained) return;
     try {
-      const value = await api.retain(item.result_id);
-      if (!this.current()) return;
-      const results = this.data.results.slice();
-      results[index] = Object.assign({}, item, { retained: true, retention_status: 'retained', stable_media_id: value.media_id || item.stable_media_id });
+      const value = await api.retain(resultID);
+      if (!this.ownsSession(session)) return;
+      const results = this.data.results.slice(), index = results.findIndex(row => row.result_id === resultID);
+      if (index < 0) return;
+      results[index] = Object.assign({}, results[index], { retained: true, retention_status: 'retained', stable_media_id: value.media_id || results[index].stable_media_id });
       this.setData({ results, error: '' });
-    } catch (error) { if (this.current()) this.setData({ error: error.message || '素材留存失败，可稍后重试' }); }
+    } catch (error) { if (this.ownsSession(session)) this.setData({ error: error.message || '素材留存失败，可稍后重试' }); }
   },
   adoptionCurrent(epoch) { return this.current() && this._visible !== false && epoch === this._adoptionEpoch; },
   closeNoteAdoption() {
@@ -183,9 +194,9 @@ Page({
   async adoptContent(event) {
     const item = this.data.results[Number(event.currentTarget.dataset.index)];
     if (!item || !item.stable_media_id || this.data.adoptingResultID) return;
-    const attempt = { token: this._token };
+    const attempt = { token: this._token, session: this.session() };
     this._contentAdoptionAttempt = attempt;
-    const ownsAttempt = () => this._contentAdoptionAttempt === attempt && attempt.token === this._token && attempt.token === String(wx.getStorageSync('token') || '') && this._visible !== false && !this._unloaded;
+    const ownsAttempt = () => this._contentAdoptionAttempt === attempt && this.ownsSession(attempt.session) && this._visible !== false;
     this.setData({ adoptingResultID: item.result_id, error: '' });
     try {
       // Recover the exact pending target even when its former owner is no

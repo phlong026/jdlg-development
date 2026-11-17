@@ -215,3 +215,19 @@ func TestProviderReferencePurposeAndOrderReachNativeRequest(t *testing.T) {
 		t.Fatalf("mismatched position accepted: %v", err)
 	}
 }
+
+func TestReferencePromptWithPurposesUsesProviderVisibleLimit(t *testing.T) {
+	refs := []GenerationReference{{Type: "image", Purpose: "控制庭院风格", Position: 1}}
+	if _, err := ReferencePromptWithPurposes(strings.Repeat("参", 7000), refs); err == nil {
+		t.Fatal("combined prompt over provider limit was accepted")
+	}
+	refs[0].Purpose = strings.Repeat("用", 121)
+	if _, err := ReferencePromptWithPurposes("庭院镜头", refs); err == nil {
+		t.Fatal("purpose over provider limit was accepted")
+	}
+	refs[0].Purpose = "控制庭院风格"
+	got, err := ReferencePromptWithPurposes("庭院镜头", refs)
+	if err != nil || !strings.Contains(got, "图片1（引用编号1）：控制庭院风格") {
+		t.Fatalf("prompt=%q err=%v", got, err)
+	}
+}

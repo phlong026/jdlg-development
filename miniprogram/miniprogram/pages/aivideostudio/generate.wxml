@@ -1,6 +1,6 @@
 <block wx:if="{{__profileAccessMounted}}">
   <view class="editor-page {{activeTab === 'reference' ? 'editor-page-reference' : ''}}">
-    <navigation-bar title="AI 视频" back="{{true}}" background="#fbfaf7" />
+    <navigation-bar class="studio-navigation" title="AI 视频" variant="studio" back="{{true}}" background="#fbfaf7" />
     <view class="tabs">
       <view class="tab {{activeTab === 'creation' ? 'tab-active' : ''}}" data-tab="creation" bindtap="switchTab">文 / 图生视频</view>
       <view class="tab {{activeTab === 'reference' ? 'tab-active' : ''}}" data-tab="reference" bindtap="switchTab">参考生视频</view>
@@ -8,51 +8,51 @@
 
     <view class="draft-row">
       <input class="draft-name" maxlength="60" value="{{name}}" data-field="name" bindinput="inputField" placeholder="给这次创作起个名字" />
-      <mini-icon class="edit-mark" name="file" size="16px" />
-      <button class="draft-save" bindtap="saveDraft" loading="{{saving}}" disabled="{{saving || quoting || submitting}}">存草稿</button>
+      <mini-icon class="edit-mark" name="edit" size="16px" />
+      <button class="draft-save" bindtap="saveDraft" loading="{{saving}}" disabled="{{saving || quoting || submitting || polishing}}">存草稿</button>
     </view>
 
     <view class="tool-row">
-      <view class="tool" bindtap="openMaterials"><mini-icon name="folder" size="19px"/><text>我的素材</text></view>
+      <view class="tool" bindtap="openMaterials"><mini-icon name="image" size="18px"/><text>我的素材</text></view>
       <view class="tool-divider" />
-      <view class="tool" bindtap="openPrompts"><mini-icon name="file" size="19px"/><text>我的提示词</text></view>
+      <view class="tool" bindtap="openPrompts"><mini-icon name="file" size="18px"/><text>我的提示词</text></view>
       <view class="tool-divider" />
-      <view class="tool" bindtap="openRecords"><mini-icon name="play-circle" size="19px"/><text>创作记录</text></view>
+      <view class="tool" bindtap="openRecords"><mini-icon name="play-circle" size="18px"/><text>创作记录</text></view>
     </view>
 
     <view wx:if="{{loading}}" class="inline-state">正在读取生成能力…</view>
-    <view wx:if="{{loadError}}" class="inline-state state-error"><text>{{loadError}}</text><text class="retry" bindtap="load">重试</text></view>
-    <view wx:if="{{!loading && !capabilities.enabled}}" class="capability-note">{{capabilities.disabled_reason || '能力或价格尚未配置，可继续编辑和保存草稿。'}}</view>
+    <view wx:if="{{loadError}}" class="inline-state state-error"><text>加载失败</text><text class="retry" bindtap="load">重试</text></view>
+    <view wx:if="{{!loading && !loadError && !capabilities.enabled}}" class="capability-note">生成暂未开放，可先保存草稿</view>
     <view wx:if="{{submissionUncertain}}" class="inline-state"><text>上次提交结果待核对</text><text class="retry" bindtap="checkSubmission">查询</text><text class="retry" bindtap="recoverSubmission">按原请求恢复</text></view>
+    <view wx:if="{{polishPending}}" class="inline-state"><text>上次润色任务待核对</text><text class="retry" bindtap="checkPolishPending">查询</text></view>
 
     <view wx:if="{{activeTab === 'creation'}}" class="section-block">
       <view class="section-heading"><text>画面素材</text><text class="optional">选填</text></view>
       <view class="frame-layout">
         <view class="frame-slot" data-target="first_frame" bindtap="chooseMaterial">
-          <image wx:if="{{firstFrame.preview_url}}" class="frame-image" src="{{firstFrame.preview_url}}" mode="aspectFill" />
+          <image wx:if="{{firstFrame.preview_url}}" class="frame-image" src="{{firstFrame.preview_url}}" mode="aspectFill" data-target="first_frame" catchtap="previewFrame" aria-label="预览首帧" />
           <view wx:else class="frame-empty"><text class="plus">+</text><text>添加首帧</text></view>
-          <text wx:if="{{first_frame_media_id}}" class="frame-tag">首帧</text>
+          <view wx:if="{{first_frame_media_id}}" class="frame-tag" data-target="first_frame" catchtap="chooseMaterial" aria-role="button" aria-label="更换首帧"><text>首帧</text><mini-icon name="edit" size="11px" /></view>
           <text wx:if="{{first_frame_media_id}}" class="remove" data-target="first_frame" catchtap="removeFrame">×</text>
         </view>
         <view class="frame-slot" data-target="last_frame" bindtap="chooseMaterial">
-          <image wx:if="{{lastFrame.preview_url}}" class="frame-image" src="{{lastFrame.preview_url}}" mode="aspectFill" />
+          <image wx:if="{{lastFrame.preview_url}}" class="frame-image" src="{{lastFrame.preview_url}}" mode="aspectFill" data-target="last_frame" catchtap="previewFrame" aria-label="预览尾帧" />
           <view wx:else class="frame-empty"><text class="plus">+</text><text>添加尾帧</text></view>
-          <text wx:if="{{last_frame_media_id}}" class="frame-tag">尾帧</text>
+          <view wx:if="{{last_frame_media_id}}" class="frame-tag" data-target="last_frame" catchtap="chooseMaterial" aria-role="button" aria-label="更换尾帧"><text>尾帧</text><mini-icon name="edit" size="11px" /></view>
           <text wx:if="{{last_frame_media_id}}" class="remove" data-target="last_frame" catchtap="removeFrame">×</text>
         </view>
       </view>
-      <view class="library-link" data-target="first_frame" bindtap="chooseMaterial">从素材库选择 ›</view>
+      <view class="library-link" data-target="first_frame" bindtap="chooseMaterial"><mini-icon name="image" size="16px"/><text>从素材库选择 ›</text></view>
     </view>
 
     <view wx:else class="section-block">
-      <view class="section-heading"><text>参考素材</text><view class="reference-actions"><text>{{references.length}} / {{limits.total_max}}</text><text class="add-reference" data-target="reference" bindtap="chooseMaterial">+添加</text></view></view>
-      <view wx:if="{{!references.length}}" class="reference-empty" data-target="reference" bindtap="chooseMaterial"><text class="plus">+</text><text>添加图片、视频或音频</text></view>
-      <view class="visual-references">
+      <view class="section-heading"><text>参考素材</text><text class="reference-count">{{references.length}} / {{limits.total_max}}</text></view>
+      <view class="visual-references {{!references.length ? 'visual-references-empty' : ''}}">
         <block wx:for="{{references}}" wx:key="media_id">
           <view wx:if="{{item.media_type === 'image' || item.media_type === 'video'}}" class="reference-visual">
             <view class="reference-preview">
-              <image wx:if="{{item.media_type === 'image' && item.preview_url}}" src="{{item.preview_url}}" mode="aspectFill" />
-              <video wx:elif="{{item.media_type === 'video' && item.media_url && !item.preview_error}}" src="{{item.media_url}}" poster="{{item.preview_url}}" controls="{{true}}" show-center-play-btn="{{true}}" object-fit="cover" data-id="{{item.media_id}}" binderror="mediaPreviewError" />
+              <image wx:if="{{item.media_type === 'image' && item.preview_url}}" src="{{item.preview_url}}" mode="aspectFill" data-id="{{item.media_id}}" catchtap="previewReference" />
+              <video wx:elif="{{item.media_type === 'video' && item.media_url && !item.preview_error}}" id="{{item.video_dom_id}}" src="{{item.media_url}}" poster="{{item.preview_url}}" controls="{{true}}" show-center-play-btn="{{true}}" object-fit="cover" data-id="{{item.media_id}}" bindplay="onReferenceVideoPlay" binderror="mediaPreviewError" />
               <view wx:else class="preview-fallback">{{item.preview_error ? '视频预览暂不可用' : (item.media_type === 'video' ? '视频暂无可用预览' : '图片预览加载失败')}}</view>
               <text class="reference-tag">{{item.media_type === 'video' ? '视频' : '图片'}} {{item.display_index}}{{item.duration ? ' · ' + item.duration + '秒' : ''}}</text>
               <text class="remove" data-id="{{item.media_id}}" catchtap="removeReference">×</text>
@@ -60,10 +60,11 @@
             <input class="purpose-input" value="{{item.purpose}}" maxlength="120" data-id="{{item.media_id}}" bindinput="updateReferencePurpose" placeholder="说明用途" />
           </view>
         </block>
+        <view wx:if="{{references.length < limits.total_max}}" class="reference-add" data-target="reference" bindtap="chooseMaterial" aria-role="button" aria-label="添加图片、视频或音频"><text class="plus">+</text></view>
       </view>
       <block wx:for="{{references}}" wx:key="media_id">
         <view wx:if="{{item.media_type === 'audio'}}" class="audio-reference">
-          <mini-icon name="play-circle" size="22px" />
+          <view class="audio-toggle" data-id="{{item.media_id}}" bindtap="toggleReferenceAudio" aria-role="button" aria-label="{{loadingAudioID === item.media_id ? '取消加载' : (playingAudioID === item.media_id ? '暂停试听' : '试听音频')}}"><view wx:if="{{loadingAudioID === item.media_id}}" class="audio-loading" /><view wx:elif="{{playingAudioID === item.media_id}}" class="audio-pause" /><mini-icon wx:else name="play-circle" size="22px" /></view>
           <text class="audio-name">音频 {{item.display_index}}{{item.duration ? ' · ' + item.duration + '秒' : ''}}</text>
           <input class="audio-purpose" value="{{item.purpose}}" maxlength="120" data-id="{{item.media_id}}" bindinput="updateReferencePurpose" placeholder="说明用途" />
           <text class="audio-remove" data-id="{{item.media_id}}" bindtap="removeReference">移除</text>
@@ -71,12 +72,13 @@
       </block>
     </view>
 
+    <text wx:if="{{audioPreviewError}}" class="media-error">{{audioPreviewError}}</text>
     <view class="section-block prompt-section">
-      <view class="section-heading"><text>画面描述</text></view>
+      <view class="section-heading"><text>画面描述</text><view class="prompt-actions"><text class="polish-link {{!polishCapability.enabled ? 'polish-link-disabled' : ''}}" bindtap="startPolish" aria-role="button">{{polishing ? '润色中…' : (polishCapability.enabled ? 'AI 润色 · ' + polishCapability.total_stones + ' 灵石' : 'AI 润色')}}</text><text class="tutorial-link" bindtap="openTutorial" aria-role="button">写法教程 ›</text></view></view>
       <view class="prompt-box">
         <textarea wx:if="{{activeTab === 'creation'}}" class="prompt-input" maxlength="7000" value="{{prompt}}" data-field="prompt" bindinput="inputField" placeholder="描述主体、环境、镜头运动和光线…" cursor-spacing="150" />
         <textarea wx:else class="prompt-input" maxlength="7000" value="{{reference_prompt}}" data-field="reference_prompt" bindinput="inputField" placeholder="说明每项参考素材的用途，例如图片1控制风格…" cursor-spacing="150" />
-        <view class="prompt-footer"><text>{{activeTab === 'creation' ? prompt.length : reference_prompt.length}} / 7000</text><text class="polish-disabled" bindtap="polishUnavailable">AI 润色（暂未开放）</text></view>
+        <view class="prompt-footer"><text>{{activeTab === 'creation' ? prompt.length : reference_prompt.length}} / 7000</text></view>
       </view>
     </view>
 
@@ -96,7 +98,7 @@
 
     <view class="bottom-bar">
       <text class="bottom-hint {{quoteStatus === 'error' ? 'price-retry' : ''}}" bindtap="retryQuote">{{quoteHint}}</text>
-      <button class="quote-button" bindtap="generateVideo" loading="{{submitting}}" disabled="{{saving || quoting || submitting || submissionUncertain || !quoteReady || !capabilities.enabled || !selectedModeEnabled}}">生成视频</button>
+      <button class="quote-button" bindtap="generateVideo" loading="{{submitting}}" disabled="{{saving || quoting || submitting || polishing || submissionUncertain || !quoteReady || !capabilities.enabled || !selectedModeEnabled}}">生成视频</button>
     </view>
   </view>
 </block>

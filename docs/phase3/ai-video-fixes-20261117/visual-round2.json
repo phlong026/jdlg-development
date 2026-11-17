@@ -1,0 +1,42 @@
+{
+  "method": "independent static visual review of native offline simulator screenshots",
+  "reviewer": "review_visual",
+  "result": "pass_with_one_polish_item",
+  "pages": [
+    "prompts",
+    "materials",
+    "index",
+    "records",
+    "detail",
+    "reference",
+    "portrait_frame_scrolled"
+  ],
+  "input_geometry_css_pixels": {
+    "height": 47,
+    "width": 368
+  },
+  "frame_geometry_css_pixels": [
+    {
+      "width": 180,
+      "height": 320
+    },
+    {
+      "width": 180,
+      "height": 320
+    }
+  ],
+  "verified": [
+    "reported input clipping resolved",
+    "six pages use consistent palette and controls",
+    "portrait frame parameters and fixed footer remain reachable",
+    "fixed navigation keeps status area clear"
+  ],
+  "polish": [
+    "Hide the redundant single-category filter and disabled upload row in an image-only picker. Applied before final screenshots."
+  ],
+  "limitations": [
+    "static simulator screenshots, not a physical device",
+    "system keyboard, font scaling and extreme long text not physically verified"
+  ],
+  "source": "visual-round1.json"
+}

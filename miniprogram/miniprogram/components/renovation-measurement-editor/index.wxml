@@ -1,0 +1,36 @@
+<view class="mask" wx:if="{{visible && draft}}" bindtap="cancel">
+  <view class="drawer" catchtap="stopPropagation">
+    <view class="drawer-head"><text>空间尺寸</text><text bindtap="cancel">×</text></view>
+    <view class="segmented">
+      <view class="segment {{draft.mode === 'estimated' ? 'selected' : ''}}" data-mode="estimated" bindtap="onModeTap">按房屋参数估算</view>
+      <view class="segment {{draft.mode === 'measured' ? 'selected' : ''}}" data-mode="measured" bindtap="onModeTap">填写空间尺寸</view>
+    </view>
+    <view class="estimated-copy" wx:if="{{draft.mode === 'estimated'}}">根据装修面积、户型和层高自动计算工程量。</view>
+    <block wx:else>
+      <scroll-view class="tabs" scroll-x><view wx:for="{{draft.floors}}" wx:key="index" class="tab {{activeFloor === index ? 'selected' : ''}}" data-index="{{index}}" bindtap="selectFloor">{{index + 1}}层</view></scroll-view>
+      <view class="floor-height"><text>本层层高</text><view class="input-field"><input type="digit" value="{{draft.floors[activeFloor].height}}" placeholder="继承全屋" bindinput="onFloorHeightInput"/><text>m</text></view></view>
+      <scroll-view class="tabs spaces" scroll-x><view wx:for="{{draft.floors[activeFloor].spaces}}" wx:key="id" class="tab {{activeSpace === index ? 'selected' : ''}}" data-index="{{index}}" bindtap="selectSpace">{{item.name}}</view></scroll-view>
+      <block wx:if="{{draft.floors[activeFloor].spaces.length}}">
+        <view class="measurement-grid">
+          <view><text class="field-label">长度</text><view class="input-field"><input type="digit" value="{{draft.floors[activeFloor].spaces[activeSpace].length}}" data-field="length" bindinput="onSpaceInput" placeholder="必填"/><text>m</text></view></view>
+          <view><text class="field-label">宽度</text><view class="input-field"><input type="digit" value="{{draft.floors[activeFloor].spaces[activeSpace].width}}" data-field="width" bindinput="onSpaceInput" placeholder="必填"/><text>m</text></view></view>
+          <view><text class="field-label">层高</text><view class="input-field"><input type="digit" value="{{draft.floors[activeFloor].spaces[activeSpace].height}}" data-field="height" bindinput="onSpaceInput" placeholder="继承本层"/><text>m</text></view></view>
+          <view><text class="field-label">面积</text><view class="input-field readonly"><text>{{areaPreview}}</text></view></view>
+        </view>
+        <view class="advanced-link" bindtap="toggleAdvanced">门窗与定制尺寸 <text>{{advancedVisible ? '收起' : '展开'}} ›</text></view>
+        <view class="measurement-grid" wx:if="{{advancedVisible}}">
+          <view><text class="field-label">门宽</text><view class="input-field"><input type="digit" value="{{draft.floors[activeFloor].spaces[activeSpace].doorWidth}}" data-field="doorWidth" bindinput="onSpaceInput"/><text>m</text></view></view>
+          <view><text class="field-label">门面积</text><view class="input-field"><input type="digit" value="{{draft.floors[activeFloor].spaces[activeSpace].doorArea}}" data-field="doorArea" bindinput="onSpaceInput"/><text>㎡</text></view></view>
+          <view><text class="field-label">窗宽</text><view class="input-field"><input type="digit" value="{{draft.floors[activeFloor].spaces[activeSpace].windowWidth}}" data-field="windowWidth" bindinput="onSpaceInput"/><text>m</text></view></view>
+          <view><text class="field-label">窗面积</text><view class="input-field"><input type="digit" value="{{draft.floors[activeFloor].spaces[activeSpace].windowArea}}" data-field="windowArea" bindinput="onSpaceInput"/><text>㎡</text></view></view>
+          <view wx:if="{{draft.floors[activeFloor].spaces[activeSpace].type === 'bedroom' || draft.floors[activeFloor].spaces[activeSpace].type === 'living'}}"><text class="field-label">窗帘盒</text><view class="input-field"><input type="digit" value="{{draft.floors[activeFloor].spaces[activeSpace].curtainBoxLength}}" data-field="curtainBoxLength" bindinput="onSpaceInput"/><text>m</text></view></view>
+          <view wx:if="{{draft.floors[activeFloor].spaces[activeSpace].type === 'living'}}"><text class="field-label">背景墙</text><view class="input-field"><input type="digit" value="{{draft.floors[activeFloor].spaces[activeSpace].tvBackgroundArea}}" data-field="tvBackgroundArea" bindinput="onSpaceInput"/><text>㎡</text></view></view>
+          <view wx:if="{{draft.floors[activeFloor].spaces[activeSpace].type === 'kitchen'}}"><text class="field-label">橱柜</text><view class="input-field"><input type="digit" value="{{draft.floors[activeFloor].spaces[activeSpace].cabinetLength}}" data-field="cabinetLength" bindinput="onSpaceInput"/><text>m</text></view></view>
+        </view>
+      </block>
+      <view class="empty" wx:else>请先设置户型</view>
+    </block>
+    <view class="hint">未填门窗面积按不扣除计算；柜体等未填按空间尺寸估算</view>
+    <view class="actions"><button class="secondary" bindtap="cancel">取消</button><button class="primary" bindtap="confirm">保存</button></view>
+  </view>
+</view>

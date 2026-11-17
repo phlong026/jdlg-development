@@ -1,0 +1,20 @@
+{
+  "fixture_only": true,
+  "supplier_requests": 0,
+  "real_charges": 0,
+  "generation_requests": 0,
+  "frame_result_edited_and_adopted": {
+    "expected": "保留庭院结构，镜头缓慢推进，树影轻动。",
+    "observed": "保留庭院结构，镜头缓慢推进，树影轻动。"
+  },
+  "keep_original_after_edit": {
+    "expected": "保留庭院结构，镜头缓慢推进，树影轻动。",
+    "observed": "保留庭院结构，镜头缓慢推进，树影轻动。"
+  },
+  "reference_result_edited_and_adopted": {
+    "expected": "图片1保持庭院外观，视频1参考平稳运镜，音频1参考舒缓节奏。",
+    "observed": "图片1保持庭院外观，视频1参考平稳运镜，音频1参考舒缓节奏。"
+  },
+  "page_event_channel": "this.getOpenerEventChannel",
+  "note": "Values observed through native automation getData after actual button taps; no clipboard or production API accessed."
+}

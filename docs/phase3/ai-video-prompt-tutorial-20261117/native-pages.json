@@ -1,0 +1,53 @@
+{
+  "fixture_only": true,
+  "results": [
+    {
+      "mode": "text",
+      "rendered_mode": "text",
+      "top": {
+        "success": true,
+        "path": "/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/docs/phase3/ai-video-prompt-tutorial-20261117/tutorial-text.png",
+        "imageWidth": 684,
+        "imageHeight": 1486
+      },
+      "bottom": {
+        "success": true,
+        "path": "/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/docs/phase3/ai-video-prompt-tutorial-20261117/tutorial-text-bottom.png",
+        "imageWidth": 684,
+        "imageHeight": 1486
+      }
+    },
+    {
+      "mode": "image",
+      "rendered_mode": "image",
+      "top": {
+        "success": true,
+        "path": "/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/docs/phase3/ai-video-prompt-tutorial-20261117/tutorial-image.png",
+        "imageWidth": 684,
+        "imageHeight": 1486
+      },
+      "bottom": {
+        "success": true,
+        "path": "/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/docs/phase3/ai-video-prompt-tutorial-20261117/tutorial-image-bottom.png",
+        "imageWidth": 684,
+        "imageHeight": 1486
+      }
+    },
+    {
+      "mode": "reference",
+      "rendered_mode": "reference",
+      "top": {
+        "success": true,
+        "path": "/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/docs/phase3/ai-video-prompt-tutorial-20261117/tutorial-reference.png",
+        "imageWidth": 684,
+        "imageHeight": 1486
+      },
+      "bottom": {
+        "success": true,
+        "path": "/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/docs/phase3/ai-video-prompt-tutorial-20261117/tutorial-reference-bottom.png",
+        "imageWidth": 684,
+        "imageHeight": 1486
+      }
+    }
+  ]
+}

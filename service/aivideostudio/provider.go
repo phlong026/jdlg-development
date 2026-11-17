@@ -253,7 +253,6 @@ func metasoRequest(input GenerationRequest) ([]byte, error) {
 		counts := map[string]int{}
 		duration := map[string]float64{}
 		seen := map[string]bool{}
-		bindings := make([]string, 0, len(input.References))
 		for index, ref := range input.References {
 			if ref.Position != 0 && ref.Position != index+1 {
 				return nil, errors.New("参考素材编号与请求顺序不一致")
@@ -281,27 +280,46 @@ func metasoRequest(input GenerationRequest) ([]byte, error) {
 			if ref.Type == "image" {
 				item["name"] = label
 			}
-			if purpose := strings.TrimSpace(ref.Purpose); purpose != "" {
-				if utf8.RuneCountInString(purpose) > 120 {
-					return nil, errors.New("单项素材用途不能超过120字")
-				}
-				bindings = append(bindings, fmt.Sprintf("%s（引用编号%d）：%s", label, index+1, purpose))
-			}
 			content = append(content, item)
 		}
 		// The native API has no purpose field. Keep the binding in model-visible
 		// text instead of silently dropping user intent or inventing JSON fields.
-		if len(bindings) > 0 {
-			prompt := input.Prompt + "\n\n参考素材用途：\n" + strings.Join(bindings, "\n")
-			if utf8.RuneCountInString(prompt) > 7000 {
-				return nil, errors.New("画面描述与素材用途合计不能超过7000字")
-			}
-			content[0]["text"] = prompt
+		prompt, err := ReferencePromptWithPurposes(input.Prompt, input.References)
+		if err != nil {
+			return nil, err
 		}
+		content[0]["text"] = prompt
 	default:
 		return nil, errors.New("生成模式不支持")
 	}
 	return json.Marshal(map[string]any{"model": "MiniMax-H3", "content": content, "resolution": input.Resolution, "duration": input.Duration, "ratio": input.Ratio})
+}
+
+// ReferencePromptWithPurposes produces the exact text sent to H3. Quote-time
+// validation calls the same function so an input cannot reserve funds and then
+// fail locally because provider-visible text is too long.
+func ReferencePromptWithPurposes(prompt string, references []GenerationReference) (string, error) {
+	counts := map[string]int{}
+	bindings := make([]string, 0, len(references))
+	for index, ref := range references {
+		counts[ref.Type]++
+		purpose := strings.TrimSpace(ref.Purpose)
+		if purpose == "" {
+			continue
+		}
+		if utf8.RuneCountInString(purpose) > 120 {
+			return "", errors.New("单项素材用途不能超过120字")
+		}
+		label := map[string]string{"image": "图片", "video": "视频", "audio": "音频"}[ref.Type] + fmt.Sprint(counts[ref.Type])
+		bindings = append(bindings, fmt.Sprintf("%s（引用编号%d）：%s", label, index+1, purpose))
+	}
+	if len(bindings) > 0 {
+		prompt += "\n\n参考素材用途：\n" + strings.Join(bindings, "\n")
+	}
+	if utf8.RuneCountInString(prompt) > 7000 {
+		return "", errors.New("画面描述与素材用途合计不能超过7000字")
+	}
+	return prompt, nil
 }
 
 func providerRatio(ratio string) bool {

@@ -1,0 +1,14 @@
+=== RUN   TestStudioPaidAtomicLifecycle
+--- PASS: TestStudioPaidAtomicLifecycle (5.93s)
+=== RUN   TestAIVideoStudioMySQLIsolationAndRevisions
+--- PASS: TestAIVideoStudioMySQLIsolationAndRevisions (1.27s)
+=== RUN   TestStudioWorkerDurabilityAndReconciliation
+--- PASS: TestStudioWorkerDurabilityAndReconciliation (4.76s)
+=== RUN   TestStudioPaidAtomicLifecycle
+--- PASS: TestStudioPaidAtomicLifecycle (1.31s)
+=== RUN   TestAIVideoStudioMySQLIsolationAndRevisions
+--- PASS: TestAIVideoStudioMySQLIsolationAndRevisions (0.35s)
+=== RUN   TestStudioWorkerDurabilityAndReconciliation
+--- PASS: TestStudioWorkerDurabilityAndReconciliation (1.50s)
+PASS
+ok  	service/model	15.678s

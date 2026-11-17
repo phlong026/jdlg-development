@@ -1,1 +1,7 @@
 @import "./common.wxss";
+.action { position:relative; min-height:150rpx; display:flex; flex-direction:column; justify-content:center; padding-right:44rpx; }
+.action-arrow { position:absolute; right:22rpx; top:50%; transform:translateY(-50%); color:#ad793d; font-size:40rpx; }
+.workspace-tools { display:flex; align-items:center; justify-content:center; gap:38rpx; min-height:76rpx; border-bottom:1rpx solid #e8e1d8; color:#785638; font-size:27rpx; }
+.workspace-tools text { padding:18rpx 8rpx; }
+.tool-divider { width:1rpx; height:24rpx; background:#d8cbbf; }
+.availability-note { display:block; margin-top:22rpx; color:#8b7565; font-size:24rpx; }
