@@ -1,0 +1,115 @@
+{
+  "recorded_at": "2026-11-17T22:50:20+08:00",
+  "source": {
+    "local_candidate_commit": "aab310e0d0dd1d54681c73aac71c7cfdbe4268e2",
+    "remote_candidate_commit": "567d134da2a6758c37236b1860b1f068553ef24f",
+    "merged_commit": "9a4101b2bc6f882da96ceac1f00ebdc0bf52f4dd",
+    "identical_tree": "71fcd54c1e95520c58539b26088be798c11d47ef",
+    "pr_url": "https://github.com/phlong026/jdlg-development/pull/58"
+  },
+  "ci": {
+    "all_passed": true,
+    "run_ids": [
+      44104591570,
+      44104591659,
+      44104580547
+    ],
+    "linux_backend_race_passed": true
+  },
+  "validation": {
+    "baseline_official_plain_get_returned": 403,
+    "officialaccount_and_route_tests": "passed CGO_ENABLED=0",
+    "vet": "passed",
+    "independent_review": {
+      "p0": 0,
+      "p1": 0,
+      "p2": 0,
+      "confidence": "high"
+    },
+    "source_reverse_patch_restores_deployed_tree": true,
+    "frontend_source_unchanged": true,
+    "dependency_files_unchanged": true,
+    "protected_signer_contract_passed": true,
+    "elf_hmac_sm4_match": true,
+    "macos_cgo_limitation": "existing go-m1cpu initialization SIGSEGV; validated no-CGO and Linux CI race"
+  },
+  "production": {
+    "status": "active",
+    "pid": 3820269,
+    "started_at": "2026-11-17T22:43:16+08:00",
+    "running_and_disk_binary_sha256": "691a29831906d1d9fffafb47ea59351c18627ca9b0d076d9b077291a868e0a27",
+    "previous_pid": 3686744,
+    "previous_binary_sha256": "6a7f8cc9fff9945ecbf50d83d18bcdbcabc4ada16e1849b8046c98e75d368497",
+    "release_path": "/root/jdlg-official-callback-20261117-aab310e",
+    "backup_path": "/root/jdlg-official-backup-20261117-aab310e",
+    "config_path": "/www/wwwroot/jiadilingguang/api/.env.local",
+    "pre_enable_config_backup": "/root/jdlg-official-backup-20261117-aab310e/api.env.local.before-enable",
+    "basic_enabled": true,
+    "delivery_enabled": false,
+    "miniprogram_verified": false,
+    "official_schema_tables_verified": 3,
+    "database_schema_changed": false,
+    "new_old_mysql_dsn_equal": true,
+    "redis_and_session_config_preserved": true,
+    "post_start_initialization_errors": 0,
+    "post_start_panic_fatal": 0,
+    "admin_index_sha256_unchanged": "42126cbcbe6e982655ba9959881c24644f4f2bd67ff5fc6b34781ac95ed67565",
+    "crm_pid_unchanged": 1001139
+  },
+  "verification": {
+    "wechat_credentials_and_ip_whitelist_verified": true,
+    "credential_api_force_refresh": false,
+    "credentials_or_access_token_logged": false,
+    "public_callback": {
+      "tls_verified": true,
+      "valid_signature": {
+        "status": 200,
+        "exact_echo": true
+      },
+      "forged_signature": 403,
+      "aes_without_message_signature": 403,
+      "bad_aes_with_valid_plain_signature": 403
+    },
+    "authenticated_binding_read": {
+      "status": 200,
+      "enabled": true,
+      "binding_available": true,
+      "delivery_available": false,
+      "configured": false,
+      "bound": false,
+      "subscribed": false,
+      "new_login_performed": false
+    },
+    "wechat_console": {
+      "status": "success_user_confirmed",
+      "independent_ui_verification_performed": false
+    }
+  },
+  "external_scope": {
+    "messages_sent": false,
+    "real_ai_invoked": false,
+    "ai_config_enabled": false,
+    "ai_provider_key_present": false,
+    "video_tasks": 0,
+    "video_batches": 0,
+    "video_consumptions": 0,
+    "video_reservations": 0,
+    "prompt_enabled": false,
+    "prompt_tasks": 0,
+    "prompt_reservations": 0,
+    "prompt_external_active": 0,
+    "mp_article_sync_configuration_modified": false
+  },
+  "rollback": {
+    "binary_command": "python3 /root/jdlg-official-callback-20261117-aab310e/binary_release.py rollback --backup /root/jdlg-official-backup-20261117-aab310e/backend",
+    "order": "先保持prepare时配置哈希不变回滚程序；旧ELF恢复后再恢复pre-enable环境备份并受控重启。若activate已自动回滚旧ELF，则恢复环境备份后再重启。不能先改环境再调用binary rollback。",
+    "reversibility": "messy",
+    "production_rollback_executed": false
+  },
+  "remaining_configuration": [
+    "服务号通知模板ID及实际字段映射",
+    "服务号与小程序关联及跳转核验",
+    "OAuth网页授权域名与测试账号绑定",
+    "指定测试接收人和真实模板通知回执；尚未发送"
+  ]
+}

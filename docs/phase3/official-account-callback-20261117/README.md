@@ -1,5 +1,7 @@
 # 服务号首次URL验证修复
 
+2026-11-17已合并[PR #58](https://github.com/phlong026/jdlg-development/pull/58)，部署并重启后端，基础接入已开启。用户已确认微信后台验证／保存成功；正确签名公网GET返回200并原样返回challenge，非法签名与两种AES防降级检查均403。模板外发、小程序关联和真实AI继续关闭，详见[部署回执](release-receipt.json)。
+
 微信保存服务器配置时，首次GET请求使用`signature`、`timestamp`、`nonce`和`echostr`。原实现只支持`msg_signature`和加密challenge，会拒绝官方首次验证。本次补齐首次验证，验签通过后原样返回`echostr`，不写入绑定、订阅或通知数据。
 
 ## 接口约定
@@ -26,4 +28,6 @@
 
 先以官方明文challenge复现基线403，再运行`CGO_ENABLED=0 go test ./officialaccount ./route -count=1`和对应vet。定向回归覆盖签名、缺失/超长参数、过期、关闭/缺少Store、AES成功及防降级、明文POST拒绝。macOS既有`go-m1cpu` CGO初始化崩溃使用无CGO路径验证，不记为通过。
 
-程序、私有环境文件分别备份；配置启用失败时先恢复关闭状态并重启。回退程序时核对当前进程、二进制和环境未被后续任务修改。无数据库结构变更，不修改余额或任务，不清共享Redis。前端代码保持已上传8.0.13及已部署管理台内容。
+程序、私有环境文件分别备份。仅回退配置时恢复关闭状态并受控重启；同时回退程序时须按下文顺序操作，并核对当前进程、二进制和环境未被后续任务修改。无数据库结构变更，不修改余额或任务，不清共享Redis。前端代码保持已上传8.0.13及已部署管理台内容。
+
+本次运行PID为3820269，程序及配置备份位于`/root/jdlg-official-backup-20261117-aab310e`。若需要回退，先保持prepare时环境文件内容不变，通过本次`binary_release.py rollback`恢复旧程序；然后再恢复`api.env.local.before-enable`并受控重启。先修改环境文件会触发发布器哈希校验并拒绝程序回滚；不能把源码revert视为配置回退。
