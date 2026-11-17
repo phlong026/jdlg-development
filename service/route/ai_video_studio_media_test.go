@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"service/aivideostudio"
 	"service/model"
 )
 
@@ -38,13 +39,13 @@ func TestStudioMediaProbesActualImageAndRejectsFalseType(t *testing.T) {
 }
 
 type studioRetentionDriver struct {
-	affected       int64
-	status, stable string
+	affected                      int64
+	status, raw, stable, external string
 }
 type studioRetentionConn struct{ fixture studioRetentionDriver }
 type studioRetentionRows struct {
-	status, stable string
-	done           bool
+	status, raw, stable, external string
+	done                          bool
 }
 
 func (d studioRetentionDriver) Open(string) (driver.Conn, error) { return studioRetentionConn{d}, nil }
@@ -61,7 +62,7 @@ func (c studioRetentionConn) QueryContext(_ context.Context, _ string, args []dr
 	if len(args) != 2 || args[1].Value != int64(1001) {
 		return nil, errors.New("owner predicate missing")
 	}
-	return &studioRetentionRows{status: c.fixture.status, stable: c.fixture.stable}, nil
+	return &studioRetentionRows{status: c.fixture.status, raw: c.fixture.raw, stable: c.fixture.stable, external: c.fixture.external}, nil
 }
 func (*studioRetentionRows) Columns() []string {
 	return []string{"status", "result_url", "stable_media_id", "external_id"}
@@ -73,10 +74,49 @@ func (r *studioRetentionRows) Next(dest []driver.Value) error {
 	}
 	r.done = true
 	dest[0] = r.status
-	dest[1] = ""
+	dest[1] = r.raw
 	dest[2] = r.stable
-	dest[3] = ""
+	dest[3] = r.external
 	return nil
+}
+
+type failingStudioResultQuerier struct{}
+
+func (failingStudioResultQuerier) Query(context.Context, string) (aivideostudio.GenerationStatus, error) {
+	return aivideostudio.GenerationStatus{}, errors.New("provider temporarily unavailable")
+}
+
+func TestStudioResultFallsBackToExistingSafeDirectURL(t *testing.T) {
+	name := fmt.Sprintf("studio-result-%d", time.Now().UnixNano())
+	safeURL := "https://cdn.example.com/existing.mp4"
+	sql.Register(name, studioRetentionDriver{status: "completed", raw: safeURL, external: "provider-task-1"})
+	db, err := sql.Open(name, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	status, raw, stable, err := studioResultWithProvider(context.Background(), model.NewAIVideoStudioStore(db), 1001, "task-1", failingStudioResultQuerier{})
+	if err != nil || status != "completed" || raw != safeURL || stable != "" {
+		t.Fatalf("safe direct fallback lost: status=%q raw=%q stable=%q err=%v", status, raw, stable, err)
+	}
+
+	unsafeName := fmt.Sprintf("studio-result-unsafe-%d", time.Now().UnixNano())
+	sql.Register(unsafeName, studioRetentionDriver{status: "completed", raw: "https://127.0.0.1/private", external: "provider-task-2"})
+	unsafeDB, openErr := sql.Open(unsafeName, "")
+	if openErr != nil {
+		t.Fatal(openErr)
+	}
+	defer unsafeDB.Close()
+	if _, unsafeRaw, _, unsafeErr := studioResultWithProvider(context.Background(), model.NewAIVideoStudioStore(unsafeDB), 1001, "task-2", failingStudioResultQuerier{}); unsafeErr == nil || unsafeRaw != "" {
+		t.Fatalf("unsafe stored URL bypassed refresh failure: raw=%q err=%v", unsafeRaw, unsafeErr)
+	}
+}
+
+func TestReadStudioResultBodyReportsSizeLimitPrecisely(t *testing.T) {
+	_, err := readStudioResultBody(strings.NewReader(strings.Repeat("x", int(studioMediaMaxBytes+1))))
+	if err == nil || err.Error() != "成片超过50MB留存上限" {
+		t.Fatalf("oversized result error=%v", err)
+	}
 }
 
 func TestStudioRetentionDoesNotReportConflictingAttachmentAsSuccess(t *testing.T) {

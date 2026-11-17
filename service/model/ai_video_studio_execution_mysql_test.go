@@ -26,11 +26,33 @@ func executionTestDB(t *testing.T) *sql.DB {
 	if e != nil || c.Net != "tcp" || !strings.HasPrefix(c.Addr, "127.0.0.1:") || !strings.HasPrefix(c.DBName, "jdlg_studio_test") {
 		t.Fatal("unsafe fixture DSN")
 	}
-	db, e := sql.Open("mysql", dsn)
+	// Every test gets its own schema. These integration tests deliberately
+	// exercise global config rows, triggers and worker admission, so sharing the
+	// caller-provided schema makes otherwise sequential reruns order-dependent.
+	adminConfig := c.Clone()
+	adminConfig.DBName = ""
+	admin, e := sql.Open("mysql", adminConfig.FormatDSN())
 	if e != nil {
 		t.Fatal(e)
 	}
-	t.Cleanup(func() { db.Close() })
+	schema := "jdlg_studio_test_t_" + strings.ReplaceAll(uuid.NewString(), "-", "")[:16]
+	if _, e = admin.Exec("CREATE DATABASE `" + schema + "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"); e != nil {
+		admin.Close()
+		t.Fatal(e)
+	}
+	testConfig := c.Clone()
+	testConfig.DBName = schema
+	db, e := sql.Open("mysql", testConfig.FormatDSN())
+	if e != nil {
+		_, _ = admin.Exec("DROP DATABASE `" + schema + "`")
+		admin.Close()
+		t.Fatal(e)
+	}
+	t.Cleanup(func() {
+		_ = db.Close()
+		_, _ = admin.Exec("DROP DATABASE `" + schema + "`")
+		_ = admin.Close()
+	})
 	return db
 }
 func TestStudioPaidAtomicLifecycle(t *testing.T) {
@@ -79,6 +101,10 @@ func TestStudioPaidAtomicLifecycle(t *testing.T) {
 	id, replay, e := s.CreatePaidBatch(ctx, uid, q, "first")
 	if e != nil || replay {
 		t.Fatalf("create %s %v %v", id, replay, e)
+	}
+	batches, total, e := s.ListBatches(ctx, uid, 20, 0)
+	if e != nil || total != 1 || len(batches) != 1 || batches[0]["name"] != "paid" {
+		t.Fatalf("batch list lost snapshot name: total=%d items=%+v err=%v", total, batches, e)
 	}
 	if _, replay, e = s.CreatePaidBatch(ctx, uid, q, "first"); e != nil || !replay {
 		t.Fatalf("replay %v %v", replay, e)

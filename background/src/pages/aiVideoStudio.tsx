@@ -14,7 +14,7 @@ import {
     type StudioReconciliationAction,
 } from '../api/aiVideoStudio';
 import { reportPageLoadError, reportPageLoadRecovered } from '../utils/pageLoadError';
-import { buildStudioReconciliation, validateAIVideoStudioConfig } from './aiVideoStudioModel';
+import { buildStudioReconciliation, summarizeAIVideoStudioReadiness, validateAIVideoStudioConfig } from './aiVideoStudioModel';
 import './aiVideoStudio.scss';
 
 type Tab = 'config' | 'tasks' | 'ledger';
@@ -134,6 +134,7 @@ const AIVideoStudio: React.FC = () => {
     }, []);
 
     const errors = useMemo(() => config ? validateAIVideoStudioConfig(config) : [], [config]);
+    const readiness = useMemo(() => config ? summarizeAIVideoStudioReadiness(config) : null, [config]);
     const dirty = !!config && !!savedConfig && JSON.stringify(config) !== JSON.stringify(savedConfig);
     const target = detail?.items.find((item) => item.result_id === targetID);
 
@@ -207,10 +208,19 @@ const AIVideoStudio: React.FC = () => {
             {state.config === 'error' ? <div className="aivs-state error" role="alert">配置加载失败，当前状态未知，不能执行修改。<button type="button" onClick={() => void loadConfig()}>重新加载</button></div> : null}
             {state.config === 'ready' && config ? <>
                 <div className="aivs-summary">
-                    <div><span>模块状态</span><b className={config.enabled ? 'ok' : ''}>{config.enabled ? (config.execution_ready && config.accounting_ready && config.provider_configured ? '允许新任务' : '等待服务就绪') : '已停用'}</b></div>
+                    <div><span>模块状态</span><b className={readiness?.ready ? 'ok' : ''}>{readiness?.status}</b><small>{readiness?.reason}</small></div>
                     <div><span>服务适配</span><b>{config.provider_display_name || config.provider_code || '未选择'}</b><small>{config.provider_configured ? '服务端已配置' : '未配置，不能开放'}</small></div>
                     <div><span>配置版本</span><b>v{config.version}</b><small>{dateTime(config.updated_at)}</small></div>
                 </div>
+                <div className="aivs-readiness" aria-label="逐模式运行状态">
+                    {readiness?.modes.map((mode) => <div key={mode.code} className={mode.enabled ? 'ready' : ''}>
+                        <b>{modeLabels[mode.code]}</b>
+                        <span>{mode.enabled ? '可提交' : mode.reason}</span>
+                    </div>)}
+                </div>
+                <p className="aivs-runtime-note">
+                    价格 {config.billing_ready ? '已就绪' : '未就绪'} · 素材存储 {config.media_storage_ready ? '已就绪' : '未就绪'} · 安全签名 {config.media_signing_ready ? '已就绪' : '未就绪'} · 音视频探测 {config.ffprobe_ready ? '已就绪' : '未就绪'}
+                </p>
                 <div className="aivs-card">
                     <h3>运行开关与模式</h3>
                     <label className="aivs-switch"><input type="checkbox" checked={config.enabled} onChange={(event) => { setConfig({ ...config, enabled: event.target.checked }); setConfirming(false); }} />允许新任务提交</label>

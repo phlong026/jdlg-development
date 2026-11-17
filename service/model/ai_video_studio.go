@@ -19,6 +19,15 @@ type AIVideoStudioStore struct {
 
 func NewAIVideoStudioStore(db *sql.DB) *AIVideoStudioStore { return &AIVideoStudioStore{DB: db} }
 
+func defaultAIVideoStudioLimits() map[string]int {
+	return map[string]int{
+		"max_concurrency": 3, "timeout_seconds": 900, "max_quantity": 1,
+		"max_duration_768p": 15, "max_duration_2k": 15,
+		"max_reference_images": 8, "max_reference_videos": 3,
+		"max_reference_audios": 3, "max_reference_total": 12,
+	}
+}
+
 type AIVideoStudioConfig struct {
 	Enabled            bool                 `json:"enabled"`
 	ProviderCode       string               `json:"provider_code"`
@@ -166,9 +175,13 @@ func (s *AIVideoStudioStore) InitTables() error {
 			return fmt.Errorf("init ai video studio schema: %w", err)
 		}
 	}
+	defaultLimits, marshalErr := json.Marshal(defaultAIVideoStudioLimits())
+	if marshalErr != nil {
+		return marshalErr
+	}
 	_, err := s.DB.Exec(`INSERT IGNORE INTO ai_video_studio_config (id,modes_json,limits_json,prices_json) VALUES (1,?,?,?)`,
 		`{"text":false,"first_frame":false,"first_last_frame":false,"reference":false}`,
-		`{"max_concurrency":1,"timeout_seconds":900,"max_quantity":1,"max_duration_768p":15,"max_duration_2k":15,"max_reference_images":8,"max_reference_videos":3,"max_reference_audios":3,"max_reference_total":12}`,
+		string(defaultLimits),
 		`[]`)
 	return err
 }
@@ -389,20 +402,24 @@ func (s *AIVideoStudioStore) ListBatchesFiltered(ctx context.Context, userID int
 		return nil, 0, err
 	}
 	queryArgs := append(args, limit, offset)
-	rows, err := s.DB.QueryContext(ctx, `SELECT id,user_id,draft_id,quote_id,mode,status,fee_status,total_stones,error_code,error_message,created_at,updated_at FROM ai_video_studio_batches`+where+` ORDER BY updated_at DESC,id DESC LIMIT ? OFFSET ?`, queryArgs...)
+	rows, err := s.DB.QueryContext(ctx, `SELECT id,user_id,draft_id,quote_id,mode,status,fee_status,total_stones,error_code,error_message,input_snapshot,created_at,updated_at FROM ai_video_studio_batches`+where+` ORDER BY updated_at DESC,id DESC LIMIT ? OFFSET ?`, queryArgs...)
 	if err != nil {
 		return nil, 0, err
 	}
 	defer rows.Close()
 	items := make([]map[string]interface{}, 0)
 	for rows.Next() {
-		var id, quoteID, mode, status, feeStatus, errorCode, errorMessage string
+		var id, quoteID, mode, status, feeStatus, errorCode, errorMessage, snapshot string
 		var rowUserID, draftID, totalStones int64
 		var created, updated time.Time
-		if err := rows.Scan(&id, &rowUserID, &draftID, &quoteID, &mode, &status, &feeStatus, &totalStones, &errorCode, &errorMessage, &created, &updated); err != nil {
+		if err := rows.Scan(&id, &rowUserID, &draftID, &quoteID, &mode, &status, &feeStatus, &totalStones, &errorCode, &errorMessage, &snapshot, &created, &updated); err != nil {
 			return nil, 0, err
 		}
-		items = append(items, map[string]interface{}{"id": id, "batch_id": id, "user_id": rowUserID, "draft_id": draftID, "quote_id": quoteID, "mode": mode, "status": status, "fee_status": feeStatus, "total_stones": totalStones, "error_code": errorCode, "error_message": errorMessage, "created_at": created, "updated_at": updated})
+		var input AIVideoStudioDraft
+		if err := json.Unmarshal([]byte(snapshot), &input); err != nil {
+			return nil, 0, fmt.Errorf("decode ai video studio batch snapshot: %w", err)
+		}
+		items = append(items, map[string]interface{}{"id": id, "batch_id": id, "name": input.Name, "user_id": rowUserID, "draft_id": draftID, "quote_id": quoteID, "mode": mode, "status": status, "fee_status": feeStatus, "total_stones": totalStones, "error_code": errorCode, "error_message": errorMessage, "created_at": created, "updated_at": updated})
 	}
 	return items, total, rows.Err()
 }

@@ -86,13 +86,13 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 		aiVideoStudioStore := model.NewAIVideoStudioStore(userDBModel.DB)
 		aiVideoStudioMediaStore := model.NewAIVideoStudioMediaStore(userDBModel.DB)
 		if err := aiVideoStudioStore.InitTables(); err != nil {
-			log.Printf("[AI视频工作台] schema unavailable")
+			log.Printf("[AI视频工作台] initialization failed operation=core_schema err_type=%T", err)
 		} else if err := aiVideoStudioStore.InitExecutionTables(); err != nil {
-			log.Printf("[AI视频工作台] execution schema unavailable")
+			log.Printf("[AI视频工作台] initialization failed operation=execution_schema err_type=%T", err)
 		} else if err := aiVideoStudioStore.InitWorkerTables(); err != nil {
-			log.Printf("[AI视频工作台] worker schema unavailable")
+			log.Printf("[AI视频工作台] initialization failed operation=worker_schema err_type=%T", err)
 		} else if err := aiVideoStudioMediaStore.InitTable(); err != nil {
-			log.Printf("[AI视频工作台] media schema unavailable")
+			log.Printf("[AI视频工作台] initialization failed operation=media_schema err_type=%T", err)
 		} else {
 			stopStudio = startStudioWorker(reportContext, aiVideoStudioStore, aiVideoStudioMediaStore)
 		}
@@ -221,7 +221,7 @@ func RegisterRoutes(r *gin.Engine, authProcessor *processor.AuthProcessor,
 			log.Printf("[AI运营] 初始化告警设置表失败（告警将使用默认阈值）: %v", err)
 		}
 		RegisterAIManagementRoutes(managementAuth, pricingModel, apiConfigModel, pricingVersionModel)
-		RegisterAIVideoStudioManagementRoutes(managementAuth, aiVideoStudioStore)
+		RegisterAIVideoStudioManagementRoutes(managementAuth, aiVideoStudioStore, trackingService)
 		RegisterAIOverviewManagementRoutes(managementAuth, taskModel, videoTaskModel, pricingModel, pricingVersionModel, aiToolModel, supportTicketModel, aiOpsSettingsModel)
 		// 内容抽检（4a）：模型在 main.go 初始化并注入 processor；nil 安全（建表失败时接口返回空）
 		RegisterAIContentAuditManagementRoutes(managementAuth, contentAuditModel)

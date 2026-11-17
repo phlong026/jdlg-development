@@ -13,6 +13,11 @@ export interface AIVideoStudioPrice {
     version?: number;
 }
 
+export interface AIVideoStudioModeReadiness {
+    enabled: boolean;
+    disabled_reason: string;
+}
+
 export interface AIVideoStudioConfig {
     version: number;
     enabled: boolean;
@@ -21,6 +26,13 @@ export interface AIVideoStudioConfig {
     provider_configured: boolean;
     execution_ready?: boolean;
     accounting_ready?: boolean;
+    billing_ready?: boolean;
+    media_storage_ready?: boolean;
+    media_signing_ready?: boolean;
+    ffprobe_ready?: boolean;
+    new_tasks_ready?: boolean;
+    disabled_reason?: string;
+    mode_readiness?: Partial<Record<AIVideoStudioMode, AIVideoStudioModeReadiness>>;
     modes: Record<AIVideoStudioMode, boolean>;
     limits: {
         max_concurrency: number;
@@ -101,7 +113,7 @@ const defaultPriceCatalog: AIVideoStudioPrice[] = [
     { code: 'ai_video_studio_768p_long', label: '768P 长档生成', billing_unit: 'per_second', unit_stones: null, enabled: false },
 ];
 
-function normalizeConfig(config: AIVideoStudioConfig): AIVideoStudioConfig {
+export function normalizeAIVideoStudioConfig(config: AIVideoStudioConfig): AIVideoStudioConfig {
     const byCode = new Map((config.prices || []).map((price) => [price.code, price]));
     const prices = defaultPriceCatalog.map((fallback) => ({ ...fallback, ...byCode.get(fallback.code) }));
     return {
@@ -110,7 +122,7 @@ function normalizeConfig(config: AIVideoStudioConfig): AIVideoStudioConfig {
         provider_display_name: config.provider_display_name || '秘塔 H3',
         modes: { text: false, first_frame: false, first_last_frame: false, reference: false, ...(config.modes || {}) },
         limits: {
-            max_concurrency: 1, timeout_seconds: 900, max_quantity: 1,
+            max_concurrency: 3, timeout_seconds: 900, max_quantity: 1,
             max_duration_768p: 15, max_duration_2k: 15,
             max_reference_images: 8, max_reference_videos: 3,
             max_reference_audios: 3, max_reference_total: 12,
@@ -122,16 +134,31 @@ function normalizeConfig(config: AIVideoStudioConfig): AIVideoStudioConfig {
 
 export const getAIVideoStudioConfig = async (): Promise<AIVideoStudioConfig> => {
     const response = await get<AIVideoStudioConfig>(API_ENDPOINTS.AI_VIDEO_STUDIO.CONFIG);
-    return normalizeConfig(response.data!);
+    return normalizeAIVideoStudioConfig(response.data!);
 };
 
 export const saveAIVideoStudioConfig = async (config: AIVideoStudioConfig): Promise<AIVideoStudioConfig> => {
-    const { version, provider_configured: _providerConfigured, provider_display_name: _providerName, execution_ready: _executionReady, accounting_ready: _accountingReady, updated_at: _updatedAt, ...editable } = config;
+    const {
+        version,
+        provider_configured: _providerConfigured,
+        provider_display_name: _providerName,
+        execution_ready: _executionReady,
+        accounting_ready: _accountingReady,
+        billing_ready: _billingReady,
+        media_storage_ready: _mediaStorageReady,
+        media_signing_ready: _mediaSigningReady,
+        ffprobe_ready: _ffprobeReady,
+        new_tasks_ready: _newTasksReady,
+        disabled_reason: _disabledReason,
+        mode_readiness: _modeReadiness,
+        updated_at: _updatedAt,
+        ...editable
+    } = config;
     const response = await put<AIVideoStudioConfig>(API_ENDPOINTS.AI_VIDEO_STUDIO.CONFIG, {
         ...editable,
         expected_version: version,
     });
-    return normalizeConfig(response.data!);
+    return normalizeAIVideoStudioConfig(response.data!);
 };
 
 export const getAIVideoStudioTasks = async (params: Record<string, string | number | undefined> = {}): Promise<PageResult<AIVideoStudioTask>> => {

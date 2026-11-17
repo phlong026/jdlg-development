@@ -6,11 +6,30 @@ import (
 	"errors"
 	"github.com/google/uuid"
 	"service/aivideostudio"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 )
+
+func TestStudioWorkerErrorRedactsCause(t *testing.T) {
+	err := &StudioWorkerError{
+		Operation: "process",
+		TaskID:    "task-123",
+		Cause:     errors.New("provider response contains a secret token"),
+	}
+	message := err.Error()
+	if !strings.Contains(message, "operation=process") || !strings.Contains(message, "task_id=task-123") || !strings.Contains(message, "category=database_or_dependency") {
+		t.Fatalf("safe context missing from worker error: %q", message)
+	}
+	if strings.Contains(message, "secret") || strings.Contains(message, "provider response") {
+		t.Fatalf("worker error exposed dependency details: %q", message)
+	}
+	if !errors.Is(err, err.Cause) {
+		t.Fatal("worker error no longer unwraps its cause")
+	}
+}
 
 type studioWorkerFake struct {
 	submits   atomic.Int32
@@ -46,6 +65,9 @@ func TestStudioWorkerDurabilityAndReconciliation(t *testing.T) {
 		if e := fn(); e != nil {
 			t.Fatal(e)
 		}
+	}
+	if _, e := db.Exec("CREATE TABLE users(id BIGINT PRIMARY KEY,stones BIGINT UNSIGNED NOT NULL)"); e != nil {
+		t.Fatal(e)
 	}
 	uid := int64(830002)
 	if _, e := db.Exec(`REPLACE INTO users(id,stones) VALUES(?,100)`, uid); e != nil {
