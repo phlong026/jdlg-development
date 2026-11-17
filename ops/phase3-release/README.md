@@ -1,5 +1,7 @@
 # 三期生产发布运维手册
 
+当前主后端实际运行目录已为 `/www/wwwroot/jiadilingguang/api/applinux`。下文 `runner.py` 的 `service/bin` 流程是历史通道，不能直接用于当前生产。2026-11-17部署准备请先读[当前发布入口与注意事项](../../docs/release-prepare-20261117/README.md)，使用 `binary_release.py` 并显式传入窗口实测PID/旧哈希；数据库备份和迁移单独处理。
+
 ## 生产边界
 
 - 小程序主后端是独立 `applinux` 进程，目录为 `/www/wwwroot/jiadilingguang/service/bin`，监听 `8080`。
