@@ -21,6 +21,9 @@
 .section-heading { display:flex; align-items:center; justify-content:space-between; margin-bottom:18rpx; font-size:33rpx; font-weight:600; line-height:1.5; }
 .optional { color:#8b7b70; font-size:24rpx; font-weight:400; }
 .tutorial-link { color:#a36d34; font-size:25rpx; font-weight:400; padding:8rpx 0 8rpx 16rpx; }
+.prompt-actions { display:flex; align-items:center; gap:22rpx; }
+.polish-link { color:#a36d34; font-size:25rpx; font-weight:500; padding:8rpx 0; }
+.polish-link-disabled { color:#a99e94; font-weight:400; }
 .reference-count { color:#77685d; font-size:24rpx; font-weight:400; }
 .frame-layout { display:flex; gap:16rpx; }
 .frame-slot { position:relative; flex:1; min-width:0; overflow:hidden; border-radius:14rpx; background:#faf8f4; }
@@ -69,6 +72,8 @@
 .quote-button[disabled] { color:#a99e94; background:#e9e4de; }
 
 @media (max-width:350px) {
+  .prompt-actions { gap:12rpx; }
+  .polish-link,.tutorial-link { font-size:23rpx; }
   .tool { gap:6rpx; font-size:23rpx; }
   .setting-grid { gap:8rpx; }
   .setting-picker { padding:0 10rpx; font-size:23rpx; }

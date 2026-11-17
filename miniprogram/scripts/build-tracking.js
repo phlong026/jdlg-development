@@ -19,6 +19,7 @@ const sources=fs.readdirSync(path.join(root,'utils/tracking')).filter(x=>x.endsW
  'pages/aivideostudio/materials.ts',
  'pages/aivideostudio/prompts.ts',
  'pages/aivideostudio/tutorial.ts',
+ 'pages/aivideostudio/polish.ts',
  'pages/aivideostudio/records.ts',
  'pages/aivideostudio/detail.ts',
  'utils/project-collections-api.ts',

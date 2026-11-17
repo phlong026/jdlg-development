@@ -1,0 +1,5 @@
+--- FAIL: TestStudioPolishHTTPKeepsSupplierBindingInsideDatabase (0.21s)
+    ai_video_studio_polish_integration_test.go:238: response exposed supplier binding polish_endpoint
+FAIL
+FAIL	service/route	0.836s
+FAIL

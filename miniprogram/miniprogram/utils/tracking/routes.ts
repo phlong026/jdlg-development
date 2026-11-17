@@ -404,7 +404,8 @@ const ROUTES = {
   "pages/aivideostudio/prompts": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"},
   "pages/aivideostudio/records": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"},
   "pages/aivideostudio/detail": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"},
-  "pages/aivideostudio/tutorial": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"}
+  "pages/aivideostudio/tutorial": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"},
+  "pages/aivideostudio/polish": {"kind":"excluded","readiness":"excluded-private-workbench","collect":false,"exclusionReason":"private-workbench"}
 };
 function policy(route) { return ROUTES[String(route || '').replace(/^\//, '')] || { collect: false }; }
 function ready(route, data, rendered) {

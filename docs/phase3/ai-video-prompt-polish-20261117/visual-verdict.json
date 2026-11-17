@@ -1,0 +1,32 @@
+{
+  "method": "WeChat DevTools offline native screenshots plus independent manual visual review; visual-verdict skill unavailable",
+  "result": "passed",
+  "screenshots": [
+    "polish-entry.png",
+    "polish-result.png",
+    "polish-original.png",
+    "polish-edited.png",
+    "polish-adopted.png",
+    "polish-reference.png"
+  ],
+  "sha256": {
+    "polish-entry.png": "9ef4e8f9a35d7b859b008775b0c80636fe2dd284ae6e07206e4022651818a9b1",
+    "polish-result.png": "3e00993d1f256d353d5a75d533b0b935439ce785292dd5030d4782acb166285a",
+    "polish-original.png": "2d521a4c82fca21ce3103b530e089d71a3b7317b68d1fc30f2d1da01c12fefff",
+    "polish-edited.png": "b69d04e3cc78b605ddf917154b2b686fa14f3ace77a0184b1baefcd85cf40c5c",
+    "polish-adopted.png": "3ea4b25086608c9771962c198abac382e4c15cfc20a1daff7f8507c0de3ce126",
+    "polish-reference.png": "48a6420e94c4bb990bc67b55a6a6bb27bceb6e26b064b6b5a29fd39a4f2b959f"
+  },
+  "verified": [
+    "existing cream/brown/bronze palette",
+    "entry actions and input readable",
+    "original expands without overlapping result",
+    "editable result and Unicode count",
+    "equal bottom actions above safe area",
+    "reference material labels readable"
+  ],
+  "limitations": [
+    "physical device, font scaling and software keyboard not verified",
+    "fixture prices/results only; no live model or actual charge"
+  ]
+}

@@ -52,6 +52,54 @@ function clearSubmission(storageKey, value) {
   const pending = wx.getStorageSync(storageKey);
   if (pending && pending.quote_id === value.quote_id && pending.idempotency_key === value.idempotency_key) wx.removeStorageSync(storageKey);
 }
+function polishStorageKey() {
+  const info = wx.getStorageSync('userInfo') || {};
+  const userID = Number(info.id);
+  if (!currentToken() || !Number.isSafeInteger(userID) || userID < 1 || (info.token && info.token !== currentToken())) throw new Error('账号资料尚未就绪，请重新登录后润色');
+  return 'aivs:polish:' + userID;
+}
+function pendingPolish() {
+  const value = wx.getStorageSync(polishStorageKey());
+  return value && typeof value.quote_id === 'string' && typeof value.idempotency_key === 'string'
+    ? { quote_id: value.quote_id, idempotency_key: value.idempotency_key, task_id: String(value.task_id || '') } : null;
+}
+function clearPolish(value) {
+  const storageKey = polishStorageKey(), pending = wx.getStorageSync(storageKey);
+  if (pending && pending.quote_id === value.quote_id && pending.idempotency_key === value.idempotency_key) wx.removeStorageSync(storageKey);
+}
+function terminalPolish(status) { return ['completed', 'failed', 'cancelled'].includes(String(status || '')); }
+async function getPolishSubmission(input) {
+  const task = await request(ROOT + '/prompt-polish/submissions/' + encodeURIComponent(input.idempotency_key));
+  if (!task.task_id && !task.id) throw new Error('润色任务暂不可读，请稍后查询');
+  if (terminalPolish(task.status)) clearPolish(input);
+  else wx.setStorageSync(polishStorageKey(), Object.assign({}, input, { task_id: task.task_id || task.id }));
+  return task;
+}
+async function createPolishTask(input) {
+  const storageKey = polishStorageKey(), previous = pendingPolish();
+  if (previous && previous.quote_id !== input.quote_id) throw Object.assign(new Error('上次润色结果待核对，请先查询'), { pendingPolish: true });
+  const value = previous || { quote_id: input.quote_id, idempotency_key: input.idempotency_key, task_id: '' };
+  wx.setStorageSync(storageKey, value);
+  try {
+    const task = await request(ROOT + '/prompt-polish/tasks', 'POST', { quote_id: value.quote_id, idempotency_key: value.idempotency_key });
+    if (!task.task_id && !task.id) throw Object.assign(new Error('润色结果待核对，请稍后查询'), { networkError: true });
+    wx.setStorageSync(storageKey, Object.assign({}, value, { task_id: task.task_id || task.id }));
+    if (terminalPolish(task.status)) clearPolish(value);
+    return task;
+  } catch (error) {
+    if ([400, 402, 409, 410, 422].includes(Number(error.statusCode))) clearPolish(value);
+    throw error;
+  }
+}
+async function getPolishTask(id) {
+  const task = await request(ROOT + '/prompt-polish/tasks/' + encodeURIComponent(id));
+  let pending = null;
+  try { pending = pendingPolish(); } catch (_) { return task; }
+  if (pending && terminalPolish(task.status)
+      && pending.quote_id === String(task.quote_id || '')
+      && (!pending.task_id || pending.task_id === String(id))) clearPolish(pending);
+  return task;
+}
 async function getSubmission(input) {
   const storageKey = submissionStorageKey();
   const batch = await request(ROOT + '/submissions/' + encodeURIComponent(input.idempotency_key));
@@ -134,7 +182,7 @@ function uploadMedia(filePath, onProgress) {
 }
 
 module.exports = {
-  ORIGIN, ROOT, request, idempotencyKey, uploadMedia, pendingSubmission, getSubmission,
+  ORIGIN, ROOT, request, idempotencyKey, uploadMedia, pendingSubmission, getSubmission, pendingPolish, getPolishSubmission,
   capabilities: () => request(ROOT + '/capabilities'),
   listDrafts: query => request(ROOT + '/drafts', 'GET', {}, query),
   createDraft: input => request(ROOT + '/drafts', 'POST', input),
@@ -149,6 +197,11 @@ module.exports = {
   getMedia: id => request(ROOT + '/media/' + encodeURIComponent(id)),
   registerMedia: mediaID => request(ROOT + '/media/register', 'POST', { media_id: mediaID }),
   quote: input => request(ROOT + '/quotes', 'POST', input),
+  polishCapabilities: () => request(ROOT + '/prompt-polish/capabilities'),
+  polishQuote: input => request(ROOT + '/prompt-polish/quotes', 'POST', input),
+  createPolishTask,
+  getPolishTask,
+  cancelPolishTask: id => request(ROOT + '/prompt-polish/tasks/' + encodeURIComponent(id) + '/cancel', 'POST', {}),
   createBatch,
   listBatches: query => request(ROOT + '/batches', 'GET', {}, query),
   getBatch: id => request(ROOT + '/batches/' + encodeURIComponent(id)).then(normalizeBatch),

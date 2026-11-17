@@ -1,0 +1,10 @@
+# service/route [service/route.test]
+route/ai_video_studio_polish_provider_test.go:23:25: undefined: studioPolishInstructions
+route/ai_video_studio_polish_provider_test.go:38:17: undefined: validateStudioPolishOutput
+route/ai_video_studio_polish_provider_test.go:42:16: undefined: validateStudioPolishOutput
+route/ai_video_studio_polish_provider_test.go:69:27: undefined: callStudioPolish
+route/ai_video_studio_polish_provider_test.go:86:23: undefined: callStudioPolish
+route/ai_video_studio_polish_provider_test.go:98:23: undefined: callStudioPolish
+route/ai_video_studio_polish_provider_test.go:103:20: undefined: callStudioPolish
+FAIL	service/route [build failed]
+FAIL

@@ -1,0 +1,34 @@
+✔ paid polish persists its original idempotency key and recovers through read-only lookup (3.384041ms)
+✔ pending polish is account scoped and blocks replacement quotes without a second request (0.651917ms)
+✔ reading an old terminal task cannot clear a newer pending quote without a task id (0.5395ms)
+✔ editor only creates a polish task after a visible matching price is confirmed twice (28.916458ms)
+✔ pending polish is checked before any draft write or revision change (2.933958ms)
+✔ price refresh and definitive failure restore automatic video quote preparation (2.864792ms)
+✔ quote network failure does not create or persist an unknown paid polish task (2.147584ms)
+✔ pending recovery adopts the task snapshot after revision-only autoquote but rejects different draft content (4.09575ms)
+✔ editor serializes polishing with save, quote and video submission and pauses hidden writes (1.872583ms)
+✔ adoption callback changes only the matching prompt and invalidates the video quote (1.932542ms)
+✔ stale adoption is rejected after local edit, material change or account switch (1.761542ms)
+✖ polish page polls read-only, edits the result and emits adoption without generating video (0.925708ms)
+✔ same polish page object rejects account A callbacks after loading account B (0.525291ms)
+✔ cancel hidden callback cannot leave the next visible session permanently cancelling (0.579084ms)
+✔ successful cancel clears busy before a failing reload (0.740292ms)
+✔ result length counts Unicode code points without splitting emoji or silently truncating (0.698958ms)
+✔ uncertain polish task remains query-only and cannot be adopted (0.508083ms)
+ℹ tests 17
+ℹ suites 0
+ℹ pass 16
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 105.052958
+
+✖ failing tests:
+
+test at miniprogram/tests/ai-video-studio-polish.test.js:203:1
+✖ polish page polls read-only, edits the result and emits adoption without generating video (0.925708ms)
+  TypeError: Cannot read properties of undefined (reading 'prompt')
+      at TestContext.<anonymous> (/Users/honor.pei/.codex/worktrees/ai-video-fixes-20261117/JDLG/miniprogram/tests/ai-video-studio-polish.test.js:214:24)
+      at async Test.run (node:internal/test_runner/test:1125:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:787:7)

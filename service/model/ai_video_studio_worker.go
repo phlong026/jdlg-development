@@ -74,10 +74,14 @@ func (s *AIVideoStudioStore) claimStudioTask(ctx context.Context) (*StudioWorker
 	if _, e = tx.ExecContext(ctx, `UPDATE ai_video_studio_tasks SET status='uncertain',error_code='submission_interrupted',lease_owner='',lease_until=NULL WHERE status='submitting' AND (lease_until IS NULL OR lease_until<=NOW()) AND external_id='' AND COALESCE(result_url,'')=''`); e != nil {
 		return nil, e
 	}
-	var active int
+	var active, polishActive int
 	if e = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM ai_video_studio_tasks WHERE status IN ('submitting','submitted','running','uncertain')`).Scan(&active); e != nil {
 		return nil, e
 	}
+	if e = tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM ai_video_studio_prompt_tasks WHERE status IN ('submitting','uncertain')`).Scan(&polishActive); e != nil {
+		return nil, e
+	}
+	active += polishActive
 	condition := `((status IN ('submitted','running','uncertain') AND (external_id<>'' OR COALESCE(result_url,'')<>'')) OR (status='submitting' AND (external_id<>'' OR COALESCE(result_url,'')<>'')))`
 	if active < max {
 		condition += ` OR status='queued'`

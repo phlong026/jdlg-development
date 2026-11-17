@@ -1,0 +1,3 @@
+id	user_id	status	fee_status	total_stones
+migration-reserved-task	1	uncertain	reserved	4
+BOOLEAN	false	1

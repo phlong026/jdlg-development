@@ -122,6 +122,7 @@ const video = ${JSON.stringify(videoURL)};
 const audio = ${JSON.stringify(audioURL)};
 let revision = 7;
 const savedDrafts = new Map();
+const polishTasks = new Map();
 
 function capabilities() {
   return Promise.resolve({
@@ -194,6 +195,26 @@ function quote(input) {
   console.warn('[offline-ui-preview] quote fixture only: no charge, no provider request');
   return Promise.resolve({ quote_id: 'offline-quote-no-charge', input_fingerprint: inputFingerprint, total_stones: 36, billable_units: Number(draft.quantity || 1), expires_at: '2099-11-13T23:59:00+08:00', offline_fixture: true, disclaimer: '离线UI验收示例价，不扣费' });
 }
+function polishCapabilities() { return Promise.resolve({ enabled: true, disabled_reason: '', model: '离线文本夹具', total_stones: 4, config_version: 1, offline_fixture: true }); }
+function polishQuote(input) {
+  const draft = savedDrafts.get(input && input.draft_id) || frameDraft();
+  return Promise.resolve({ quote_id: 'offline-polish-quote', draft_id: draft.draft_id, draft_revision: draft.revision, input_hash: rules.billableFingerprint(draft), total_stones: 4, quote_version: 1, expires_at: '2099-11-13T23:59:00+08:00', offline_fixture: true });
+}
+function createPolishTask(input) {
+  const draft = Array.from(savedDrafts.values()).pop() || frameDraft();
+  const original = draft.mode === 'reference' ? draft.reference_prompt : draft.prompt;
+  const task = { task_id: 'offline-polish-task', quote_id: input.quote_id, draft_id: draft.draft_id, draft_revision: draft.revision, input_hash: rules.billableFingerprint(draft), input_fingerprint: rules.billableFingerprint(draft), input_snapshot: draft, status: 'completed', fee_status: 'settled', total_stones: 4, original_prompt: original, optimized_prompt: draft.mode === 'reference' ? '图片1控制庭院结构与暖色材质，视频1参考平稳推进节奏，音频1参考舒缓氛围。镜头由水景缓慢移向客厅落地窗，保持建筑与植物布局稳定，不新增人物或文字。' : '保持庭院建筑结构、石材质感和植物布局稳定。镜头从水景处缓慢、平稳地向客厅落地窗推进，树影随微风轻动，晨光柔和自然，不新增人物或文字。', offline_fixture: true };
+  polishTasks.set(task.task_id, task);
+  console.warn('[offline-ui-preview] polish fixture only: no charge, no provider request');
+  return Promise.resolve(task);
+}
+function getPolishTask(id) { return Promise.resolve(polishTasks.get(id) || createPolishFixture()); }
+function createPolishFixture() {
+  const draft = frameDraft(), task = { task_id: 'offline-polish-task', draft_id: draft.draft_id, draft_revision: draft.revision, input_hash: rules.billableFingerprint(draft), input_fingerprint: rules.billableFingerprint(draft), input_snapshot: draft, status: 'completed', fee_status: 'settled', total_stones: 4, original_prompt: draft.prompt, optimized_prompt: '保持庭院建筑结构、石材质感和植物布局稳定。镜头从水景处缓慢、平稳地向客厅落地窗推进，树影随微风轻动，晨光柔和自然，不新增人物或文字。', offline_fixture: true }; polishTasks.set(task.task_id, task); return task;
+}
+function pendingPolish() { return null; }
+function getPolishSubmission() { return Promise.resolve(createPolishFixture()); }
+function cancelPolishTask() { return Promise.resolve({ cancelled: true }); }
 function createBatch() { return Promise.reject(Object.assign(new Error(OFFLINE_ERROR), { statusCode: 503, offlineFixture: true })); }
 function idempotencyKey() { return 'offline-preview-never-submitted'; }
 function listMedia(input) { const items = fixtureMedia().filter(item => !input || !input.media_type || item.media_type === input.media_type); return Promise.resolve({ items, total: items.length }); }
@@ -203,7 +224,7 @@ function listBatches() { return Promise.resolve({ items: [{ batch_id: 'offline-b
 function getBatch() { return Promise.resolve({ batch_id: 'offline-batch', name: '庭院漫游', status: 'completed', snapshot: frameDraft(), charge: { quoted_stones: 36, settled_stones: 36, released_stones: 0 }, results: [{ result_id: 'offline-result', status: 'completed', playback_url: video }], can_cancel: false }); }
 function playback() { return Promise.resolve({ url: video }); }
 
-module.exports = { ORIGIN: '', capabilities, getDraft, createDraft, updateDraft, getMedia, quote, createBatch, idempotencyKey, listMedia, listPrompts, listDrafts, listBatches, getBatch, playback, OFFLINE_ERROR };
+module.exports = { ORIGIN: '', capabilities, getDraft, createDraft, updateDraft, getMedia, quote, createBatch, idempotencyKey, listMedia, listPrompts, listDrafts, listBatches, getBatch, playback, polishCapabilities, polishQuote, createPolishTask, getPolishTask, pendingPolish, getPolishSubmission, cancelPolishTask, OFFLINE_ERROR };
 `;
   writeFile('miniprogram/utils/ai-video-studio-api.js', stub);
 }
@@ -224,7 +245,7 @@ App({ onLaunch() { console.warn('[offline-ui-preview] local fixtures only; no to
   writeFile('miniprogram/app.js', app);
   writeFile('miniprogram/utils/phase3-api.js', "'use strict'; module.exports = {};\n");
   writeFile('miniprogram/app.json', JSON.stringify({
-    pages: ['pages/aivideostudio/generate', 'pages/aivideostudio/index', 'pages/aivideostudio/materials', 'pages/aivideostudio/prompts', 'pages/aivideostudio/tutorial', 'pages/aivideostudio/records', 'pages/aivideostudio/detail'],
+    pages: ['pages/aivideostudio/generate', 'pages/aivideostudio/index', 'pages/aivideostudio/materials', 'pages/aivideostudio/prompts', 'pages/aivideostudio/tutorial', 'pages/aivideostudio/polish', 'pages/aivideostudio/records', 'pages/aivideostudio/detail'],
     window: { navigationBarTitleText: 'AI 视频 · 离线UI验收', navigationBarBackgroundColor: '#fbfaf7', navigationBarTextStyle: 'black', backgroundColor: '#fbfaf7' },
     sitemapLocation: 'sitemap.json',
   }, null, 2) + '\n');
@@ -240,6 +261,7 @@ App({ onLaunch() { console.warn('[offline-ui-preview] local fixtures only; no to
     condition: { miniprogram: { list: [
       { name: '首帧图生视频', pathName: 'pages/aivideostudio/generate', query: 'draft_id=frame-preview', scene: null },
       { name: '混合参考视频', pathName: 'pages/aivideostudio/generate', query: 'draft_id=reference-preview&kind=reference', scene: null },
+      { name: 'AI润色结果', pathName: 'pages/aivideostudio/polish', query: 'task_id=offline-polish-task', scene: null },
     ] } },
   }, null, 2) + '\n');
 }
@@ -250,7 +272,7 @@ function writeReadme() {
 - 页面与样式从实际 \`pages/aivideostudio\` 的 JS/WXML/WXSS/JSON 复制；不复制 TS。
 - \`frame-preview\` 展示庭院首帧与普通提示词；\`reference-preview\` 展示图片、5秒本地视频、5秒低音量测试音 MP3 和结构化参考提示词。
 - Page 包装器只在本 fixture 将 \`__profileAccessMounted\` 设为 true，未读取或写入真实登录 token，也未更改生产登录守卫。
-- API 全部为本地 Promise stub。报价为 36 灵石的离线展示值且不扣费；\`createBatch\` 固定拒绝。
+- API 全部为本地 Promise stub。视频报价为 36 灵石、润色报价为 4 灵石，均为离线展示且不扣费；视频 \`createBatch\` 固定拒绝，润色只返回本地示例文字。
 - fixture 不包含任何供应商凭据，不访问外部网络，不产生生成费用。可选 loopback 地址仅用于读取本机夹具音视频文件。
 
 重新生成：

@@ -22,7 +22,8 @@ function normalizedMedia(item, type, mediaID) {
 
 Page({
   data: {
-    loading: true, loadError: '', error: '', notice: '', saving: false, quoting: false, submitting: false, submissionUncertain: false,
+    loading: true, loadError: '', error: '', notice: '', saving: false, quoting: false, submitting: false, polishing: false, submissionUncertain: false,
+    polishCapability: { enabled: false, disabled_reason: '', total_stones: 0, config_version: 0 }, polishPending: false,
     capabilities: {}, limits: rules.DEFAULT_LIMITS, modeOptions: [], activeTab: 'creation', mode: 'text', selectedModeEnabled: false,
     name: '', prompt: '', reference_prompt: '', draft_id: '', revision: 0,
     first_frame_media_id: '', last_frame_media_id: '', firstFrame: {}, lastFrame: {}, references: [],
@@ -37,11 +38,14 @@ Page({
   onLoad(options) {
     this._sessionEpoch = (this._sessionEpoch || 0) + 1;
     this._unloaded = false;
+    this._visible = true;
     this.options = options || {};
     this._token = String(wx.getStorageSync('token') || '');
     this._editVersion = 0;
     this._tabStates = {};
-    this.setData({ saving: false, quoting: false, submitting: false });
+    this.setData({ saving: false, quoting: false, submitting: false, polishing: false });
+    try { if (api.pendingPolish && api.pendingPolish()) this.setData({ polishPending: true }); }
+    catch (_) { /* Account profile loading must not prevent draft editing. */ }
     try { if (api.pendingSubmission && api.pendingSubmission()) this.setData({ submissionUncertain: true }); }
     catch (_) { /* Account profile loading must not prevent draft editing. */ }
     this.load();
@@ -53,8 +57,13 @@ Page({
     this._loadEpoch = (this._loadEpoch || 0) + 1;
     if (this._quoteTimer) clearTimeout(this._quoteTimer);
   },
-  onHide() { this._previewEpoch = (this._previewEpoch || 0) + 1; this.stopAudioPreview(true); },
-  onShow() { if (this._token && this._token !== String(wx.getStorageSync('token') || '')) { this._previewEpoch = (this._previewEpoch || 0) + 1; this.stopAudioPreview(true); } },
+  onHide() { this._visible = false; if (this._quoteTimer) clearTimeout(this._quoteTimer); this._quoteTimer = null; this._previewEpoch = (this._previewEpoch || 0) + 1; this.stopAudioPreview(true); },
+  onShow() {
+    const returning = this._visible === false;
+    this._visible = true;
+    if (this._token && this._token !== String(wx.getStorageSync('token') || '')) { this._previewEpoch = (this._previewEpoch || 0) + 1; this.stopAudioPreview(true); return; }
+    if (returning && !this.data.quote && !this.data.polishing) this.scheduleAutoQuote();
+  },
   current(epoch) { return !this._unloaded && this._token === String(wx.getStorageSync('token') || '') && (epoch === undefined || epoch === this._loadEpoch); },
   session() { return { epoch: this._sessionEpoch, token: this._token }; },
   ownsSession(session) { return !!session && session.epoch === this._sessionEpoch && session.token === this._token && this.current(); },
@@ -77,10 +86,12 @@ Page({
         selectedModeEnabled: this.modeEnabled(initialMode, modeOptions),
       }, base));
       this.seedTabStates();
+      await this.loadPolishCapability(epoch);
       if (this.options.draft_id) await this.restoreDraft(this.options.draft_id, epoch);
       else this.scheduleAutoQuote();
       if (!this.current(epoch)) return;
       if (this.data.submissionUncertain) await this.checkSubmission();
+      if (this.data.polishPending) await this.checkPolishPending();
     } catch (error) {
       if (!this.current(epoch)) return;
       const base = this.parameterState({}, 'text', '768p');
@@ -90,6 +101,15 @@ Page({
   },
 
   modeEnabled(mode, options) { return !!((options || this.data.modeOptions).find(item => item.code === mode) || {}).enabled; },
+  async loadPolishCapability(epoch) {
+    if (typeof api.polishCapabilities !== 'function') return;
+    try {
+      const capability = await api.polishCapabilities();
+      if (this.current(epoch)) this.setData({ polishCapability: capability || { enabled: false } });
+    } catch (error) {
+      if (this.current(epoch)) this.setData({ polishCapability: { enabled: false, disabled_reason: error.message || 'AI 润色暂不可用', total_stones: 0, config_version: 0 } });
+    }
+  },
   parameterState(capabilities, mode, resolution, previous) {
     const resolutions = capabilities.resolutions || ['768p'];
     const nextResolution = resolutions.includes(resolution) ? resolution : resolutions[0];
@@ -377,7 +397,7 @@ Page({
     return api.createDraft(input);
   },
   async saveDraft() {
-    if (this.data.saving || this.data.quoting) return null;
+    if (this.data.saving || this.data.quoting || this.data.submitting || this.data.polishing) return null;
     const session = this.session();
     const version = this._editVersion || 0;
     this.setData({ saving: true, error: '', notice: '' });
@@ -399,6 +419,8 @@ Page({
   },
   scheduleAutoQuote() {
     if (this._quoteTimer) clearTimeout(this._quoteTimer);
+    this._quoteTimer = null;
+    if (this._visible === false || this.data.polishing) return;
     if (this.data.submissionUncertain) {
       this.setData({ quote: null, quoteReady: false, quoteStatus: 'disabled', quoteHint: '提交结果待确认，请先查看创作记录' });
       return;
@@ -414,13 +436,13 @@ Page({
     this.setData({ quote: null, quoteReady: false, quoteStatus: 'waiting', quoteHint: '正在准备价格…' });
     this._quoteTimer = setTimeout(() => {
       this._quoteTimer = null;
-      if (this.data.quoting || this.data.saving) { this.scheduleAutoQuote(); return; }
+      if (this.data.quoting || this.data.saving || this.data.submitting || this.data.polishing) { this.scheduleAutoQuote(); return; }
       return this.refreshQuote();
     }, 500);
     if (this._quoteTimer && this._quoteTimer.unref) this._quoteTimer.unref();
   },
   async refreshQuote() {
-    if (!this.generationReady() || this.data.quoting || this.data.saving) return null;
+    if (!this.generationReady() || this.data.quoting || this.data.saving || this.data.submitting || this.data.polishing || this._visible === false) return null;
     const session = this.session();
     const version = this._editVersion || 0;
     const frozenInput = this.draftInput();
@@ -452,6 +474,90 @@ Page({
     }
   },
   retryQuote() { if (this.data.quoteStatus === 'error') this.refreshQuote(); },
+  polishFingerprint() { return rules.billableFingerprint(this.draftInput()); },
+  polishPrompt() { return String(this.data.mode === 'reference' ? this.data.reference_prompt : this.data.prompt).trim(); },
+  openPolishTask(task, frozen) {
+    const taskID = task && (task.task_id || task.id);
+    if (!taskID) return;
+    const owner = this.session(), serverInputHash = String(task.input_fingerprint || task.input_hash || '');
+    wx.navigateTo({
+      url: '/pages/aivideostudio/polish?task_id=' + encodeURIComponent(taskID),
+      events: { adopted: value => {
+        if (!this.ownsSession(owner) || !value || frozen.adoptable === false || frozen.editVersion !== (this._editVersion || 0)) return;
+        if (String(value.draft_id) !== String(frozen.taskDraftID || frozen.draftID) || Number(value.draft_revision) !== Number(frozen.taskRevision || frozen.revision)) return;
+        if (frozen.currentDraftID && String(this.data.draft_id) !== String(frozen.currentDraftID)) return;
+        if (serverInputHash && value.input_fingerprint !== serverInputHash) return;
+        if (this.polishFingerprint() !== frozen.fingerprint) return;
+        const prompt = String(value.prompt || '').trim();
+        if (!prompt || Array.from(prompt).length > 7000) return;
+        if (this.data.mode === 'reference' && Array.from(rules.providerVisibleReferencePrompt(prompt, this.data.references)).length > 7000) {
+          this.setData({ error: '润色结果与素材用途合计超过7000字，请在结果页缩短后再采用' }); return;
+        }
+        this.markEdited({ [this.data.mode === 'reference' ? 'reference_prompt' : 'prompt']: prompt });
+        this.setData({ notice: '已采用润色结果，请核对后再生成视频' });
+      } },
+    });
+  },
+  async startPolish() {
+    if (this.data.polishing || this.data.saving || this.data.quoting || this.data.submitting) return;
+    let pending = false;
+    try { pending = !!(api.pendingPolish && api.pendingPolish()); } catch (_) { pending = !!this.data.polishPending; }
+    if (this.data.polishPending || pending) { await this.checkPolishPending(); return; }
+    if (!this.polishPrompt()) { this.setData({ error: '请先输入一句画面描述，也可以打开写法教程参考案例' }); return; }
+    const capability = this.data.polishCapability || {};
+    if (!capability.enabled || Number(capability.total_stones) < 1) { this.setData({ error: capability.disabled_reason || 'AI 润色尚未开放' }); return; }
+    if (this._quoteTimer) clearTimeout(this._quoteTimer);
+    this._quoteTimer = null;
+    const session = this.session(), editVersion = this._editVersion || 0, fingerprint = this.polishFingerprint();
+    let stage = 'persist';
+    this.setData({ polishing: true, quote: null, quoteReady: false, error: '', notice: '正在保存并核对润色费用…' });
+    try {
+      const saved = await this.persistDraft();
+      if (!this.ownsSession(session)) return;
+      this.setData({ draft_id: saved.draft_id, revision: saved.revision });
+      if (editVersion !== (this._editVersion || 0) || fingerprint !== this.polishFingerprint()) throw Object.assign(new Error('内容已变化，请重新润色'), { stale: true });
+      stage = 'quote';
+      const quote = await api.polishQuote({ draft_id: saved.draft_id, expected_revision: saved.revision });
+      if (!this.ownsSession(session)) return;
+      if (editVersion !== (this._editVersion || 0) || fingerprint !== this.polishFingerprint()) throw Object.assign(new Error('内容已变化，请重新润色'), { stale: true });
+      if (Number(quote.total_stones) !== Number(capability.total_stones) || Number(quote.quote_version) !== Number(capability.config_version)) {
+        this.setData({ polishing: false, quoteStatus: 'waiting', quoteHint: '正在准备价格…', polishCapability: Object.assign({}, capability, { total_stones: Number(quote.total_stones), config_version: Number(quote.quote_version) }), notice: '润色价格已更新，请确认后再次点击' });
+        this.scheduleAutoQuote();
+        return;
+      }
+      const frozen = { editVersion, draftID: saved.draft_id, revision: saved.revision, taskDraftID: saved.draft_id, taskRevision: saved.revision, currentDraftID: saved.draft_id, fingerprint, adoptable: true };
+      stage = 'create';
+      const task = await api.createPolishTask({ quote_id: quote.quote_id, idempotency_key: api.idempotencyKey() });
+      if (!this.ownsSession(session)) return;
+      frozen.taskDraftID = task.draft_id || frozen.taskDraftID;
+      frozen.taskRevision = Number(task.draft_revision || frozen.taskRevision);
+      this.setData({ polishing: false, polishPending: !['completed', 'failed', 'cancelled'].includes(task.status), notice: '' });
+      this.openPolishTask(task, frozen);
+    } catch (error) {
+      if (!this.ownsSession(session)) return;
+      const uncertain = stage === 'create' && (!!error.networkError || !!error.pendingPolish || Number(error.statusCode) >= 500);
+      this.setData({ polishing: false, polishPending: uncertain, quoteStatus: uncertain ? 'disabled' : 'waiting', quoteHint: uncertain ? '润色任务待核对，请先查询' : '正在准备价格…', error: uncertain ? '润色任务结果待核对，请查询原任务，避免重复扣费' : (error.message || '润色失败，原文已保留'), notice: '' });
+      if (!uncertain) this.scheduleAutoQuote();
+    }
+  },
+  async checkPolishPending() {
+    if (this.data.polishing || typeof api.pendingPolish !== 'function') return;
+    const session = this.session();
+    let pending;
+    try { pending = api.pendingPolish(); } catch (error) { if (this.ownsSession(session)) this.setData({ error: error.message }); return; }
+    if (!pending) { this.setData({ polishPending: false }); return; }
+    this.setData({ polishing: true, polishPending: true, notice: '正在查询上次润色任务…' });
+    try {
+      const task = pending.task_id ? await api.getPolishTask(pending.task_id) : await api.getPolishSubmission(pending);
+      if (!this.ownsSession(session)) return;
+      this.setData({ polishing: false, polishPending: !['completed', 'failed', 'cancelled'].includes(task.status), notice: '' });
+      const fingerprint = this.polishFingerprint();
+      const snapshotFingerprint = task.input_snapshot && typeof task.input_snapshot === 'object' ? rules.billableFingerprint(task.input_snapshot) : '';
+      const adoptable = !!snapshotFingerprint && snapshotFingerprint === fingerprint && String(task.draft_id) === String(this.data.draft_id);
+      if (!adoptable && task.status === 'completed') this.setData({ error: '当前草稿内容已变化，可查看润色结果，但不能直接采用' });
+      this.openPolishTask(task, { editVersion: this._editVersion || 0, taskDraftID: task.draft_id, taskRevision: task.draft_revision, currentDraftID: this.data.draft_id, fingerprint, adoptable });
+    } catch (error) { if (this.ownsSession(session)) this.setData({ polishing: false, error: error.message || '润色任务暂不可查询', notice: '' }); }
+  },
   async generateVideo() {
     if (this.data.submissionUncertain) {
       this.setData({ error: '提交结果待确认，请先到创作记录核对，避免重复扣费。' });
@@ -533,5 +639,4 @@ Page({
   },
   openRecords() { wx.navigateTo({ url: '/pages/aivideostudio/records' }); },
   openTutorial() { wx.navigateTo({ url: '/pages/aivideostudio/tutorial?mode=' + encodeURIComponent(this.data.mode || 'text') }); },
-  polishUnavailable() { wx.showToast({ title: 'AI 润色能力尚未开放', icon: 'none' }); },
 });

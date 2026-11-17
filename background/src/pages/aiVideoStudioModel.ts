@@ -1,4 +1,4 @@
-import type { AIVideoStudioConfig, AIVideoStudioMode, StudioReconciliationAction, StudioReconciliationInput } from '../api/aiVideoStudio';
+import type { AIVideoStudioConfig, AIVideoStudioMode, PolishReconciliationAction, PolishReconciliationInput, StudioReconciliationAction, StudioReconciliationInput } from '../api/aiVideoStudio';
 
 const studioModes: AIVideoStudioMode[] = ['text', 'first_frame', 'first_last_frame', 'reference'];
 
@@ -34,6 +34,18 @@ export function buildStudioReconciliation(action: StudioReconciliationAction, ex
     return { action, evidence: reason };
 }
 
+export function buildPolishReconciliation(action: PolishReconciliationAction, evidence: string, result: string): PolishReconciliationInput {
+    if (action !== 'confirmed_rejected' && action !== 'confirmed_result') throw new Error('请选择有效的核对动作');
+    const reason = evidence.trim();
+    if (Array.from(reason).length < 10 || Array.from(reason).length > 500) throw new Error('请填写10至500字的供应商核对依据');
+    if (action === 'confirmed_result') {
+        const text = result.trim();
+        if (!text || Array.from(text).length > 7000) throw new Error('请填写1至7000字的已核实润色结果');
+        return { action, evidence: reason, result: text };
+    }
+    return { action, evidence: reason };
+}
+
 export function validateAIVideoStudioConfig(config: AIVideoStudioConfig): string[] {
     const errors: string[] = [];
     if (config.provider_code !== 'metaso_h3') errors.push('当前版本只允许使用已冻结的秘塔 H3 适配。');
@@ -46,6 +58,16 @@ export function validateAIVideoStudioConfig(config: AIVideoStudioConfig): string
         errors.push('灵石单价必须是 0–1000000000 的整数；未配置请留空。');
     }
     if (config.prices.some((price) => !['per_request', 'per_video', 'per_second'].includes(price.billing_unit))) errors.push('价格目录包含不支持的计费单位。');
+    const polishPrice = config.prices.find((price) => price.code === 'ai_video_studio_prompt_optimize');
+    if (polishPrice && polishPrice.billing_unit !== 'per_request') errors.push('提示词润色必须按次计费。');
+    const polishConfig = config.prompt_optimize || { enabled: false, model: '', timeout_seconds: 45 };
+    if (polishConfig.enabled && !polishConfig.model.trim()) errors.push('开启提示词润色前请填写模型名称。');
+    if (polishConfig.enabled && (!polishPrice?.enabled || !Number.isSafeInteger(polishPrice.unit_stones) || Number(polishPrice.unit_stones) <= 0)) {
+        errors.push('开启提示词润色前请启用按次价格并填写正整数单价。');
+    }
+    if (!Number.isSafeInteger(polishConfig.timeout_seconds) || polishConfig.timeout_seconds < 1 || polishConfig.timeout_seconds > 120) {
+        errors.push('提示词润色超时必须为 1–120 秒。');
+    }
     if (config.enabled && !config.prices.some((price) => price.enabled && price.code !== 'ai_video_studio_prompt_optimize')) {
         errors.push('至少启用一个已定价的视频生成档位。');
     }

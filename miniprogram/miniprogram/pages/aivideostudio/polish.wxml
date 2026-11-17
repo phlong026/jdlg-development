@@ -1,0 +1,25 @@
+<block wx:if="{{__profileAccessMounted}}">
+  <navigation-bar class="studio-navigation" title="AI 润色" variant="studio" back="{{true}}" background="#fbfaf7" />
+  <view class="polish-page">
+    <view wx:if="{{loading}}" class="state">正在读取润色结果…</view>
+    <block wx:else>
+      <view class="status-row"><text>{{statusLabel}}</text><text wx:if="{{task.total_stones}}" class="fee">{{task.total_stones}} 灵石</text></view>
+      <view wx:if="{{error}}" class="error-message">{{error}}</view>
+      <view class="original-card" bindtap="toggleOriginal" aria-role="button"><view class="original-title"><text>原文</text><text>{{originalOpen ? '收起' : '查看'}}</text></view><text wx:if="{{originalOpen}}" class="original-text" selectable="{{true}}">{{task.original_prompt}}</text></view>
+      <view class="result-section">
+        <text class="section-title">润色结果</text>
+        <textarea class="result-input" maxlength="-1" value="{{result}}" bindinput="inputResult" cursor-spacing="160" adjust-position="{{true}}" disabled="{{task.status !== 'completed'}}" placeholder="润色完成后可在这里继续修改" />
+        <text class="count {{resultLength > 7000 ? 'count-error' : ''}}">{{resultLength}} / 7000</text>
+      </view>
+      <view wx:if="{{task.status === 'uncertain'}}" class="task-note">供应商结果尚待核对。页面只查询原任务，不会重新发起润色。</view>
+      <view wx:elif="{{task.status === 'failed' || task.status === 'cancelled'}}" class="task-note">{{task.error_message || '原文已保留，可返回后重新操作。'}}</view>
+      <button wx:if="{{task.status === 'queued'}}" class="cancel-button" bindtap="cancel" loading="{{cancelling}}" disabled="{{cancelling}}">取消润色</button>
+    </block>
+    <view class="safe-bottom" />
+  </view>
+  <view wx:if="{{!loading}}" class="polish-bottom">
+    <button class="keep-button" bindtap="retainOriginal">保留原文</button>
+    <button class="adopt-button" bindtap="adopt" disabled="{{!canAdopt}}">采用结果</button>
+  </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

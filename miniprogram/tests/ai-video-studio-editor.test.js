@@ -305,7 +305,7 @@ test('opening an unresolved editor only queries and never creates a paid batch a
   assert.match(page.data.notice, /原请求/);
 });
 
-test('editor markup follows the confirmed two-tab workspace without fake AI polish', () => {
+test('editor markup follows the confirmed two-tab workspace with the connected AI polish entry', () => {
   const root = path.resolve(__dirname, '../miniprogram/pages/aivideostudio');
   const markup = fs.readFileSync(path.join(root, 'generate.wxml'), 'utf8');
   const style = fs.readFileSync(path.join(root, 'generate.wxss'), 'utf8');
@@ -316,7 +316,9 @@ test('editor markup follows the confirmed two-tab workspace without fake AI poli
   assert.match(markup, /我的素材/);
   assert.match(markup, /我的提示词/);
   assert.match(markup, /创作记录/);
-  assert.doesNotMatch(markup, /AI 润色|bindtap="polishUnavailable"/);
+  assert.match(markup, /AI 润色/);
+  assert.match(markup, /bindtap="startPolish"/);
+  assert.doesNotMatch(markup, /bindtap="polishUnavailable"/);
   assert.match(markup, />生成视频</);
   assert.doesNotMatch(markup, /查看报价|确认并生成/);
   assert.match(markup, /<video/);

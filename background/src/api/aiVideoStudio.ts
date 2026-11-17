@@ -33,6 +33,13 @@ export interface AIVideoStudioConfig {
     new_tasks_ready?: boolean;
     disabled_reason?: string;
     mode_readiness?: Partial<Record<AIVideoStudioMode, AIVideoStudioModeReadiness>>;
+    prompt_optimize: {
+        enabled: boolean;
+        model: string;
+        timeout_seconds: number;
+    };
+    prompt_optimize_ready?: boolean;
+    prompt_optimize_disabled_reason?: string;
     modes: Record<AIVideoStudioMode, boolean>;
     limits: {
         max_concurrency: number;
@@ -47,6 +54,30 @@ export interface AIVideoStudioConfig {
     };
     prices: AIVideoStudioPrice[];
     updated_at?: string;
+}
+
+export interface AIVideoStudioPolishTask {
+    task_id: string;
+    user_id: number;
+    quote_id: string;
+    draft_id: number;
+    draft_revision: number;
+    status: string;
+    fee_status: string;
+    total_stones: number;
+    original_prompt?: string;
+    optimized_prompt?: string;
+    error_message?: string;
+    input_snapshot?: Record<string, unknown>;
+    created_at: string;
+    updated_at?: string;
+}
+
+export type PolishReconciliationAction = 'confirmed_rejected' | 'confirmed_result';
+export interface PolishReconciliationInput {
+    action: PolishReconciliationAction;
+    evidence: string;
+    result?: string;
 }
 
 export interface AIVideoStudioTask {
@@ -120,6 +151,7 @@ export function normalizeAIVideoStudioConfig(config: AIVideoStudioConfig): AIVid
         ...config,
         provider_code: config.provider_code || 'metaso_h3',
         provider_display_name: config.provider_display_name || '秘塔 H3',
+        prompt_optimize: { enabled: false, model: '', timeout_seconds: 45, ...(config.prompt_optimize || {}) },
         modes: { text: false, first_frame: false, first_last_frame: false, reference: false, ...(config.modes || {}) },
         limits: {
             max_concurrency: 3, timeout_seconds: 900, max_quantity: 1,
@@ -151,6 +183,8 @@ export const saveAIVideoStudioConfig = async (config: AIVideoStudioConfig): Prom
         new_tasks_ready: _newTasksReady,
         disabled_reason: _disabledReason,
         mode_readiness: _modeReadiness,
+        prompt_optimize_ready: _promptOptimizeReady,
+        prompt_optimize_disabled_reason: _promptOptimizeDisabledReason,
         updated_at: _updatedAt,
         ...editable
     } = config;
@@ -159,6 +193,22 @@ export const saveAIVideoStudioConfig = async (config: AIVideoStudioConfig): Prom
         expected_version: version,
     });
     return normalizeAIVideoStudioConfig(response.data!);
+};
+
+const promptPolishRoot = '/api/v1/management/ai-video-studio/prompt-polish/tasks';
+
+export const getAIVideoStudioPolishTasks = async (params: Record<string, string | number | undefined> = {}): Promise<PageResult<AIVideoStudioPolishTask>> => {
+    const response = await get<PageResult<AIVideoStudioPolishTask>>(promptPolishRoot, params);
+    return response.data || { items: [], total: 0, page: 1, page_size: 20 };
+};
+
+export const getAIVideoStudioPolishTask = async (id: string): Promise<AIVideoStudioPolishTask> => {
+    const response = await get<AIVideoStudioPolishTask>(`${promptPolishRoot}/${encodeURIComponent(id)}`);
+    return response.data!;
+};
+
+export const reconcileAIVideoStudioPolishTask = async (id: string, input: PolishReconciliationInput): Promise<void> => {
+    await post(`${promptPolishRoot}/${encodeURIComponent(id)}/reconcile`, input);
 };
 
 export const getAIVideoStudioTasks = async (params: Record<string, string | number | undefined> = {}): Promise<PageResult<AIVideoStudioTask>> => {

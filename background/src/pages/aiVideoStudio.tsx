@@ -4,20 +4,25 @@ import {
     getAIVideoStudioLedger,
     getAIVideoStudioTasks,
     getAIVideoStudioTask,
+    getAIVideoStudioPolishTasks,
+    getAIVideoStudioPolishTask,
     reconcileAIVideoStudioResult,
+    reconcileAIVideoStudioPolishTask,
     saveAIVideoStudioConfig,
     type AIVideoStudioConfig,
     type AIVideoStudioLedgerItem,
     type AIVideoStudioMode,
     type AIVideoStudioTask,
     type AIVideoStudioBatchDetail,
+    type AIVideoStudioPolishTask,
+    type PolishReconciliationAction,
     type StudioReconciliationAction,
 } from '../api/aiVideoStudio';
 import { reportPageLoadError, reportPageLoadRecovered } from '../utils/pageLoadError';
-import { buildStudioReconciliation, summarizeAIVideoStudioReadiness, validateAIVideoStudioConfig } from './aiVideoStudioModel';
+import { buildPolishReconciliation, buildStudioReconciliation, summarizeAIVideoStudioReadiness, validateAIVideoStudioConfig } from './aiVideoStudioModel';
 import './aiVideoStudio.scss';
 
-type Tab = 'config' | 'tasks' | 'ledger';
+type Tab = 'config' | 'tasks' | 'polish' | 'ledger';
 type LoadState = 'loading' | 'ready' | 'error';
 
 const modeLabels: Record<AIVideoStudioMode, string> = {
@@ -50,7 +55,8 @@ const AIVideoStudio: React.FC = () => {
     const [savedConfig, setSavedConfig] = useState<AIVideoStudioConfig | null>(null);
     const [tasks, setTasks] = useState<AIVideoStudioTask[]>([]);
     const [ledger, setLedger] = useState<AIVideoStudioLedgerItem[]>([]);
-    const [state, setState] = useState<Record<Tab, LoadState>>({ config: 'loading', tasks: 'loading', ledger: 'loading' });
+    const [polishTasks, setPolishTasks] = useState<AIVideoStudioPolishTask[]>([]);
+    const [state, setState] = useState<Record<Tab, LoadState>>({ config: 'loading', tasks: 'loading', polish: 'loading', ledger: 'loading' });
     const [saving, setSaving] = useState(false);
     const [confirming, setConfirming] = useState(false);
     const [status, setStatus] = useState('');
@@ -59,9 +65,12 @@ const AIVideoStudio: React.FC = () => {
     const [taskTotal, setTaskTotal] = useState(0);
     const [ledgerPage, setLedgerPage] = useState(1);
     const [ledgerTotal, setLedgerTotal] = useState(0);
+    const [polishPage, setPolishPage] = useState(1);
+    const [polishTotal, setPolishTotal] = useState(0);
     const configRequest = useRef(0);
     const taskRequest = useRef(0);
     const ledgerRequest = useRef(0);
+    const polishRequest = useRef(0);
     const saveInFlight = useRef(false);
     const mounted = useRef(true);
     const detailRequest = useRef(0);
@@ -74,6 +83,15 @@ const AIVideoStudio: React.FC = () => {
     const [evidence, setEvidence] = useState('');
     const [reconciling, setReconciling] = useState(false);
     const reconciliationInFlight = useRef(false);
+    const polishDetailRequest = useRef(0);
+    const [polishDetail, setPolishDetail] = useState<AIVideoStudioPolishTask | null>(null);
+    const [polishDetailLoading, setPolishDetailLoading] = useState(false);
+    const [polishError, setPolishError] = useState('');
+    const [polishAction, setPolishAction] = useState<PolishReconciliationAction>('confirmed_rejected');
+    const [polishEvidence, setPolishEvidence] = useState('');
+    const [polishResult, setPolishResult] = useState('');
+    const [polishReconciling, setPolishReconciling] = useState(false);
+    const polishReconciliationInFlight = useRef(false);
 
     const loadConfig = useCallback(async () => {
         const request = ++configRequest.current;
@@ -119,8 +137,23 @@ const AIVideoStudio: React.FC = () => {
         }
     }, [keyword, ledgerPage]);
 
+    const loadPolishTasks = useCallback(async () => {
+        const request = ++polishRequest.current;
+        setState((current) => ({ ...current, polish: 'loading' }));
+        try {
+            const result = await getAIVideoStudioPolishTasks({ status: status || undefined, keyword: keyword.trim() || undefined, page: polishPage, page_size: 20 });
+            if (request !== polishRequest.current) return;
+            setPolishTasks(result.items || []); setPolishTotal(result.total || 0); setState((current) => ({ ...current, polish: 'ready' }));
+        } catch (error) {
+            if (request !== polishRequest.current) return;
+            setState((current) => ({ ...current, polish: 'error' }));
+            reportPageLoadError(error, 'AI 润色任务加载失败');
+        }
+    }, [keyword, polishPage, status]);
+
     useEffect(() => { void loadConfig(); }, [loadConfig]);
     useEffect(() => { if (tab === 'tasks') void loadTasks(); }, [loadTasks, tab]);
+    useEffect(() => { if (tab === 'polish') void loadPolishTasks(); }, [loadPolishTasks, tab]);
     useEffect(() => { if (tab === 'ledger') void loadLedger(); }, [loadLedger, tab]);
     useEffect(() => {
         mounted.current = true;
@@ -129,7 +162,9 @@ const AIVideoStudio: React.FC = () => {
             configRequest.current += 1;
             taskRequest.current += 1;
             ledgerRequest.current += 1;
+            polishRequest.current += 1;
             detailRequest.current += 1;
+            polishDetailRequest.current += 1;
         };
     }, []);
 
@@ -172,6 +207,40 @@ const AIVideoStudio: React.FC = () => {
         }
     };
 
+    const loadPolishDetail = async (id: string) => {
+        const request = ++polishDetailRequest.current;
+        setPolishDetailLoading(true); setPolishError(''); setPolishDetail(null);
+        try {
+            const value = await getAIVideoStudioPolishTask(id);
+            if (!mounted.current || request !== polishDetailRequest.current) return;
+            setPolishDetail(value); setPolishAction('confirmed_rejected'); setPolishEvidence(''); setPolishResult(value.optimized_prompt || '');
+        } catch (error: any) {
+            if (mounted.current && request === polishDetailRequest.current) setPolishError(error?.message || '润色任务详情读取失败');
+        } finally {
+            if (mounted.current && request === polishDetailRequest.current) setPolishDetailLoading(false);
+        }
+    };
+
+    const reconcilePolish = async () => {
+        if (!polishDetail || polishDetail.status !== 'uncertain' || polishReconciliationInFlight.current) return;
+        try {
+            const input = buildPolishReconciliation(polishAction, polishEvidence, polishResult);
+            const message = polishAction === 'confirmed_rejected'
+                ? '确认供应商未受理该润色任务？预留灵石将退回，并记录核对依据。'
+                : '确认该文本是供应商已完成的真实结果？任务将结算，且不会再次请求供应商。';
+            if (!window.confirm(message)) return;
+            polishReconciliationInFlight.current = true; setPolishReconciling(true); setPolishError('');
+            await reconcileAIVideoStudioPolishTask(polishDetail.task_id, input);
+            if (!mounted.current) return;
+            await Promise.all([loadPolishDetail(polishDetail.task_id), loadPolishTasks(), loadLedger()]);
+        } catch (error: any) {
+            if (mounted.current) setPolishError(error?.message || '核对失败，请刷新后重试');
+        } finally {
+            polishReconciliationInFlight.current = false;
+            if (mounted.current) setPolishReconciling(false);
+        }
+    };
+
     const changeLimit = (key: keyof AIVideoStudioConfig['limits'], value: string) => {
         const number = Math.max(0, Math.trunc(Number(value) || 0));
         setConfig((current) => current ? { ...current, limits: { ...current.limits, [key]: number } } : current);
@@ -199,8 +268,8 @@ const AIVideoStudio: React.FC = () => {
     return <div className="aivs-page">
         <p className="aivs-intro">独立能力、价格、任务和费用核对；不会改动原 AI 视频功能。</p>
         <div className="aivs-tabs" role="tablist" aria-label="AI 视频工作区管理">
-            {([['config', '能力与价格'], ['tasks', '任务与异常'], ['ledger', '费用流水']] as const).map(([value, text]) =>
-                <button key={value} type="button" className={tab === value ? 'on' : ''} onClick={() => { setTab(value); setKeyword(''); setTaskPage(1); setLedgerPage(1); }} role="tab" aria-selected={tab === value}>{text}</button>)}
+            {([['config', '能力与价格'], ['tasks', '视频任务'], ['polish', '润色任务'], ['ledger', '费用流水']] as const).map(([value, text]) =>
+                <button key={value} type="button" className={tab === value ? 'on' : ''} onClick={() => { setTab(value); setKeyword(''); setStatus(''); setTaskPage(1); setPolishPage(1); setLedgerPage(1); }} role="tab" aria-selected={tab === value}>{text}</button>)}
         </div>
 
         {tab === 'config' ? <section className="aivs-panel">
@@ -240,6 +309,16 @@ const AIVideoStudio: React.FC = () => {
                     </div>
                 </div>
                 <div className="aivs-card">
+                    <h3>AI 润色</h3>
+                    <p>沿用已配置的文本 AI 地址和凭据；这里只指定润色模型与超时。关闭后仍可查看历史结果。</p>
+                    <div className="aivs-form-grid polish-config">
+                        <label className="aivs-switch"><input type="checkbox" checked={config.prompt_optimize.enabled} onChange={(event) => { setConfig({ ...config, prompt_optimize: { ...config.prompt_optimize, enabled: event.target.checked } }); setConfirming(false); }} />允许创建润色任务</label>
+                        <label>模型名称<input value={config.prompt_optimize.model} maxLength={128} placeholder="由文本服务支持的模型" onChange={(event) => { setConfig({ ...config, prompt_optimize: { ...config.prompt_optimize, model: event.target.value } }); setConfirming(false); }} /></label>
+                        <label>请求超时（秒）<input type="number" min={1} max={120} value={config.prompt_optimize.timeout_seconds} onChange={(event) => { setConfig({ ...config, prompt_optimize: { ...config.prompt_optimize, timeout_seconds: Math.trunc(Number(event.target.value) || 0) } }); setConfirming(false); }} /></label>
+                        <div className={config.prompt_optimize_ready ? 'aivs-polish-ready ready' : 'aivs-polish-ready'}><span>运行状态</span><b>{config.prompt_optimize_ready ? '可用' : '未就绪'}</b><small>{config.prompt_optimize_ready ? '新任务可按独立报价提交' : (config.prompt_optimize_disabled_reason || '等待服务返回就绪状态')}</small></div>
+                    </div>
+                </div>
+                <div className="aivs-card">
                     <h3>独立价格目录</h3>
                     <p>已启用价格项必须有正整数价格。改价只影响新报价，已创建批次按费用快照结算。</p>
                     <div className="admin-table-region"><table><thead><tr><th>收费项</th><th>计费单位</th><th>灵石单价</th><th>状态</th><th>版本</th></tr></thead><tbody>
@@ -273,6 +352,28 @@ const AIVideoStudio: React.FC = () => {
                 <div className="aivs-actions"><button type="button" disabled={reconciling || !target || (reconcileAction === 'query' ? !target.external_id : target.status !== 'uncertain' || !!target.external_id)} className={reconcileAction === 'refund_confirmed_rejected' ? 'primary danger' : 'primary'} onClick={() => void reconcile()}>{reconciling ? '正在核对…' : reconcileAction === 'query' ? '查询任务' : reconcileAction === 'attach_external_id' ? '核验并补回标识' : '确认未受理并退回灵石'}</button></div>
             </div> : null}
             {taskTotal > 20 ? <div className="aivs-pagination"><button type="button" onClick={() => setTaskPage((page) => Math.max(1, page - 1))} disabled={taskPage <= 1}>上一页</button><span>第 {taskPage} 页 · 共 {taskTotal} 条</span><button type="button" onClick={() => setTaskPage((page) => page + 1)} disabled={taskPage * 20 >= taskTotal}>下一页</button></div> : null}
+        </section> : null}
+
+        {tab === 'polish' ? <section className="aivs-panel">
+            <div className="aivs-filters"><input value={keyword} onChange={(event) => { setKeyword(event.target.value); setPolishPage(1); }} placeholder="任务、草稿或用户 ID" /><select value={status} onChange={(event) => { setStatus(event.target.value); setPolishPage(1); }}><option value="">全部状态</option><option value="queued">排队中</option><option value="submitting">提交中</option><option value="uncertain">待确认</option><option value="completed">已完成</option><option value="failed">失败</option><option value="cancelled">已取消</option></select><button type="button" onClick={() => void loadPolishTasks()}>查询</button></div>
+            {state.polish === 'loading' ? <div className="aivs-state">润色任务加载中…</div> : state.polish === 'error' ? <div className="aivs-state error">润色任务加载失败。<button onClick={() => void loadPolishTasks()}>重试</button></div> : polishTasks.length === 0 ? <div className="aivs-state">暂无符合条件的润色任务。</div> : <div className="admin-table-region"><table><thead><tr><th>任务</th><th>用户 / 草稿</th><th>状态</th><th>费用</th><th>原文</th><th>润色结果</th><th>说明</th><th>时间</th><th>详情</th></tr></thead><tbody>{polishTasks.map((task) => <tr key={task.task_id}><td><b>{task.task_id}</b><small>报价 {task.quote_id || '-'}</small></td><td>{task.user_id}<small>草稿 {task.draft_id} · r{task.draft_revision}</small></td><td><b>{label(task.status)}</b><small>{label(task.fee_status)}</small></td><td>{task.total_stones} 灵石</td><td><span className="aivs-text-cell">{task.original_prompt || '-'}</span></td><td><span className="aivs-text-cell">{task.optimized_prompt || '-'}</span></td><td>{task.error_message || '-'}</td><td>{dateTime(task.updated_at || task.created_at)}</td><td><button type="button" onClick={() => void loadPolishDetail(task.task_id)} disabled={polishReconciling}>查看与核对</button></td></tr>)}</tbody></table></div>}
+            <p className="aivs-note">待确认表示供应商是否受理尚不明确，费用保持预留。后台不会自动重试；只有供应商明确未受理或已核实取得结果时才能人工处理。</p>
+            {polishDetailLoading ? <div className="aivs-state">润色详情加载中…</div> : null}
+            {polishError ? <div className="aivs-errors" role="alert">{polishError}</div> : null}
+            {polishDetail ? <div className="aivs-card">
+                <h3>润色核对 · {polishDetail.task_id}</h3>
+                <p>{label(polishDetail.status)} · {polishDetail.total_stones} 灵石 · {label(polishDetail.fee_status)}</p>
+                <div className="aivs-polish-copy"><div><span>原文</span><p>{polishDetail.original_prompt || '-'}</p></div><div><span>已保存结果</span><p>{polishDetail.optimized_prompt || '尚无可用结果'}</p></div></div>
+                {polishDetail.status === 'uncertain' ? <>
+                    <div className="aivs-form-grid">
+                        <label>核对动作<select value={polishAction} disabled={polishReconciling} onChange={(event) => setPolishAction(event.target.value as PolishReconciliationAction)}><option value="confirmed_rejected">确认供应商未受理并退款</option><option value="confirmed_result">录入供应商已完成结果并结算</option></select></label>
+                    </div>
+                    {polishAction === 'confirmed_result' ? <label className="aivs-evidence">已核实润色结果<textarea value={polishResult} minLength={1} maxLength={7000} disabled={polishReconciling} placeholder="粘贴供应商已完成的真实文本结果" onChange={(event) => setPolishResult(event.target.value)} /></label> : null}
+                    <label className="aivs-evidence">核对依据<textarea value={polishEvidence} minLength={10} maxLength={500} disabled={polishReconciling} placeholder="填写供应商任务记录或客服核对依据，10至500字" onChange={(event) => setPolishEvidence(event.target.value)} /></label>
+                    <div className="aivs-actions"><button type="button" disabled={polishReconciling} className={polishAction === 'confirmed_rejected' ? 'primary danger' : 'primary'} onClick={() => void reconcilePolish()}>{polishReconciling ? '正在提交核对…' : polishAction === 'confirmed_rejected' ? '确认未受理并退回灵石' : '确认结果并结算'}</button></div>
+                </> : <p className="aivs-note">当前任务不是待确认状态，只读展示，不能执行核对写入。</p>}
+            </div> : null}
+            {polishTotal > 20 ? <div className="aivs-pagination"><button type="button" onClick={() => setPolishPage((page) => Math.max(1, page - 1))} disabled={polishPage <= 1}>上一页</button><span>第 {polishPage} 页 · 共 {polishTotal} 条</span><button type="button" onClick={() => setPolishPage((page) => page + 1)} disabled={polishPage * 20 >= polishTotal}>下一页</button></div> : null}
         </section> : null}
 
         {tab === 'ledger' ? <section className="aivs-panel">
