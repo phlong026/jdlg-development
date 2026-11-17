@@ -1,4 +1,5 @@
 @import "./common.wxss";
+.tutorial-entry { display:flex; justify-content:flex-end; margin-bottom:14rpx; }
 .prompt-form { padding:4rpx 0 30rpx; border-bottom:1rpx solid #e8e1d8; margin-bottom:28rpx; }
 .prompt-form .textarea { margin-top:18rpx; height:230rpx; }
 .prompt-copy { white-space:pre-wrap; word-break:break-all; }

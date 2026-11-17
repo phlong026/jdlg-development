@@ -1,0 +1,57 @@
+{
+  "date": "2026-11-17",
+  "baseline": "1e97f09",
+  "branch": "feat/ai-video-prompt-tutorial-20261117",
+  "new_tests": {
+    "red": 6,
+    "passed": 7,
+    "callback_red_verified": true
+  },
+  "mini_program": {
+    "total": 1778,
+    "passed": 1774,
+    "failed": 0,
+    "skipped": 4,
+    "ai_video_related_passed": 83
+  },
+  "routes": {
+    "total": 79,
+    "public": 23,
+    "excluded": 56,
+    "tutorial_collect": false
+  },
+  "go_tracking": "passed",
+  "generated_js": "passed",
+  "syntax": "passed",
+  "diff_check": "passed",
+  "independent_code_review": "no actionable findings",
+  "independent_visual_review": "passed",
+  "new_dependencies": 0,
+  "polish_feature": "design only; not implemented",
+  "delivery": {
+    "deployment": false,
+    "paid_generation": false,
+    "push": false,
+    "merge": false,
+    "mini_program_upload": false
+  },
+  "not_tested": [
+    "physical device clipboard and font scaling",
+    "real model prompt optimization"
+  ],
+  "dependency_audit": {
+    "command": "npm audit --omit=dev --json",
+    "vulnerabilities": 0
+  },
+  "logs": "verification-logs/",
+  "changed_js_syntax_checked": 12,
+  "credential_scan": {
+    "scope": "all staged text files",
+    "findings": 0
+  },
+  "rollback": {
+    "reverse_patch_check": "passed",
+    "database_migration": false,
+    "external_write": false
+  }
+}

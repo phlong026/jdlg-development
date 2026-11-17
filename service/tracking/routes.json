@@ -161,6 +161,7 @@
   "pages/aivideostudio/prompts": {"Title":"AI 视频提示词","Type":"excluded","Public":false,"Audience":"designer"},
   "pages/aivideostudio/records": {"Title":"AI 视频创作记录","Type":"excluded","Public":false,"Audience":"designer"},
   "pages/aivideostudio/detail": {"Title":"AI 视频任务详情","Type":"excluded","Public":false,"Audience":"designer"},
+  "pages/aivideostudio/tutorial": {"Title":"AI 视频提示词教程","Type":"excluded","Public":false,"Audience":"designer"},
   "pages/real/real": {
     "Title": "pages/real/real",
     "Type": "excluded",

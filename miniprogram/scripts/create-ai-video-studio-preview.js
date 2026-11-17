@@ -92,6 +92,7 @@ function writeLoginGuardStub() {
 
 function copyRulesAndImage() {
   copyFile(path.join(sourceRoot, 'utils', 'ai-video-studio.js'), path.join(outputRoot, 'miniprogram', 'utils', 'ai-video-studio.js'));
+  copyFile(path.join(sourceRoot, 'utils', 'ai-video-tutorial.js'), path.join(outputRoot, 'miniprogram', 'utils', 'ai-video-tutorial.js'));
   copyFile(path.join(sourceRoot, 'assets', 'welcome', 'courtyard.jpg'), path.join(outputRoot, 'miniprogram', 'assets', 'welcome', 'courtyard.jpg'));
 }
 
@@ -223,7 +224,7 @@ App({ onLaunch() { console.warn('[offline-ui-preview] local fixtures only; no to
   writeFile('miniprogram/app.js', app);
   writeFile('miniprogram/utils/phase3-api.js', "'use strict'; module.exports = {};\n");
   writeFile('miniprogram/app.json', JSON.stringify({
-    pages: ['pages/aivideostudio/generate', 'pages/aivideostudio/index', 'pages/aivideostudio/materials', 'pages/aivideostudio/prompts', 'pages/aivideostudio/records', 'pages/aivideostudio/detail'],
+    pages: ['pages/aivideostudio/generate', 'pages/aivideostudio/index', 'pages/aivideostudio/materials', 'pages/aivideostudio/prompts', 'pages/aivideostudio/tutorial', 'pages/aivideostudio/records', 'pages/aivideostudio/detail'],
     window: { navigationBarTitleText: 'AI 视频 · 离线UI验收', navigationBarBackgroundColor: '#fbfaf7', navigationBarTextStyle: 'black', backgroundColor: '#fbfaf7' },
     sitemapLocation: 'sitemap.json',
   }, null, 2) + '\n');

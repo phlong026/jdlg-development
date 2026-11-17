@@ -11,6 +11,7 @@ Page({
   ownsSession(session){return!!session&&session.epoch===this._sessionEpoch&&session.token===this._token&&this.current()},
   inputName(e){this.setData({name:e.detail.value})},
   inputPrompt(e){this.setData({prompt:String(e.detail.value||'').slice(0,7000)})},
+  openTutorial(){wx.navigateTo({url:'/pages/aivideostudio/tutorial?mode='+encodeURIComponent(this.data.mode||'text')})},
   async load(append){
     const appendPage=append===true,epoch=this._epoch=(this._epoch||0)+1,page=appendPage?this.data.page+1:1,pageSize=50;
     this.setData(appendPage?{loadingMore:true,error:''}:{loading:true,error:'',items:[]});

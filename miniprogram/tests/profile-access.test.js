@@ -34,7 +34,7 @@ const anonymousBusinessRoutes = new Set([
 ]);
 
 test('every business route hides its content behind the shared profile guard', () => {
-  assert.equal(businessRoutes.length, 75);
+  assert.equal(businessRoutes.length, 76);
   for (const route of businessRoutes) {
     const template = fs.readFileSync(path.join(root, route + '.wxml'), 'utf8');
     const config = JSON.parse(fs.readFileSync(path.join(root, route + '.json'), 'utf8'));

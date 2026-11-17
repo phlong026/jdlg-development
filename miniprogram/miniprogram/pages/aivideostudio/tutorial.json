@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "提示词教程",
+  "navigationStyle": "custom",
+  "usingComponents": {
+    "login-guard": "/components/login-guard/login-guard",
+    "navigation-bar": "/components/navigation-bar/navigation-bar"
+  }
+}

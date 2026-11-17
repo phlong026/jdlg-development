@@ -1,0 +1,29 @@
+{
+  "method": "native offline simulator screenshots and independent visual review; visual-verdict skill unavailable",
+  "result": "passed",
+  "screenshots": [
+    "tutorial-text.png",
+    "tutorial-image.png",
+    "tutorial-reference.png",
+    "tutorial-text-bottom.png",
+    "tutorial-image-bottom.png",
+    "tutorial-reference-bottom.png"
+  ],
+  "verified": [
+    "three modes and formulas readable",
+    "image labeled reference only",
+    "copy button reachable after scrolling",
+    "existing palette and spacing retained",
+    "no clipped text or overlapping controls"
+  ],
+  "sha256": {
+    "tutorial-text.png": "ead1416a50410e9a9a1fbd9abc9ddafa9fa581f6ddfda8e4cebf016b7596ee77",
+    "tutorial-image.png": "021122911d57cd96f103fe6d342df2501ff3d6a17ccd96d534133f8b20809d5f",
+    "tutorial-reference.png": "b530aed1135e16bf79db85491e79e1fddebe7f9d9f5b80a57083fdb1a034d1ff",
+    "tutorial-text-bottom.png": "dc2296847ddb3859e3831e579ee8deb53d1e1c66f8473968afb1ff33e0ec9a4a",
+    "tutorial-image-bottom.png": "df1fd9cec318b6c8de369cb577e38b77cf5d37550299b5777fc22c4fe96fee65",
+    "tutorial-reference-bottom.png": "8daa20bfede5ad5a5e30b55005afe14e010d32a644869d1f207c38996ec04514"
+  },
+  "physical_device": false,
+  "paid_generation": false
+}

@@ -1,6 +1,7 @@
 <block wx:if="{{__profileAccessMounted}}">
   <navigation-bar class="studio-navigation" title="我的提示词" variant="studio" back="{{true}}" background="#fbfaf7" />
   <view class="page">
+    <view class="tutorial-entry"><text class="text-link" bindtap="openTutorial" aria-role="button">提示词写法教程 ›</text></view>
     <view class="prompt-form"><input class="input" maxlength="60" value="{{name}}" bindinput="inputName" placeholder="提示词名称"/><textarea class="textarea" maxlength="7000" value="{{prompt}}" bindinput="inputPrompt" placeholder="输入画面描述" cursor-spacing="120" adjust-position="{{true}}"/><button class="button" bindtap="save" loading="{{saving}}" disabled="{{saving}}">保存提示词</button></view>
     <view wx:if="{{loading}}" class="state">加载中…</view>
     <view wx:elif="{{error}}" class="error prompt-error"><text>{{error}}</text><button class="text-button" bindtap="load">重试</button></view>

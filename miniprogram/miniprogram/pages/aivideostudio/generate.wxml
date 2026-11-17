@@ -73,7 +73,7 @@
 
     <text wx:if="{{audioPreviewError}}" class="media-error">{{audioPreviewError}}</text>
     <view class="section-block prompt-section">
-      <view class="section-heading"><text>画面描述</text></view>
+      <view class="section-heading"><text>画面描述</text><text class="tutorial-link" bindtap="openTutorial" aria-role="button">写法教程 ›</text></view>
       <view class="prompt-box">
         <textarea wx:if="{{activeTab === 'creation'}}" class="prompt-input" maxlength="7000" value="{{prompt}}" data-field="prompt" bindinput="inputField" placeholder="描述主体、环境、镜头运动和光线…" cursor-spacing="150" />
         <textarea wx:else class="prompt-input" maxlength="7000" value="{{reference_prompt}}" data-field="reference_prompt" bindinput="inputField" placeholder="说明每项参考素材的用途，例如图片1控制风格…" cursor-spacing="150" />

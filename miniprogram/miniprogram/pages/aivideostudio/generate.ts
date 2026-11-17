@@ -532,5 +532,6 @@ Page({
     wx.navigateTo({ url: '/pages/aivideostudio/prompts?select=1&mode=' + encodeURIComponent(this.data.mode), events: { selected: item => { if (this.ownsSession(session)) this.markEdited({ [this.data.activeTab === 'reference' ? 'reference_prompt' : 'prompt']: item.prompt }); } } });
   },
   openRecords() { wx.navigateTo({ url: '/pages/aivideostudio/records' }); },
+  openTutorial() { wx.navigateTo({ url: '/pages/aivideostudio/tutorial?mode=' + encodeURIComponent(this.data.mode || 'text') }); },
   polishUnavailable() { wx.showToast({ title: 'AI 润色能力尚未开放', icon: 'none' }); },
 });
