@@ -1,6 +1,7 @@
 package route
 
 import (
+	"crypto/subtle"
 	"errors"
 	"io"
 	"net/http"
@@ -131,17 +132,38 @@ func registerOfficialAccountHandlers(public, authed *gin.RouterGroup, deps Offic
 			c.String(http.StatusServiceUnavailable, "unavailable")
 			return
 		}
-		encrypted, signature := c.Query("echostr"), c.Query("msg_signature")
-		if encrypted == "" || signature == "" {
+		timestamp, nonce, echo := c.Query("timestamp"), c.Query("nonce"), c.Query("echostr")
+		if nonce == "" || len(nonce) > 128 || echo == "" || len(echo) > 4096 {
 			c.String(http.StatusForbidden, "invalid signature")
 			return
 		}
-		plain, err := officialaccount.DecryptEcho(deps.Config, c.Query("timestamp"), c.Query("nonce"), signature, encrypted)
-		if err != nil {
+		encryptType, messageSignature := c.Query("encrypt_type"), c.Query("msg_signature")
+		if encryptType != "" && encryptType != "aes" {
 			c.String(http.StatusForbidden, "invalid signature")
 			return
 		}
-		c.String(http.StatusOK, string(plain))
+		if messageSignature != "" || encryptType == "aes" {
+			if messageSignature == "" {
+				c.String(http.StatusForbidden, "invalid signature")
+				return
+			}
+			plain, err := officialaccount.DecryptEcho(deps.Config, timestamp, nonce, messageSignature, echo)
+			if err != nil {
+				c.String(http.StatusForbidden, "invalid signature")
+				return
+			}
+			c.Data(http.StatusOK, "text/plain; charset=utf-8", plain)
+			return
+		}
+		signature := c.Query("signature")
+		if !validOfficialCallbackSignature(signature) || subtle.ConstantTimeCompare(
+			[]byte(officialaccount.SignCallback(deps.Config.CallbackToken, timestamp, nonce, "")),
+			[]byte(signature),
+		) != 1 {
+			c.String(http.StatusForbidden, "invalid signature")
+			return
+		}
+		c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(echo))
 	})
 	callback.POST("/callback", func(c *gin.Context) {
 		if !deps.Config.Status().BindingAvailable || deps.Store == nil || !freshWechatTimestamp(c.Query("timestamp"), deps.Now()) {
@@ -186,6 +208,20 @@ func registerOfficialAccountHandlers(public, authed *gin.RouterGroup, deps Offic
 		}
 		c.String(http.StatusOK, "success")
 	})
+}
+
+func validOfficialCallbackSignature(value string) bool {
+	if len(value) != 40 {
+		return false
+	}
+	for _, char := range value {
+		if char < '0' || char > '9' {
+			if char < 'a' || char > 'f' {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func freshWechatTimestamp(raw string, now time.Time) bool {

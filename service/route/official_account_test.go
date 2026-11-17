@@ -11,6 +11,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -269,14 +270,119 @@ func TestOfficialBindingReadAndDeleteDoNotRequireCallbackCrypto(t *testing.T) {
 	}
 }
 
-func TestOfficialGETCallbackRejectsPlaintextFallback(t *testing.T) {
+func TestOfficialGETCallbackAcceptsVerifiedPlaintextChallenge(t *testing.T) {
 	config := enabledOfficialConfig(t)
 	store := &officialRouteStore{}
 	router, now := officialRouteFixture(t, config, store)
 	timestamp := strconv.FormatInt(now.Unix(), 10)
 	signature := officialaccount.SignCallback(config.CallbackToken, timestamp, "nonce", "")
 	w := httptest.NewRecorder()
-	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/wechat/official/callback?timestamp="+timestamp+"&nonce=nonce&signature="+signature+"&echostr=plain", nil))
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/wechat/official/callback?timestamp="+timestamp+"&nonce=nonce&signature="+signature+"&echostr=official-challenge", nil))
+	if w.Code != http.StatusOK || w.Body.String() != "official-challenge" {
+		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestOfficialGETCallbackRejectsInvalidPlaintextChallenge(t *testing.T) {
+	config := enabledOfficialConfig(t)
+	store := &officialRouteStore{}
+	router, now := officialRouteFixture(t, config, store)
+	timestamp := strconv.FormatInt(now.Unix(), 10)
+	validSignature := officialaccount.SignCallback(config.CallbackToken, timestamp, "nonce", "")
+	tests := []struct {
+		name string
+		path string
+		want int
+	}{
+		{name: "bad signature", path: "?timestamp=" + timestamp + "&nonce=nonce&signature=bad&echostr=challenge", want: http.StatusForbidden},
+		{name: "missing signature", path: "?timestamp=" + timestamp + "&nonce=nonce&echostr=challenge", want: http.StatusForbidden},
+		{name: "missing nonce", path: "?timestamp=" + timestamp + "&signature=" + officialaccount.SignCallback(config.CallbackToken, timestamp, "", "") + "&echostr=challenge", want: http.StatusForbidden},
+		{name: "missing echo", path: "?timestamp=" + timestamp + "&nonce=nonce&signature=" + validSignature, want: http.StatusForbidden},
+		{name: "oversized nonce", path: "?timestamp=" + timestamp + "&nonce=" + strings.Repeat("n", 129) + "&signature=" + officialaccount.SignCallback(config.CallbackToken, timestamp, strings.Repeat("n", 129), "") + "&echostr=challenge", want: http.StatusForbidden},
+		{name: "oversized echo", path: "?timestamp=" + timestamp + "&nonce=nonce&signature=" + validSignature + "&echostr=" + strings.Repeat("e", 4097), want: http.StatusForbidden},
+		{name: "expired timestamp", path: "?timestamp=" + strconv.FormatInt(now.Add(-6*time.Minute).Unix(), 10) + "&nonce=nonce&signature=" + validSignature + "&echostr=challenge", want: http.StatusServiceUnavailable},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/api/v1/wechat/official/callback"+test.path, nil))
+			if w.Code != test.want {
+				t.Fatalf("status=%d want=%d body=%s", w.Code, test.want, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestOfficialGETCallbackRequiresEnabledReadyService(t *testing.T) {
+	config := enabledOfficialConfig(t)
+	tests := []struct {
+		name         string
+		config       officialaccount.Config
+		withoutStore bool
+	}{
+		{name: "disabled", config: officialaccount.Config{}},
+		{name: "missing store", config: config, withoutStore: true},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			store := &officialRouteStore{}
+			router, now := officialRouteFixture(t, test.config, store)
+			if test.withoutStore {
+				gin.SetMode(gin.TestMode)
+				router = gin.New()
+				public := router.Group("/api/v1")
+				authed := router.Group("/api/v1/miniprogram/official-account")
+				registerOfficialAccountHandlers(public, authed, OfficialAccountDeps{Config: test.config, Now: func() time.Time { return now }})
+			}
+			timestamp := strconv.FormatInt(now.Unix(), 10)
+			signature := officialaccount.SignCallback(test.config.CallbackToken, timestamp, "nonce", "")
+			w := httptest.NewRecorder()
+			path := "/api/v1/wechat/official/callback?timestamp=" + timestamp + "&nonce=nonce&signature=" + signature + "&echostr=challenge"
+			router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+			if w.Code != http.StatusServiceUnavailable {
+				t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestOfficialGETCallbackKeepsEncryptedChallengeStrict(t *testing.T) {
+	config := enabledOfficialConfig(t)
+	router, now := officialRouteFixture(t, config, &officialRouteStore{})
+	timestamp := strconv.FormatInt(now.Unix(), 10)
+	encrypted := encryptOfficialRouteEvent(t, config, []byte("encrypted-challenge"))
+	msgSignature := officialaccount.SignCallback(config.CallbackToken, timestamp, "nonce", encrypted)
+	w := httptest.NewRecorder()
+	path := "/api/v1/wechat/official/callback?encrypt_type=aes&timestamp=" + timestamp + "&nonce=nonce&msg_signature=" + msgSignature + "&echostr=" + url.QueryEscape(encrypted)
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+	if w.Code != http.StatusOK || w.Body.String() != "encrypted-challenge" {
+		t.Fatalf("encrypted status=%d body=%s", w.Code, w.Body.String())
+	}
+
+	plainSignature := officialaccount.SignCallback(config.CallbackToken, timestamp, "nonce", "")
+	for _, query := range []string{
+		"encrypt_type=aes",
+		"encrypt_type=aes&msg_signature=bad",
+		"msg_signature=bad",
+		"encrypt_type=unknown",
+	} {
+		w = httptest.NewRecorder()
+		path = "/api/v1/wechat/official/callback?timestamp=" + timestamp + "&nonce=nonce&signature=" + plainSignature + "&echostr=challenge&" + query
+		router.ServeHTTP(w, httptest.NewRequest(http.MethodGet, path, nil))
+		if w.Code != http.StatusForbidden {
+			t.Fatalf("query=%s downgrade status=%d body=%s", query, w.Code, w.Body.String())
+		}
+	}
+}
+
+func TestOfficialPOSTCallbackRejectsPlaintextMessage(t *testing.T) {
+	config := enabledOfficialConfig(t)
+	router, now := officialRouteFixture(t, config, &officialRouteStore{})
+	timestamp := strconv.FormatInt(now.Unix(), 10)
+	signature := officialaccount.SignCallback(config.CallbackToken, timestamp, "nonce", "")
+	w := httptest.NewRecorder()
+	path := "/api/v1/wechat/official/callback?timestamp=" + timestamp + "&nonce=nonce&signature=" + signature
+	router.ServeHTTP(w, httptest.NewRequest(http.MethodPost, path, strings.NewReader(`<xml><MsgType>event</MsgType></xml>`)))
 	if w.Code != http.StatusForbidden {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
 	}
