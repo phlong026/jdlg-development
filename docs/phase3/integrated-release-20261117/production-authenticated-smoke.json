@@ -1,0 +1,34 @@
+{
+  "production": true,
+  "source_commit": "f8688da5753dc729d76166bf6dbff3f78f9d3da3",
+  "transport": "HTTPS GET only; TLS verified",
+  "new_login_performed": false,
+  "provider_calls_performed": false,
+  "session_storage_modified": false,
+  "checks": [
+    {
+      "path": "/api/v1/miniprogram/workbench/context",
+      "status": 200,
+      "code": 0
+    },
+    {
+      "path": "/api/v1/miniprogram/ai-video-studio/capabilities",
+      "status": 200,
+      "code": 0,
+      "enabled": false,
+      "new_tasks_ready": false,
+      "execution_ready": true,
+      "accounting_ready": true,
+      "billing_ready": false
+    },
+    {
+      "path": "/api/v1/miniprogram/ai-video-studio/prompt-polish/capabilities",
+      "status": 200,
+      "code": 0,
+      "enabled": false,
+      "config_version": 2
+    }
+  ],
+  "passed": true,
+  "recorded_at": "2026-11-17T12:52:38.508Z"
+}

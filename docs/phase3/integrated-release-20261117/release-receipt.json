@@ -1,0 +1,220 @@
+{
+  "recorded_at": "2026-11-17T20:55:14+08:00",
+  "timezone": "Asia/Shanghai",
+  "scope": "联合部署；真实AI供应商调用与启用除外；服务号及公众号同步按用户指示延后",
+  "server_deployment_complete": true,
+  "delivery_complete": false,
+  "source": {
+    "pr_url": "https://github.com/phlong026/jdlg-development/pull/57",
+    "candidate_commit": "f8688da5753dc729d76166bf6dbff3f78f9d3da3",
+    "merge_commit": "f75160bc22d2077a33b9c11ea87696749de8ed06",
+    "candidate_tree_matches_merged_main": true,
+    "previous_production_commit": "8467e1cf5b6cda1cf4fd5a560f70f7f9a8f0c8f1",
+    "original_worktree_not_reset_or_overwritten": true
+  },
+  "ci": {
+    "all_passed": true,
+    "run_ids": [
+      44082458625,
+      44082458459,
+      44081804791
+    ],
+    "successful_job_executions": 7,
+    "distinct_jobs": 5,
+    "linux_backend_race_passed": true
+  },
+  "validation": {
+    "mini_tests": {
+      "passed": 1960,
+      "failed": 0,
+      "skipped": 0,
+      "native_wxml_compiler_used": true
+    },
+    "mini_typescript_diagnostics": 0,
+    "functional_ts_nocheck_files": 11,
+    "admin_tests_passed": 786,
+    "go": {
+      "pass_events": 2168,
+      "fail_events": 0,
+      "other_fixture_skips": 18,
+      "ai_video_mysql_tests_passed": 22,
+      "ai_video_mysql_tests_skipped": 0,
+      "vet_passed": true,
+      "model_race_passed": true
+    },
+    "dependency_audit": {
+      "mini_vulnerabilities": 0,
+      "admin_vulnerabilities": 0
+    },
+    "routes": {
+      "total": 82,
+      "public": 24,
+      "excluded": 58
+    },
+    "building_pricing_files_unchanged": true,
+    "protected_signer_contract_passed": true,
+    "final_elf_hmac_sm4_match": true,
+    "source_reverse_patch_restores_base_tree": true
+  },
+  "package": {
+    "source_commit": "f8688da5753dc729d76166bf6dbff3f78f9d3da3",
+    "archive_sha256": "16ab797b07ef6387a9fcb4d8bc06261662d42e123bfd0f536e10ec8cf24960e2",
+    "manifest_sha256": "f460a1fcaa4e611c5f6ccd8fc66bfce3d21280e0ae794ba32f5dc12f6d05eb73",
+    "verified_files": 106,
+    "server_path": "/root/jdlg-release-20261117-f8688da/package",
+    "private_operational_helper_sha256": "48061bd154c1a8952487119c50c9790987a9804b1f5d1b30fa9bdaf282c3d342"
+  },
+  "backend": {
+    "deployed": true,
+    "status": "active",
+    "pid": 3686744,
+    "started_at": "2026-11-17T20:42:30+08:00",
+    "single_process_verified": true,
+    "running_and_disk_sha256": "6a7f8cc9fff9945ecbf50d83d18bcdbcabc4ada16e1849b8046c98e75d368497",
+    "previous_pid": 1628402,
+    "previous_sha256": "b4b983a73993aa77300a9aed04161c24bbf08e116bed23891e0270d68941f66d",
+    "target": "/www/wwwroot/jiadilingguang/api/applinux",
+    "backup": "/root/jdlg-backup-20261117-f8688da/backend",
+    "runtime_environment_preserved": true,
+    "api_and_service_env_files_preserved": true,
+    "post_start_initialization_failures": 0,
+    "post_start_panic_fatal": 0
+  },
+  "admin": {
+    "deployed": true,
+    "url": "https://api.jiadilingguang.com/admin/",
+    "manifest_files_verified": 94,
+    "index_sha256": "42126cbcbe6e982655ba9959881c24644f4f2bd67ff5fc6b34781ac95ed67565",
+    "public_index_matches_build": true,
+    "referenced_assets_http_200_and_hash_match": 5,
+    "tls_certificate_verified": true,
+    "previous_hashed_assets_retained": true,
+    "backup": "/root/jdlg-backup-20261117-f8688da/web/admin/original",
+    "nginx_configuration_changed": false
+  },
+  "database": {
+    "backup": {
+      "path": "/root/jdlg-backup-20261117-f8688da/database.sql",
+      "size_bytes": 163437593,
+      "sha256": "d54e20f33950d7404786eee07254481953384f316b4c78e9024894926cfc4bfa",
+      "complete_dump_marker": true,
+      "integrity_verified": true,
+      "production_restore_drill_performed": false
+    },
+    "migration": {
+      "name": "add_ai_video_prompt_polish.sql",
+      "applied": true,
+      "execution": "候选程序 migrate 子命令；不启动worker或供应商",
+      "nullable_json_column": "ai_video_studio_config.prompt_optimize_json",
+      "tables": [
+        "ai_video_studio_prompt_tasks",
+        "ai_video_studio_prompt_fees",
+        "ai_video_studio_prompt_reconciliations"
+      ],
+      "unique_indexes_verified": 4,
+      "max_concurrency_before": 1,
+      "max_concurrency_after": 3,
+      "config_version_before": 1,
+      "config_version_after": 2,
+      "balances_modified": false,
+      "wallet_redis_to_mysql_copy_needed": false
+    },
+    "post_start_state": {
+      "config_enabled": 0,
+      "provider_key_present": false,
+      "prompt_enabled": 0,
+      "prompt_column": 1,
+      "prompt_tables": 3,
+      "video_tasks": 0,
+      "video_batches": 0,
+      "video_consumptions": 0,
+      "video_reserved": 0,
+      "video_reserved_stones": 0,
+      "prompt_tasks": 0,
+      "prompt_reserved": 0,
+      "prompt_external_active": 0,
+      "max_concurrency": 3,
+      "version": 2
+    }
+  },
+  "public_smoke": {
+    "tls_certificate_verified": true,
+    "statuses": {
+      "/api/v1/miniprogram/tracking/config": 200,
+      "/api/v1/miniprogram/workbench/context": 401,
+      "/api/v1/miniprogram/workbench/imports/capabilities": 401,
+      "/api/v1/miniprogram/ai-video-studio/prompt-polish/capabilities": 401,
+      "/admin/": 200
+    }
+  },
+  "authenticated_smoke": {
+    "passed": true,
+    "evidence": "production-authenticated-smoke.json",
+    "read_requests": 3,
+    "transport": "HTTPS GET only; TLS verified",
+    "new_login_performed": false,
+    "provider_calls_performed": false,
+    "session_storage_modified": false
+  },
+  "external_scope": {
+    "crm_process_unchanged": true,
+    "crm_port": 18087,
+    "crm_pid": 1001139,
+    "crm_business_regression_performed": false,
+    "real_ai_provider_invoked": false,
+    "new_video_enabled": false,
+    "new_polish_enabled": false,
+    "existing_text_ai_config_modified": false,
+    "official_account_and_mp_sync": "disabled; user deferred configuration"
+  },
+  "miniprogram": {
+    "appid": "wx94fdc48861913ede",
+    "version": "8.0.13",
+    "source_commit": "f8688da5753dc729d76166bf6dbff3f78f9d3da3",
+    "source_files_verified": 985,
+    "status": "pending_user_confirmation",
+    "uploaded": false,
+    "taskId": "confirmation_upload_f98ca8f2-455f-46aa-8f7f-acf34d4e9667",
+    "tool": "wechatide -c codex upload",
+    "last_task_status": "pending",
+    "next_action": "用户在开发者工具确认后先查旧 taskId；不得重复发起上传",
+    "experience_version_status": "not independently verified",
+    "submitted_for_review": false,
+    "formally_released_by_this_task": false
+  },
+  "remaining_acceptance": [
+    "微信开发者工具确认后的上传终态",
+    "体验版指向与真机角色验收",
+    "服务号及公众号同步后续配置",
+    "真实AI供应商配置、价格核对及付费验收"
+  ],
+  "review": {
+    "p0": 0,
+    "p1": 0,
+    "p2": 3,
+    "items": [
+      {
+        "priority": "P2",
+        "topic": "11个功能文件沿用@ts-nocheck，0诊断不等于全部语义覆盖"
+      },
+      {
+        "priority": "P2",
+        "topic": "历史runner仍有service/bin路径；本次已使用正确binary_release.py和显式PID/hash"
+      },
+      {
+        "priority": "P2",
+        "topic": "润色POST未到达服务端后查询404的恢复路径",
+        "url": "https://github.com/phlong026/jdlg-development/pull/57#discussion_r4599525032",
+        "constraint": "润色保持关闭；启用前处理恢复路径"
+      }
+    ]
+  },
+  "rollback": {
+    "backend_command": "python3 /root/jdlg-release-20261117-f8688da/package/ops/binary_release.py rollback --backup /root/jdlg-backup-20261117-f8688da/backend",
+    "admin_backup": "/root/jdlg-backup-20261117-f8688da/web/admin/original",
+    "database_policy": "应用回退保留新增列、任务、费用和核对表；逻辑SQL停用功能，不删表、不清Redis、不覆盖新业务数据",
+    "database_full_restore": "仅在单独维护窗口确认后使用私有完整备份；本次未进行生产恢复演练",
+    "renovation_v5_links": "回退到旧后端可能暂不可用，需与小程序成套回退",
+    "reversibility": "messy"
+  }
+}
