@@ -17,6 +17,7 @@ type ConsumerConfig struct {
 	MaxAttempts   int
 	Channel       string
 	Eligibility   EventEligibility
+	Presentation  EventPresentationResolver
 	Binding       BindingSnapshot
 }
 
@@ -55,7 +56,16 @@ func (c *Consumer) RunOnce(ctx context.Context) (bool, error) {
 		return true, err
 	}
 	plan := Eligibility{Eligible: eligible, Reason: "ineligible"}
-	if eligible && c.cfg.Binding != nil {
+	deliveryAllowed := true // A nil resolver preserves legacy delivery behavior.
+	if eligible && c.cfg.Presentation != nil {
+		presentation, presentationEligible, presentationErr := c.cfg.Presentation(ctx, job.Event)
+		if presentationErr != nil {
+			return true, presentationErr
+		}
+		plan.Eligible, plan.Body = presentationEligible, presentation.Body
+		deliveryAllowed = presentation.DeliveryAllowed
+	}
+	if plan.Eligible && deliveryAllowed && c.cfg.Binding != nil {
 		version, deliveryEligible, bindingErr := c.cfg.Binding(ctx, job.Event.RecipientID)
 		if bindingErr != nil {
 			return true, bindingErr
@@ -146,6 +156,12 @@ func (w *DeliveryWorker) RunOnce(ctx context.Context) (bool, error) {
 	}
 	result := w.cfg.Send(ctx, *job)
 	switch result.Status {
+	case DeliveryCancelled:
+		reason := result.Reason
+		if reason == "" {
+			reason = "ineligible"
+		}
+		return true, w.store.CancelDelivery(ctx, job.Delivery.ID, job.Delivery.LeaseToken, reason, now)
 	case DeliveryAccepted, DeliveryUnknown:
 		return true, w.store.CompleteDelivery(ctx, job.Delivery.ID, job.Delivery.LeaseToken, result.Status, result.ProviderMessageID)
 	case DeliveryFailed:

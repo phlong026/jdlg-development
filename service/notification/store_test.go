@@ -93,8 +93,10 @@ func (s *fakeDurableStore) MaterializeEvent(_ context.Context, job *EventJob, ch
 		return nil
 	}
 	notice := noticeFromEvent(job.Event)
-	// 与 SQLStore.MaterializeEvent 保持同一合并维度：窗口内未读浏览提醒只刷新
-	// 时间与事件指向，不新建收件箱条目也不新建外发投递。
+	if eligibility.Body != "" {
+		notice.Body = notificationBody(eligibility.Body)
+	}
+	// 与 SQLStore 保持同一合并语义；不新建收件箱条目或外发投递。
 	if recipientID, kind, shareID, at, mergeable := browseMergeTarget(job.Event, s.browseMergeWindow); mergeable {
 		existing := make([]Notification, 0, len(s.notices))
 		for _, item := range s.notices {
@@ -103,6 +105,7 @@ func (s *fakeDurableStore) MaterializeEvent(_ context.Context, job *EventJob, ch
 		if existingID, found := findMergeableBrowseNotice(existing, recipientID, kind, shareID, at, s.browseMergeWindow); found {
 			merged := s.notices[existingID]
 			merged.CreatedAt, merged.EventID = notice.CreatedAt, notice.EventID
+			merged.Title, merged.Body, merged.Route, merged.ContentID = notice.Title, notice.Body, notice.Route, notice.ContentID
 			s.notices[existingID] = merged
 			state.status, state.leaseToken, state.leaseUntil = "processed", "", time.Time{}
 			s.eventJobs[job.Event.ID] = state

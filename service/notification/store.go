@@ -180,8 +180,10 @@ func (s *SQLStore) MaterializeEvent(ctx context.Context, job *EventJob, channel 
 		return tx.Commit()
 	}
 	notice := noticeFromEvent(job.Event)
-	// 浏览提醒合并：窗口内同收件人+同分享+同类型已有未读提醒时，只刷新其时间与
-	// 最新事件指向，不再新建收件箱条目，也不再创建外发投递（窗口内只提醒一次）。
+	if eligibility.Body != "" {
+		notice.Body = notificationBody(eligibility.Body)
+	}
+	// 合并时正文、内容与路由一起指向最新事件；不再创建外发投递（窗口内只提醒一次）。
 	merged := false
 	if recipientID, kind, shareID, at, mergeable := browseMergeTarget(job.Event, s.browseMergeWindow); mergeable {
 		var existingID string
@@ -189,9 +191,19 @@ func (s *SQLStore) MaterializeEvent(ctx context.Context, job *EventJob, channel 
 WHERE tenant_id=? AND recipient_id=? AND kind=? AND share_id=? AND read_at IS NULL AND cancelled_at IS NULL AND created_at>=?
 ORDER BY created_at DESC LIMIT 1`, s.tenant, recipientID, kind, shareID, at.Add(-s.browseMergeWindow)).Scan(&existingID)
 		if lookupErr == nil {
-			if _, updateErr := tx.ExecContext(ctx, `UPDATE mini_notifications SET created_at=?, event_id=? WHERE tenant_id=? AND notification_id=? AND read_at IS NULL AND cancelled_at IS NULL`,
-				notice.CreatedAt, notice.EventID, s.tenant, existingID); updateErr != nil {
+			result, updateErr := tx.ExecContext(ctx, `UPDATE mini_notifications SET created_at=?, event_id=?, title=?, body=?, route_key=?, content_id=? WHERE tenant_id=? AND notification_id=? AND read_at IS NULL AND cancelled_at IS NULL`,
+				notice.CreatedAt, notice.EventID, notice.Title, notice.Body, notice.Route, notice.ContentID, s.tenant, existingID)
+			if updateErr != nil {
 				return storeError("materialize_merge", updateErr)
+			}
+			changed, rowsErr := result.RowsAffected()
+			if rowsErr != nil {
+				return storeError("materialize_merge_rows", rowsErr)
+			}
+			// A concurrent read/cancellation can invalidate the lookup. Retry the
+			// event after rollback rather than silently marking it processed.
+			if changed != 1 {
+				return ErrConflict
 			}
 			merged = true
 		} else if !errors.Is(lookupErr, sql.ErrNoRows) {
@@ -697,6 +709,18 @@ func validEvent(event Event) bool {
 	default:
 		return false
 	}
+}
+
+// The database body column is VARCHAR(512), measured in characters, not bytes.
+func notificationBody(body string) string {
+	characters := 0
+	for offset := range body {
+		if characters == 512 {
+			return body[:offset]
+		}
+		characters++
+	}
+	return body
 }
 
 func noticeFromEvent(event Event) Notification {
