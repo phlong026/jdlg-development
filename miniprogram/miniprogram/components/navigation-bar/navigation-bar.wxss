@@ -89,3 +89,8 @@
   border-radius: 16rpx;
   box-shadow: 0 4rpx 12rpx rgba(113, 80, 63, 0.12);
 }
+
+/* AI 视频确认稿使用轻量返回箭头，由该模块显式启用。 */
+.uni-nav--studio .uni-nav-back { margin-left:24rpx; background:transparent; box-shadow:none; }
+.uni-nav--studio .uni-nav-chevron { width:18rpx; height:18rpx; border-color:#30251c; border-width:4rpx; }
+.uni-nav--studio .uni-nav-title-main { font-size:34rpx; }

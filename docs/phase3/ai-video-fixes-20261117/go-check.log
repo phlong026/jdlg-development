@@ -1,0 +1,32 @@
+ok  	service	0.343s
+ok  	service/aivideostudio	0.181s
+?   	service/cmd/backfill_ai_task_thumbnails	[no test files]
+?   	service/cmd/backfill_image_metadata	[no test files]
+?   	service/cmd/backfill_image_variants	[no test files]
+ok  	service/cmd/content-capture-worker	0.214s
+?   	service/cmd/crm-integration-demo	[no test files]
+ok  	service/cmd/localseed	0.242s
+?   	service/cmd/merge_duplicate_users	[no test files]
+ok  	service/cmd/reconcile_tracking_summaries	0.333s
+?   	service/cmd/render_report	[no test files]
+?   	service/cmd/split_applog	[no test files]
+?   	service/cmd/upload_miniprogram_assets	[no test files]
+ok  	service/component	0.382s
+ok  	service/component/virtualpay	0.246s
+?   	service/component/wechatpay	[no test files]
+ok  	service/config	0.136s
+ok  	service/contentcapture	0.306s
+ok  	service/contentimport	0.381s
+ok  	service/contentstorage	0.312s
+ok  	service/function	1.446s
+ok  	service/model	4.741s
+ok  	service/notedocx	2.233s
+ok  	service/notification	0.142s
+ok  	service/officialaccount	0.364s
+?   	service/processor	[no test files]
+ok  	service/report	1.222s
+ok  	service/reportwecom	0.232s
+ok  	service/route	3.473s
+?   	service/safeerror	[no test files]
+ok  	service/shareweb	0.233s
+ok  	service/tracking	22.647s

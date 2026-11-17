@@ -1,0 +1,54 @@
+{
+  "method": "manual and independent visual comparison with native offline simulator screenshots",
+  "reference": "../ai-video-studio-20261113/design-approved.png",
+  "screenshots": [
+    "frame-final.png",
+    "reference-final.png",
+    "materials-frame-picker-final.png",
+    "prompts-fixed.png",
+    "index.png",
+    "records.png",
+    "detail.png",
+    "frame-settings-fixed.png"
+  ],
+  "result": "passed",
+  "frame_css_pixels": [
+    {
+      "width": 180,
+      "height": 320
+    },
+    {
+      "width": 180,
+      "height": 320
+    }
+  ],
+  "single_line_input_height_css_pixels": 47,
+  "fixed": [
+    "name/search input clipping",
+    "portrait slot border geometry",
+    "scrolling under status area",
+    "redundant explanatory copy",
+    "single-category picker chrome"
+  ],
+  "constraints": [
+    "equal 9:16 frame placeholders",
+    "direct generate",
+    "existing brand colors"
+  ],
+  "screenshot_sha256": {
+    "frame-final.png": "4a69d01c23d762f897af953ea0340ca0fe6a5bc288ef1c59b71ac8530f65919a",
+    "reference-final.png": "8dc3ac0d23a424c991746c2976407f1370e1d0826de5610e355fa93f6c3d00e9",
+    "materials-frame-picker-final.png": "4d1984b46781ec7bc0a7cc4d7d10d978254af5b479b518e5aae9d4a371a7c54b",
+    "prompts-fixed.png": "c158c05e5f2c697b09037c2349b7cbc014c5801bd1b51710709a9d05ca4e14f0",
+    "index.png": "17785d031f6deef0732251a656a1fc9f4fe3be304489e99541a4fd75045e0c2d",
+    "records.png": "96888cd9fe6ceb4cf82150e8b69dc8463fd866a919532d2f0c629bb6c22c4e43",
+    "detail.png": "583e0517e3a5479d5e3cad6fdd28474092a46809dae8f54cf3ab97cd26c64398",
+    "frame-settings-fixed.png": "73c3c51029e9f21cc03b111ce271368fc643616996ff162352f59c9f7a5914c2"
+  },
+  "not_verified": [
+    "physical device",
+    "soft keyboard",
+    "system font scaling",
+    "real provider output"
+  ]
+}

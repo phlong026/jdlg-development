@@ -55,6 +55,12 @@ service/
 
 当前 AI 视频补充说明：
 
+- 设计师工作台的独立新版使用 `/api/v1/miniprogram/ai-video-studio/*`，管理接口为 `/api/v1/management/ai-video-studio/*`，与下述旧版接口分开。
+- 新版全局并发默认 **3**，由管理台 `limits.max_concurrency` 覆盖；已有显式配置不会自动改写。不确定提交继续占用并发，需核对后处理。
+- 新版报价和首次批次创建都核对模式、有效价格与媒体依赖；幂等重放、历史查询保持可用。参考素材单类上限显式为 `0` 时禁用该类。
+- 管理配置响应新增只读就绪状态：`billing_ready`、`media_storage_ready`、`media_signing_ready`、`ffprobe_ready`、`new_tasks_ready`、`disabled_reason` 和逐模式 `mode_readiness`；保存配置不得回写这些字段。
+- 新版素材留存上限为 50MB，超限返回 HTTP 413 和明确原因；临时直链不等于稳定留存。详细接口与本次修复见 [AI 视频修复记录](../docs/phase3/ai-video-fixes-20261117/README.md)。
+
 - `POST /api/v1/miniprogram/ai/video/create` 当前已按老张视频接口实现
 - 支持纯文生视频、单图动画视频、首尾帧动画视频
 - 首尾帧模式下，后端会把前端传入的 `start_frame_url`、`end_frame_url` 或上传文件转换成老张接口要求的两个 `input_reference`

@@ -1,2 +1,15 @@
 @import "./common.wxss";
-.toolbar { display:flex; gap:12rpx; margin-top:20rpx; }.toolbar .input{flex:1}.type-tabs{margin:20rpx 0}.upload-row{display:flex;gap:12rpx}.upload-row button{flex:1}.progress{margin-top:10rpx;color:#9b5b27;font-size:24rpx}
+.toolbar { display:flex; align-items:center; gap:20rpx; }
+.toolbar .input { flex:1; min-width:0; }
+.type-tabs { margin:26rpx 0 10rpx; }
+.upload-row { display:flex; gap:12rpx; margin-bottom:26rpx; }
+.upload-row button { flex:1; font-size:25rpx; }
+.upload-progress { margin:18rpx 0; color:#9b6a38; font-size:25rpx; }
+.material-row { display:flex; align-items:center; gap:20rpx; margin-top:20rpx; }
+.media-preview { flex:none; }
+.media-thumb { display:block; width:128rpx; height:100rpx; border-radius:10rpx; background:#eee7de; }
+.media-placeholder { display:flex; align-items:center; justify-content:center; color:#8d6949; font-size:42rpx; }
+.material-name .title { overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:27rpx; }
+.select-button { flex:none; margin:0; padding:10rpx 16rpx; border:1rpx solid #d3b291; border-radius:8rpx; background:transparent; color:#9b6a38; font-size:24rpx; line-height:1.5; }
+.select-button::after { border:0; }
+.preview-error { display:block; margin:14rpx 0; font-size:24rpx; }

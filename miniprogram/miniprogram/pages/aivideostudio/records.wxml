@@ -1,5 +1,12 @@
 <block wx:if="{{__profileAccessMounted}}">
-<navigation-bar title="创作记录" back="{{true}}" background="#fbfaf7" /><view class="page"><view class="hero"><text class="hero-title">创作记录</text><text class="hero-copy">草稿与已提交批次分开保存，原 AI 视频记录不会混入这里。</text></view><view class="chips section"><text class="chip {{tab==='batches'?'chip-active':''}}" data-tab="batches" bindtap="switchTab">生成任务</text><text class="chip {{tab==='drafts'?'chip-active':''}}" data-tab="drafts" bindtap="switchTab">创作草稿</text></view>
-<view wx:if="{{loading}}" class="state">正在加载记录…</view><view wx:elif="{{error}}" class="card state error"><text>{{error}}</text><button class="button-secondary" bindtap="load">重试</button></view><view wx:elif="{{!items.length}}" class="card state">暂无{{tab==='drafts'?'草稿':'生成任务'}}。</view>
-<view wx:for="{{items}}" wx:key="id" class="card" data-index="{{index}}" bindtap="open"><view class="row"><text class="title grow">{{item.name}}</text><text class="badge">{{item.status_label}}</text></view><text class="meta">{{item.mode_label}} · {{item.time_label}}</text></view><button wx:if="{{hasMore}}" class="button-secondary" bindtap="loadMore" loading="{{loadingMore}}">加载更多</button>
-</view></block><login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />
+  <navigation-bar class="studio-navigation" title="创作记录" variant="studio" back="{{true}}" background="#fbfaf7" />
+  <view class="page">
+    <view class="chips record-tabs"><text class="chip {{tab==='batches'?'chip-active':''}}" data-tab="batches" bindtap="switchTab">生成任务</text><text class="chip {{tab==='drafts'?'chip-active':''}}" data-tab="drafts" bindtap="switchTab">创作草稿</text></view>
+    <view wx:if="{{loading}}" class="state">加载中…</view>
+    <view wx:elif="{{error}}" class="state error"><text>{{error}}</text><button class="button-secondary" bindtap="load">重试</button></view>
+    <view wx:elif="{{!items.length}}" class="state">暂无{{tab==='drafts'?'草稿':'生成任务'}}</view>
+    <view wx:for="{{items}}" wx:key="id" class="card" data-index="{{index}}" bindtap="open"><view class="row"><text class="title grow">{{item.name}}</text><text class="badge">{{item.status_label}}</text></view><text class="meta">{{item.mode_label}} · {{item.time_label}}</text></view>
+    <button wx:if="{{hasMore}}" class="button-secondary" bindtap="loadMore" loading="{{loadingMore}}">加载更多</button>
+  </view>
+</block>
+<login-guard id="profileAccessGuard" bind:authenticated="onProfileAccessGranted" bind:gated="onProfileAccessBlocked" />

@@ -7,7 +7,7 @@ const { execFileSync } = require('node:child_process');
 
 const projectRoot = path.resolve(__dirname, '..');
 const sourceRoot = path.join(projectRoot, 'miniprogram');
-const outputRoot = '/tmp/jdlg-studio-ui-preview-20261113';
+const outputRoot = '/tmp/jdlg-studio-ui-preview-20261117';
 const markerName = '.jdlg-ai-video-studio-preview';
 const markerPath = path.join(outputRoot, markerName);
 const pageSource = path.join(sourceRoot, 'pages', 'aivideostudio');
@@ -87,7 +87,7 @@ function writeLoginGuardStub() {
   writeFile('miniprogram/components/login-guard/login-guard.json', JSON.stringify({ component: true }, null, 2) + '\n');
   writeFile('miniprogram/components/login-guard/login-guard.wxml', '<view hidden="true" />\n');
   writeFile('miniprogram/components/login-guard/login-guard.wxss', '/* Offline preview: no authentication overlay. */\n');
-  writeFile('miniprogram/components/login-guard/login-guard.js', "Component({ lifetimes: { attached() { this.triggerEvent('authenticated'); } } });\n");
+  writeFile('miniprogram/components/login-guard/login-guard.js', "Component({});\n");
 }
 
 function copyRulesAndImage() {
@@ -100,10 +100,10 @@ function createMediaFixtures() {
   ensureDir(mediaDir);
   const image = path.join(outputRoot, 'miniprogram', 'assets', 'welcome', 'courtyard.jpg');
   const video = path.join(mediaDir, 'courtyard-preview-5s.mp4');
-  const audio = path.join(mediaDir, 'silence-preview-5s.wav');
+  const audio = path.join(mediaDir, 'tone-preview-5s.mp3');
   try {
     execFileSync('ffmpeg', ['-y', '-loop', '1', '-i', image, '-t', '5', '-vf', 'scale=960:-2', '-r', '25', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-an', video], { stdio: 'ignore' });
-    execFileSync('ffmpeg', ['-y', '-f', 'lavfi', '-i', 'anullsrc=r=44100:cl=stereo', '-t', '5', '-c:a', 'pcm_s16le', audio], { stdio: 'ignore' });
+    execFileSync('ffmpeg', ['-y', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=5', '-af', 'volume=0.12', '-c:a', 'libmp3lame', '-b:a', '128k', audio], { stdio: 'ignore' });
   } catch (error) {
     throw new Error(`ffmpeg is required to create local 5-second preview fixtures: ${error.message}`);
   }
@@ -111,7 +111,7 @@ function createMediaFixtures() {
 
 function writeAPIStub() {
   const videoURL = mediaOrigin ? mediaOrigin + '/assets/fixtures/courtyard-preview-5s.mp4' : '/assets/fixtures/courtyard-preview-5s.mp4';
-  const audioURL = mediaOrigin ? mediaOrigin + '/assets/fixtures/silence-preview-5s.wav' : '/assets/fixtures/silence-preview-5s.wav';
+  const audioURL = mediaOrigin ? mediaOrigin + '/assets/fixtures/tone-preview-5s.mp3' : '/assets/fixtures/tone-preview-5s.mp3';
   const stub = `'use strict';
 
 const OFFLINE_ERROR = '离线UI验收禁止提交生成任务，不会调用供应商或扣费';
@@ -155,7 +155,7 @@ function referenceDraft() {
     references: [
       { media_id: 'fixture-reference-image', media_type: 'image', mime_type: 'image/jpeg', name: '庭院参考图', purpose: '控制建筑与庭院风格', position: 1, width: 1200, height: 800, preview_url: image, url: image },
       { media_id: 'fixture-reference-video', media_type: 'video', mime_type: 'video/mp4', name: '庭院推进参考', purpose: '参考镜头推进节奏', position: 2, duration_seconds: 5, width: 960, height: 640, poster: image, preview_url: image, url: video },
-      { media_id: 'fixture-reference-audio', media_type: 'audio', mime_type: 'audio/wav', name: '舒缓节奏参考', purpose: '参考舒缓节拍', position: 3, duration_seconds: 5, url: audio },
+      { media_id: 'fixture-reference-audio', media_type: 'audio', mime_type: 'audio/mpeg', name: '舒缓节奏参考', purpose: '参考舒缓节拍', position: 3, duration_seconds: 5, url: audio },
     ],
   };
 }
@@ -165,7 +165,7 @@ function fixtureMedia() {
     { media_id: 'fixture-courtyard-image', media_type: 'image', mime_type: 'image/jpeg', name: '庭院首帧', width: 1200, height: 800, preview_url: image, url: image },
     { media_id: 'fixture-reference-image', media_type: 'image', mime_type: 'image/jpeg', name: '庭院参考图', width: 1200, height: 800, preview_url: image, url: image },
     { media_id: 'fixture-reference-video', media_type: 'video', mime_type: 'video/mp4', name: '庭院推进参考', duration_seconds: 5, width: 960, height: 640, poster: image, poster_url: image, preview_url: image, url: video },
-    { media_id: 'fixture-reference-audio', media_type: 'audio', mime_type: 'audio/wav', name: '舒缓节奏参考', duration_seconds: 5, url: audio },
+    { media_id: 'fixture-reference-audio', media_type: 'audio', mime_type: 'audio/mpeg', name: '舒缓节奏参考', duration_seconds: 5, url: audio },
   ];
 }
 
@@ -195,11 +195,14 @@ function quote(input) {
 }
 function createBatch() { return Promise.reject(Object.assign(new Error(OFFLINE_ERROR), { statusCode: 503, offlineFixture: true })); }
 function idempotencyKey() { return 'offline-preview-never-submitted'; }
-function listMedia() { const items = fixtureMedia(); return Promise.resolve({ items, total: items.length }); }
-function listPrompts() { return Promise.resolve({ items: [], total: 0 }); }
-function listBatches() { return Promise.resolve({ items: [], total: 0 }); }
+function listMedia(input) { const items = fixtureMedia().filter(item => !input || !input.media_type || item.media_type === input.media_type); return Promise.resolve({ items, total: items.length }); }
+function listPrompts() { return Promise.resolve({ items: [{ prompt_id: 'prompt-demo', name: '庭院运镜', prompt: '镜头缓慢推进，保留庭院结构与自然光线。', revision: 1 }], total: 1 }); }
+function listDrafts() { return Promise.resolve({ items: [frameDraft(), referenceDraft()], total: 2 }); }
+function listBatches() { return Promise.resolve({ items: [{ batch_id: 'offline-batch', name: '庭院漫游', mode: 'first_frame', status: 'completed', created_at: '2026-11-17T10:30:00+08:00' }], total: 1 }); }
+function getBatch() { return Promise.resolve({ batch_id: 'offline-batch', name: '庭院漫游', status: 'completed', snapshot: frameDraft(), charge: { quoted_stones: 36, settled_stones: 36, released_stones: 0 }, results: [{ result_id: 'offline-result', status: 'completed', playback_url: video }], can_cancel: false }); }
+function playback() { return Promise.resolve({ url: video }); }
 
-module.exports = { capabilities, getDraft, createDraft, updateDraft, getMedia, quote, createBatch, idempotencyKey, listMedia, listPrompts, listBatches, OFFLINE_ERROR };
+module.exports = { ORIGIN: '', capabilities, getDraft, createDraft, updateDraft, getMedia, quote, createBatch, idempotencyKey, listMedia, listPrompts, listDrafts, listBatches, getBatch, playback, OFFLINE_ERROR };
 `;
   writeFile('miniprogram/utils/ai-video-studio-api.js', stub);
 }
@@ -210,16 +213,17 @@ Page = function offlinePreviewPage(definition) {
   definition.data = Object.assign({}, definition.data || {}, { __profileAccessMounted: true });
   const originalOnLoad = definition.onLoad;
   definition.onLoad = function previewOnLoad(options) {
-    this.setData({ __profileAccessMounted: true, notice: '离线UI验收：不会调用供应商或扣费' });
-    return originalOnLoad && originalOnLoad.call(this, options || { draft_id: 'frame-preview' });
+    this.setData({ __profileAccessMounted: true });
+    return originalOnLoad && originalOnLoad.call(this, options && Object.keys(options).length ? options : { draft_id: 'frame-preview' });
   };
   return nativePage(definition);
 };
 App({ onLaunch() { console.warn('[offline-ui-preview] local fixtures only; no token, network, provider, generation or billing'); } });
 `;
   writeFile('miniprogram/app.js', app);
+  writeFile('miniprogram/utils/phase3-api.js', "'use strict'; module.exports = {};\n");
   writeFile('miniprogram/app.json', JSON.stringify({
-    pages: ['pages/aivideostudio/generate'],
+    pages: ['pages/aivideostudio/generate', 'pages/aivideostudio/index', 'pages/aivideostudio/materials', 'pages/aivideostudio/prompts', 'pages/aivideostudio/records', 'pages/aivideostudio/detail'],
     window: { navigationBarTitleText: 'AI 视频 · 离线UI验收', navigationBarBackgroundColor: '#fbfaf7', navigationBarTextStyle: 'black', backgroundColor: '#fbfaf7' },
     sitemapLocation: 'sitemap.json',
   }, null, 2) + '\n');
@@ -243,7 +247,7 @@ function writeReadme() {
   writeFile('README-OFFLINE-PREVIEW.md', `# AI视频离线UI验收 fixture
 
 - 页面与样式从实际 \`pages/aivideostudio\` 的 JS/WXML/WXSS/JSON 复制；不复制 TS。
-- \`frame-preview\` 展示庭院首帧与普通提示词；\`reference-preview\` 展示图片、5秒本地视频、5秒静音 WAV 和结构化参考提示词。
+- \`frame-preview\` 展示庭院首帧与普通提示词；\`reference-preview\` 展示图片、5秒本地视频、5秒低音量测试音 MP3 和结构化参考提示词。
 - Page 包装器只在本 fixture 将 \`__profileAccessMounted\` 设为 true，未读取或写入真实登录 token，也未更改生产登录守卫。
 - API 全部为本地 Promise stub。报价为 36 灵石的离线展示值且不扣费；\`createBatch\` 固定拒绝。
 - fixture 不包含任何供应商凭据，不访问外部网络，不产生生成费用。可选 loopback 地址仅用于读取本机夹具音视频文件。

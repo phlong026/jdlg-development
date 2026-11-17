@@ -1,0 +1,33 @@
+{
+  "method": "manual comparison of approved image and native offline simulator screenshots",
+  "reference": "../ai-video-studio-20261113/design-approved.png",
+  "user_overrides": [
+    "equal 9:16 portrait frame slots",
+    "direct generate",
+    "remove redundant copy"
+  ],
+  "screenshots": [
+    "frame-round1.png",
+    "frame-settings.png",
+    "reference-round1.png"
+  ],
+  "observed_frame_outer_css_pixels": [
+    {
+      "width": 180,
+      "height": 318
+    },
+    {
+      "width": 180,
+      "height": 318
+    }
+  ],
+  "verdict": "revise",
+  "observations": [
+    "Palette, plain navigation arrow, tool row and light form match approved direction.",
+    "Both portrait frames are equal; inset border should avoid changing outer 9:16 geometry.",
+    "When scrolling the long portrait form, content passes behind the system status area; keep the studio navigation visible.",
+    "Reference form settings and action are visible at current viewport.",
+    "Reported prompt name and material search input clip because native single-line input has padding without explicit height; replace vertical padding with explicit 88rpx height."
+  ],
+  "boundary": "offline fixture only, no real provider, balance, deployment or physical device"
+}

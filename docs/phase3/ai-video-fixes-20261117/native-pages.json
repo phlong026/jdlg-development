@@ -1,0 +1,48 @@
+{
+  "project": "/tmp/jdlg-studio-ui-preview-20261117",
+  "fixture_only": true,
+  "screenshots": [
+    {
+      "name": "frame-final",
+      "width": 684,
+      "height": 1486,
+      "screenshot": "frame-final.png"
+    },
+    {
+      "name": "reference-final",
+      "width": 684,
+      "height": 1486,
+      "screenshot": "reference-final.png"
+    },
+    {
+      "name": "materials-frame-picker-final",
+      "width": 684,
+      "height": 1486,
+      "screenshot": "materials-frame-picker-final.png"
+    },
+    {
+      "name": "prompts-fixed",
+      "width": 684,
+      "height": 1486,
+      "screenshot": "prompts-fixed.png"
+    },
+    {
+      "name": "index",
+      "width": 684,
+      "height": 1486,
+      "screenshot": "index.png"
+    },
+    {
+      "name": "records",
+      "width": 684,
+      "height": 1486,
+      "screenshot": "records.png"
+    },
+    {
+      "name": "detail",
+      "width": 684,
+      "height": 1486,
+      "screenshot": "detail.png"
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 <!-- 统一导航栏组件 -->
-<view class="uni-nav {{variant === 'workbench' ? 'uni-nav--workbench' : ''}}" style="padding-top: {{navSafeTop}}px; height: {{navBarHeight}}px; background: {{background}};">
+<view class="uni-nav {{variant === 'workbench' ? 'uni-nav--workbench' : ''}} {{variant === 'studio' ? 'uni-nav--studio' : ''}}" style="padding-top: {{navSafeTop}}px; height: {{navBarHeight}}px; background: {{background}};">
   <view class="uni-nav-inner" style="height: {{navContentHeight}}px;">
     <!-- 左侧：返回按钮 -->
     <view class="uni-nav-side" style="width: {{navSideWidth}}px;">
