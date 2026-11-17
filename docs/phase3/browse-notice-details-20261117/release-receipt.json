@@ -1,0 +1,147 @@
+{
+  "recorded_at": "2026-11-18T00:35:54+08:00",
+  "source": {
+    "local_candidate_commit": "82da5114d993e9331f165f15ba9b335da7be5031",
+    "remote_candidate_commit": "5f555417a6cd580bf3171b77056dda045f10ac95",
+    "merge_commit": "7ccabf6f42525523c341c4b71733139ef7811327",
+    "identical_tree": "2e16758c1f986ee6a1fd799396623521888f9a00",
+    "pr_url": "https://github.com/phlong026/jdlg-development/pull/59"
+  },
+  "ci": {
+    "all_passed": true,
+    "run_ids": [
+      44123724451,
+      44123724492,
+      44123709354
+    ],
+    "linux_backend_race_passed": true
+  },
+  "validation": {
+    "related_packages": [
+      "tracking",
+      "notification",
+      "officialaccount",
+      "route"
+    ],
+    "all_related_tests_passed": true,
+    "all_related_vet_passed": true,
+    "format_and_credential_scan_passed": true,
+    "source_reverse_patch_restores_base": true,
+    "independent_review": {
+      "p0": 0,
+      "p1": 0,
+      "p2": 1,
+      "remaining": "物化和发送各有重复的有界单事件检查，后续可在保持权限三态的前提下优化"
+    },
+    "regressions": [
+      "新visitor源原先被拒绝，已复现并修复",
+      "旧模板browse正文意外变化，已复现并保持原行为",
+      "合并更新0行或RowsAffected错误时回滚重试，不标记事件完成"
+    ],
+    "protected_signer_contract_passed": true,
+    "elf_hmac_sm4_match": true
+  },
+  "production": {
+    "status": "active",
+    "pid": 3935603,
+    "started_at": "2026-11-18T00:28:20+08:00",
+    "running_and_disk_sha256": "2ff0d53a3546be446b956d047d0275524f649946c551e6e571939ed7ff2d82a5",
+    "previous_pid": 3820269,
+    "previous_sha256": "691a29831906d1d9fffafb47ea59351c18627ca9b0d076d9b077291a868e0a27",
+    "release_path": "/root/jdlg-browse-notice-20261118-82da511",
+    "backup_path": "/root/jdlg-browse-notice-backup-20261118-82da511",
+    "config_before_template": "/root/jdlg-browse-notice-backup-20261118-82da511/api.env.local.before-template",
+    "notification_enabled": true,
+    "browse_enabled": true,
+    "merge_window": "30m",
+    "official_basic_enabled": true,
+    "official_delivery_enabled": false,
+    "miniprogram_verified": false,
+    "template_id_configured": true,
+    "template_fields": {
+      "thing1": "visitor",
+      "time2": "time"
+    },
+    "unverified_constant_omitted": "const3",
+    "private_config_mode": "0600",
+    "existing_config_modified_or_removed": 0,
+    "mysql_redis_session_settings_preserved": true,
+    "notification_initialization_errors": 0,
+    "ai_db_initialization_errors": 0,
+    "panic_errors": 0,
+    "database_schema_changed": false,
+    "balances_modified": false,
+    "frontend_source_changed": false,
+    "admin_index_sha256_unchanged": "42126cbcbe6e982655ba9959881c24644f4f2bd67ff5fc6b34781ac95ed67565",
+    "crm_pid_unchanged": 1001139,
+    "merge_key": [
+      "recipient",
+      "share",
+      "kind"
+    ],
+    "frequency_policy_changed": false
+  },
+  "smoke": {
+    "public_tls_verified": true,
+    "valid_wechat_callback_signature": {
+      "status": 200,
+      "exact_echo": true
+    },
+    "forged_signature_status": 403,
+    "aes_downgrade_status": 403,
+    "authenticated_gets": {
+      "workbench_context": 200,
+      "notifications": 200,
+      "official_binding": 200
+    },
+    "approved_test_session_binding": {
+      "binding_available": true,
+      "delivery_available": false,
+      "bound": false
+    },
+    "new_login_performed": false,
+    "business_writes_from_smoke": false,
+    "new_test_browse_created": false,
+    "real_messages_sent_by_this_task": false,
+    "real_ai_invoked_by_this_task": false
+  },
+  "ai_video_scope": {
+    "video_enabled": false,
+    "polish_enabled": false,
+    "provider_key_present": false,
+    "video_tasks": 0,
+    "video_consumptions": 0,
+    "video_reservations": 0,
+    "prompt_tasks": 0,
+    "prompt_reservations": 0,
+    "prompt_external_active": 0,
+    "existing_text_ai_configuration_modified": false
+  },
+  "known_existing_issue": {
+    "component": "content-import worker",
+    "current_start_window_error_count": 2,
+    "prior_10_minute_window_error_count": 3,
+    "error_type": "*errors.errorString",
+    "changed_by_this_release": false,
+    "expanded_repair_performed": false
+  },
+  "remaining_acceptance": [
+    "服务号小程序关联入口待当前界面截图定位，用户已确认域名mp.weixin.qq.com",
+    "正式版消息中心页面与模板跳转核验",
+    "接收人服务号关注与本人小程序账号绑定",
+    "指定测试接收人的真实通知送达；本任务未发送",
+    "尚未通过生产新访问逐条验证昵称和内容展示，不等同完整真实用户验收"
+  ],
+  "computer_use": {
+    "inspection_denied": true,
+    "reason": "Computer Use is not allowed on the current browser URL",
+    "session_ended": true,
+    "restriction_not_bypassed": true
+  },
+  "rollback": {
+    "binary_command": "python3 /root/jdlg-browse-notice-20261118-82da511/binary_release.py rollback --backup /root/jdlg-browse-notice-backup-20261118-82da511/backend",
+    "config_policy": "先保持prepare时文件哈希完成程序回滚，再按私有before-template备份恢复配置并受控重启；已写入正文不会因源码revert消失。回退旧合并逻辑前需暂停新浏览通知并核对在途队列，避免旧正文与新时间错配。",
+    "reversibility": "messy",
+    "live_rollback_drill_performed": false
+  }
+}
