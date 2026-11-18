@@ -31,5 +31,8 @@
     "sass": "^1.97.2",
     "typescript": "^5.9.3",
     "vite": "^7.3.7"
+  },
+  "overrides": {
+    "picomatch": "npm:@ryotsu/picomatch@4.0.7-a"
   }
 }
