@@ -379,7 +379,7 @@ func (s *Service) summaryFactsSelected(r Repository, scope Scope, f Filter, sele
 	summarized := map[string]bool{}
 	expired := map[string]bool{}
 	raw := []string{}
-	rows, e := scopedRecords(r, "daily_summary", RecordQuery{Owners: permittedOwners(scope, f.Owner), Sessions: selection.Sessions, VisitorKeys: selection.Visitors, IdentityAsOf: f.AsOf, Content: f.Content, View: selection.View, AtFrom: businessDay(f.Start), AtBefore: businessDay(f.End.Add(-time.Nanosecond)).AddDate(0, 0, 1)})
+	rows, e := scopedRecords(r, "daily_summary", RecordQuery{Owners: permittedOwners(scope, f.Owner), Sessions: selection.Sessions, VisitorKeys: selection.Visitors, IdentityAsOf: f.AsOf, Content: f.Content, ContentIDs: selection.ContentIDs, View: selection.View, AtFrom: businessDay(f.Start), AtBefore: businessDay(f.End.Add(-time.Nanosecond)).AddDate(0, 0, 1)})
 	if e != nil {
 		return nil, nil, nil, e
 	}

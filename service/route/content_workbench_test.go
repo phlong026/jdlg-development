@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"service/model"
@@ -426,5 +427,54 @@ func TestWorkbenchAdvertisesVideoDocumentFieldsIndependentlyOfUploadStorage(t *t
 	}
 	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil || w.Code != 200 || !result.Data.Fields || result.Data.Upload {
 		t.Fatalf("video document editing must remain available without local upload storage: status=%d response=%s err=%v", w.Code, w.Body.String(), err)
+	}
+}
+
+func TestWorkbenchContentListDefaultsToCreationTimeAndPages(t *testing.T) {
+	t.Setenv("CONTENT_WORKBENCH_ENABLED", "true")
+	scope := tracking.Scope{Tenant: "workbench", Actor: 11, Owners: []string{"owner-a"}, Manage: true}
+	router, svc := newWorkbenchHandlerFixture(t, &scope)
+	firstAt := time.Date(2026, time.November, 18, 0, 0, 0, 0, time.UTC)
+	svc.Now = func() time.Time { return firstAt }
+	first, err := svc.SaveContent(context.Background(), scope, "", tracking.Draft{Title: "庭院甲", Body: "甲", Rights: "own", Owner: "owner-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	svc.Now = func() time.Time { return firstAt.Add(time.Hour) }
+	second, err := svc.SaveContent(context.Background(), scope, "", tracking.Draft{Title: "庭院乙", Body: "乙", Rights: "own", Owner: "owner-a"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := "/workbench/contents?limit=1"
+	getPage := func(path string) (items []tracking.Content, nextCursor, snapshot string) {
+		t.Helper()
+		rec := workbenchRequest(t, router, http.MethodGet, path, nil)
+		if rec.Code != http.StatusOK {
+			t.Fatalf("status=%d response=%s", rec.Code, rec.Body.String())
+		}
+		var result struct {
+			Data struct {
+				Items      []tracking.Content `json:"items"`
+				NextCursor string             `json:"next_cursor"`
+				AsOf       string             `json:"as_of"`
+			} `json:"data"`
+		}
+		if err := json.Unmarshal(rec.Body.Bytes(), &result); err != nil {
+			t.Fatal(err)
+		}
+		return result.Data.Items, result.Data.NextCursor, result.Data.AsOf
+	}
+	items, cursor, asOf := getPage(path)
+	if len(items) != 1 || items[0].ID != second.ID || cursor == "" || asOf == "" {
+		t.Fatalf("first page items=%+v cursor=%q as_of=%q", items, cursor, asOf)
+	}
+	items, cursor, _ = getPage(path + "&sort=created_at&cursor=" + cursor + "&as_of=" + asOf)
+	if len(items) != 1 || items[0].ID != first.ID || cursor != "" {
+		t.Fatalf("second page items=%+v cursor=%q", items, cursor)
+	}
+
+	t.Setenv("CONTENT_WORKBENCH_ENABLED", "false")
+	if rec := workbenchRequest(t, router, http.MethodGet, path+"&sort=collection", nil); rec.Code != http.StatusForbidden {
+		t.Fatalf("disabled collections status=%d response=%s", rec.Code, rec.Body.String())
 	}
 }

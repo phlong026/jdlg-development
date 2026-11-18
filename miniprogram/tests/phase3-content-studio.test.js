@@ -47,6 +47,82 @@ test('content studio searches the authorized catalog and resets cursor snapshots
   assert.equal(page.data.searchTerm, '庭院');
 });
 
+test('sort requests keep the active filters and discard a late response from the previous order', async () => {
+  const calls = [];
+  let finishPreviousPage;
+  const { page } = runtime({
+    listContents: async query => {
+      calls.push({ ...query });
+      if (query.cursor === 'newest-page-2') return new Promise(resolve => { finishPreviousPage = resolve; });
+      if (query.sort === 'page_views') {
+        return { items: [{ content_id: 'most-viewed', type: 'video', page_views: 51 }, { content_id: 'less-viewed', type: 'video', page_views: 10 }] };
+      }
+      return { items: [{ content_id: 'latest', type: 'video' }], next_cursor: 'newest-page-2', as_of: '2026-11-18T02:00:00Z', metric_version: 'v1' };
+    },
+  });
+  page.setData({ category: 'video', searchTerm: '庭院', ownerFilter: 'owner-a' });
+  await page.load(true);
+  assert.equal(calls[0].sort, 'created_at');
+  const previousPage = page.load(false, page._epoch);
+  await tick();
+  await page.selectSort({ currentTarget: { dataset: { key: 'page_views' } } });
+  assert.deepEqual(calls.at(-1), { limit: 20, sort: 'page_views', type: 'video', content_q: '庭院', owner: 'owner-a' });
+  finishPreviousPage({ items: [{ content_id: 'stale', type: 'video' }] });
+  await previousPage;
+  assert.deepEqual(page.data.visibleItems.map(item => [item.content_id, item.view_count]), [['most-viewed', 51], ['less-viewed', 10]]);
+  assert.equal(page.data.next_cursor, '');
+});
+
+test('collection grouping shows one heading per collection spanning pages, then ungrouped content', async () => {
+  const at = '2026-11-18T02:00:00Z';
+  const calls = [];
+  const { page } = runtime({ listContents: async query => {
+    calls.push({ ...query });
+    if (query.cursor) {
+      return { items: [
+        { content_id: 'a-2', collection_id: 'a', collection_title: '庭院精选' },
+        { content_id: 'b-1', collection_id: 'b', collection_title: '庭院精选' },
+        { content_id: 'plain' },
+      ] };
+    }
+    return {
+      items: [{ content_id: 'a-1', collection_id: 'a', collection_title: '庭院精选' }],
+      next_cursor: 'collections-2', as_of: at, metric_version: 'v1',
+    };
+  }});
+  await page.selectSort({ currentTarget: { dataset: { key: 'collection' } } });
+  await page.load(false, page._epoch);
+  assert.deepEqual(calls.at(-1), { limit: 20, sort: 'collection', cursor: 'collections-2', as_of: at, metric_version: 'v1' });
+  assert.deepEqual(page.data.visibleItems.map(item => [item.content_id, item.collection_heading]), [
+    ['a-1', '庭院精选'], ['a-2', ''], ['b-1', '庭院精选'], ['plain', '未归入合集'],
+  ]);
+});
+
+test('expired collection pagination refreshes the current ordering from its first page', async () => {
+  const calls = [];
+  const { page } = runtime({ listContents: async query => {
+    calls.push({ ...query });
+    if (query.cursor) throw Object.assign(new Error('合集已更新'), { statusCode: 409 });
+    return calls.length === 1
+      ? { items: [{ content_id: 'old' }], next_cursor: 'old-cursor' }
+      : { items: [{ content_id: 'fresh' }] };
+  }});
+  await page.selectSort({ currentTarget: { dataset: { key: 'collection' } } });
+  await page.load(false, page._epoch);
+  assert.deepEqual(calls.map(query => [query.sort, query.cursor]), [
+    ['collection', undefined], ['collection', 'old-cursor'], ['collection', undefined],
+  ]);
+  assert.deepEqual(page.data.visibleItems.map(item => item.content_id), ['fresh']);
+  assert.equal(page.data.error, '');
+});
+
+test('studio template exposes sorting and fits uncropped thumbnails', () => {
+  const template = fs.readFileSync(path.join(path.dirname(source), 'contentworkbench.wxml'), 'utf8');
+  assert.match(template, /class="category-scroll"[\s\S]*class="sort-row"[\s\S]*bindtap="selectSort"[\s\S]*class="content-list"/);
+  assert.match(template, /wx:if="\{\{item.collection_heading\}\}"/);
+  assert.match(template, /src="\{\{item.cover_path\}\}" mode="aspectFit"/);
+});
+
 test('confirmed workbench access loss clears all private state and invalidates pending requests', async () => {
   let revoked = false;
   const { page } = runtime({ workbenchContext: async () => {

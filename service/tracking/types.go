@@ -180,6 +180,10 @@ type Content struct {
 	// CreatorID is persisted by the service but never serialized to clients.
 	// Authorization continues to use Owner and Scope only.
 	CreatorID int64 `json:"-"`
+
+	// Collection metadata is populated only in the workbench grouping response.
+	CollectionID    string `json:"collection_id,omitempty"`
+	CollectionTitle string `json:"collection_title,omitempty"`
 }
 type Draft struct {
 	Title      string   `json:"title"`

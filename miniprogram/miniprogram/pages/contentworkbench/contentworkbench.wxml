@@ -6,7 +6,7 @@
     <view wx:elif="{{denied}}" class="state-card"><text class="state-title">暂未获得内容管理权限</text><text class="muted">请联系管理员开通</text><button class="outline-button" bindtap="retry">重新检查</button></view>
     <view wx:elif="{{disabled}}" class="state-card"><text class="state-title">内容创作暂未开通</text><button class="outline-button" bindtap="retry">重新检查</button></view>
     <view wx:elif="{{loading && !context}}" class="state-card" role="status"><view class="loading-mark"></view><text>正在加载…</text></view>
-    <view wx:elif="{{error && !items.length}}" class="state-card"><text class="state-title">内容加载失败</text><text class="muted">{{error}}</text><button class="outline-button" bindtap="retry">重试</button></view>
+    <view wx:elif="{{error && !context}}" class="state-card"><text class="state-title">内容加载失败</text><text class="muted">{{error}}</text><button class="outline-button" bindtap="retry">重试</button></view>
     <block wx:else>
       <block wx:if="{{view === 'studio'}}">
         <view class="workspace-tabs" role="tablist"><text class="workspace-tab active" role="tab" aria-selected="{{true}}">我的内容</text><button class="workspace-tab" bindtap="openCollections">合集</button><button class="workspace-tab" bindtap="openExistingAssets">资料库</button></view>
@@ -16,14 +16,26 @@
         </view>
         <view class="search-row"><view class="search-box"><mini-icon name="search" size="30rpx" color="#756b61" /><input value="{{keyword}}" bindinput="setKeyword" bindconfirm="searchContents" confirm-type="search" maxlength="30" placeholder="搜索内容" aria-label="搜索内容标题" /><button wx:if="{{keyword}}" class="clear-search" bindtap="clearSearch" aria-label="清空搜索">×</button></view><button class="filter-button {{moreFiltersOpen || category === 'article' || category === 'note' ? 'active' : ''}}" bindtap="toggleMoreFilters" aria-label="更多类型筛选" aria-expanded="{{moreFiltersOpen}}"><mini-icon name="filter" size="34rpx" /></button></view>
         <view class="category-scroll"><view class="category-tabs primary-categories" role="tablist"><button class="category-tab {{category === 'all' ? 'active' : ''}}" data-key="all" bindtap="selectCategory" role="tab" aria-selected="{{category === 'all'}}">全部</button><button class="category-tab {{category === 'gallery' ? 'active' : ''}}" data-key="gallery" bindtap="selectCategory" role="tab" aria-selected="{{category === 'gallery'}}">图文</button><button class="category-tab {{category === 'video' ? 'active' : ''}}" data-key="video" bindtap="selectCategory" role="tab" aria-selected="{{category === 'video'}}">视频</button><button class="category-tab {{category === 'document' ? 'active' : ''}}" data-key="document" bindtap="selectCategory" role="tab" aria-selected="{{category === 'document'}}">文档</button></view><view wx:if="{{moreFiltersOpen}}" class="secondary-categories"><button class="category-chip {{category === 'article' ? 'active' : ''}}" data-key="article" bindtap="selectCategory">文章</button><button class="category-chip {{category === 'note' ? 'active' : ''}}" data-key="note" bindtap="selectCategory">项目笔记</button></view></view>
+        <view class="sort-row" role="group" aria-label="排序方式">
+          <button wx:for="{{sortOptions}}" wx:key="key" class="sort-option {{sort === item.key ? 'active' : ''}}" data-key="{{item.key}}" bindtap="selectSort" aria-pressed="{{sort === item.key}}">{{item.label}}</button>
+        </view>
         <view wx:if="{{searchTerm}}" class="filter-note">“{{searchTerm}}”<button class="text-button" bindtap="clearSearch">清空</button></view>
         <view class="content-list">
           <view wx:if="{{loading}}" class="state-card content-list-loading" role="status"><view class="loading-mark"></view><text>正在加载内容…</text></view>
+          <view wx:elif="{{error && !visibleItems.length}}" class="state-card"><text class="state-title">内容加载失败</text><text class="muted">{{error}}</text><button class="outline-button" bindtap="retry">重试</button></view>
           <block wx:elif="{{visibleItems.length > 0}}">
-            <view wx:for="{{visibleItems}}" wx:key="content_id" class="content-row {{item.kind}}" data-id="{{item.content_id}}" data-status="{{item.status}}" data-version="{{item.version}}" data-read-only="{{item.read_only}}" data-route="{{item.route_key}}" bindtap="openContent" bindlongpress="deleteContentMenu" role="button" aria-label="{{item.title}}">
-              <view class="content-cover {{item.kind}}"><image wx:if="{{item.cover_path}}" src="{{item.cover_path}}" mode="aspectFill" /><view wx:else class="cover-placeholder"><mini-icon name="{{item.kind === 'video' ? 'video' : 'file'}}" size="44rpx" color="#b49a7e" /><text>{{item.kind_label}}</text></view><view wx:if="{{item.kind === 'video'}}" class="play-mark">▶</view></view>
-              <view class="content-info"><text class="content-title">{{item.title || '未命名内容'}}</text><text class="content-meta">{{item.status_label}}{{item.date_label ? ' · ' + item.date_label : ''}}</text><view class="content-row-actions"><text class="content-action">{{item.action_label}}</text><button wx:if="{{!item.read_only}}" class="edit-link" catchtap="openContentMore" data-id="{{item.content_id}}" aria-label="更多操作"><mini-icon name="more" size="34rpx" color="#8d6238" /></button></view></view><text class="row-chevron">›</text>
-            </view>
+            <block wx:for="{{visibleItems}}" wx:key="content_id">
+              <view wx:if="{{item.collection_heading}}" class="collection-heading" role="heading">{{item.collection_heading}}</view>
+              <view class="content-row {{item.kind}}" data-id="{{item.content_id}}" data-status="{{item.status}}" data-version="{{item.version}}" data-read-only="{{item.read_only}}" data-route="{{item.route_key}}" bindtap="openContent" bindlongpress="deleteContentMenu" role="button" aria-label="{{item.title}}">
+                <view class="content-cover {{item.kind}}"><image wx:if="{{item.cover_path}}" src="{{item.cover_path}}" mode="aspectFit" /><view wx:else class="cover-placeholder"><mini-icon name="{{item.kind === 'video' ? 'video' : 'file'}}" size="44rpx" color="#b49a7e" /><text>{{item.kind_label}}</text></view><view wx:if="{{item.kind === 'video'}}" class="play-mark">▶</view></view>
+                <view class="content-info">
+                  <text class="content-title">{{item.title || '未命名内容'}}</text>
+                  <text class="content-meta">{{item.status_label}}{{item.date_label ? ' · ' + item.date_label : ''}}{{sort === 'page_views' ? ' · 查看 ' + item.view_count + ' 次' : ''}}</text>
+                  <view class="content-row-actions"><text class="content-action">{{item.action_label}}</text><button wx:if="{{!item.read_only}}" class="edit-link" catchtap="openContentMore" data-id="{{item.content_id}}" aria-label="更多操作"><mini-icon name="more" size="34rpx" color="#8d6238" /></button></view>
+                </view>
+                <text class="row-chevron">›</text>
+              </view>
+            </block>
           </block>
           <view wx:else class="empty-state">
             <block wx:if="{{category === 'all' && !searchTerm && !next_cursor}}">
@@ -33,7 +45,7 @@
             <block wx:else><mini-icon name="file" size="84rpx" color="#c9b597" /><text class="state-title">{{searchTerm ? '未找到相关内容' : '暂无这类内容'}}</text></block>
           </view>
         </view>
-        <view wx:if="{{error}}" class="inline-error">{{error}}</view>
+        <view wx:if="{{error && visibleItems.length}}" class="inline-error">{{error}}</view>
         <button wx:if="{{next_cursor}}" class="load-more" bindtap="loadMore" loading="{{loadingMore}}" disabled="{{loadingMore}}">加载更多</button>
       </block>
       <block wx:else>

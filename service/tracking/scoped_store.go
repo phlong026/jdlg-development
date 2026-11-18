@@ -3,6 +3,7 @@ package tracking
 import (
 	"encoding/json"
 	"errors"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -26,6 +27,7 @@ type RecordQuery struct {
 	ProjectDesigner                            int64 // Server-selected actor; filters project fact ownership before LIMIT.
 	Owners, IDs, Sessions, VisitorKeys, Shares []string
 	Content, View                              string
+	ContentIDs                                 []string // Sorted values for the indexed record content_id column.
 	// TitleSearch and AssetKinds are catalog predicates. SQL repositories push
 	// them into the query so media/content pagination never scans a whole tenant.
 	TitleSearch string
@@ -196,7 +198,7 @@ func includes(values []string, value string) bool {
 	return false
 }
 func queryHasNoRows(q RecordQuery) bool {
-	return q.Owners != nil && len(q.Owners) == 0 || q.IDs != nil && len(q.IDs) == 0 || q.Sessions != nil && len(q.Sessions) == 0 || q.VisitorKeys != nil && len(q.VisitorKeys) == 0 || q.Shares != nil && len(q.Shares) == 0
+	return q.Owners != nil && len(q.Owners) == 0 || q.IDs != nil && len(q.IDs) == 0 || q.Sessions != nil && len(q.Sessions) == 0 || q.VisitorKeys != nil && len(q.VisitorKeys) == 0 || q.Shares != nil && len(q.Shares) == 0 || q.ContentIDs != nil && len(q.ContentIDs) == 0
 }
 
 // The fallback is for small in-memory/test repositories. Production SQL uses
@@ -284,6 +286,11 @@ func matchesRecordQuery(r Repository, row Record, q RecordQuery) (bool, error) {
 	// Apply authoritative scalar predicates before touching JSON. This keeps
 	// unrelated large event payloads out of the fallback budget just as SQL WHERE
 	// does. JSON-only legacy relationships remain bounded before decoding.
+	if q.ContentIDs != nil {
+		if _, included := slices.BinarySearch(q.ContentIDs, row.Content); !included {
+			return false, nil
+		}
+	}
 	if q.Content != "" && row.Kind != "content" && row.Kind != "legacy_catalog" && row.Content != q.Content {
 		return false, nil
 	}

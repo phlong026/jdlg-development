@@ -126,6 +126,39 @@ button::after {
   border-radius: 0;
 }
 
+.sort-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  padding: 14rpx 0;
+  border-bottom: 1rpx solid #eae5df;
+}
+
+.sort-row button.sort-option {
+  min-height: 56rpx;
+  padding: 0 20rpx;
+  border-radius: 8rpx;
+  background: #f0ede8;
+  color: #6e6153;
+  font-size: 24rpx;
+}
+
+.sort-row button.sort-option.active {
+  background: #efe2d0;
+  color: #7b4e25;
+  font-weight: 600;
+}
+
+.collection-heading {
+  margin-top: 16rpx;
+  padding: 12rpx 16rpx;
+  border-radius: 8rpx;
+  background: #f2ebe1;
+  color: #604630;
+  font-size: 26rpx;
+  font-weight: 600;
+}
+
 .content-row {
   display: flex;
   align-items: center;
@@ -146,6 +179,7 @@ button::after {
 .content-cover.video { background: #1c1a18; }
 
 .content-cover image {
+  display: block;
   width: 100%;
   height: 100%;
 }

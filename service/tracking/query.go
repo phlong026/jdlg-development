@@ -46,8 +46,8 @@ func boundedTransaction(run func(context.Context, func(Repository) error) error,
 }
 
 type factSelection struct {
-	Visitors, Sessions []string
-	View               string
+	Visitors, Sessions, ContentIDs []string
+	View                           string
 	// Summaries lets list and intent reductions read exact current projections
 	// instead of raw events. Drilldowns that need flags or events keep raw.
 	Summaries bool
@@ -209,6 +209,12 @@ func (s *Service) factsSelected(r Repository, scope Scope, f Filter, selection f
 	if !scope.View {
 		return nil, fail(403, "无访问记录查看权限")
 	}
+	return s.readFacts(r, scope, f, selection)
+}
+
+// The caller must authorize the output. Workbench listings use only aggregate PVs
+// for the exact owner and content pairs already authorized by the catalog.
+func (s *Service) readFacts(r Repository, scope Scope, f Filter, selection factSelection) ([]factView, error) {
 	// f.Visitor 精确过滤复用 selection.Visitors 通道（与访客详情同一条已验证的路径）：
 	// 摘要与原始记录两条查询都按 VisitorKeys 收敛，聚合结果自然只含该访客。
 	if f.Visitor != "" {
@@ -238,7 +244,7 @@ func (s *Service) factsSelected(r Repository, scope Scope, f Filter, selection f
 	// With current projections, a session needs a raw scan only if it may hold
 	// facts in days without a bucket: never projected, projected by an older
 	// projector, or with deferred events. Others with facts here have a bucket.
-	candidates, e := scopedRecords(r, "event", RecordQuery{Owners: owners, Sessions: selection.Sessions, VisitorKeys: selection.Visitors, IdentityAsOf: f.AsOf, Content: f.Content, View: selection.View, AtFrom: f.Start, AtBefore: f.End.Add(15 * time.Second), AtThrough: f.AsOf, WithoutExactSummary: current})
+	candidates, e := scopedRecords(r, "event", RecordQuery{Owners: owners, Sessions: selection.Sessions, VisitorKeys: selection.Visitors, IdentityAsOf: f.AsOf, Content: f.Content, ContentIDs: selection.ContentIDs, View: selection.View, AtFrom: f.Start, AtBefore: f.End.Add(15 * time.Second), AtThrough: f.AsOf, WithoutExactSummary: current})
 	if e != nil {
 		return nil, e
 	}
