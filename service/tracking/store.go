@@ -237,6 +237,7 @@ func buildScopedQuery(tenant, kind string, q RecordQuery, limit int) (string, []
 	}
 	addIn("r.owner_id", q.Owners)
 	addIn("r.record_id", q.IDs)
+	addIn("r.content_id", q.ContentIDs)
 	addIn(recordSessionColumn(kind), q.Sessions)
 	if kind == "share" || kind == "share_request" {
 		addShareIn(&where, &args, q.Shares)

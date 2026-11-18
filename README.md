@@ -45,6 +45,8 @@ npm test
 npm run build
 ```
 
+管理台构建链暂时通过 npm override 固定使用 `@ryotsu/picomatch@4.0.7-a`，覆盖 Vite、Sass 等开发依赖中的 `picomatch`，处理 [GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf)。该版本由第三方维护，锁文件固定下载地址及完整性校验。上游发布修复版本后移除 override，并重新运行完整依赖审计、后台回归与构建。
+
 小程序全量测试会复用后台锁定的 TypeScript 和 Sass，无需微信凭据：
 
 ```sh

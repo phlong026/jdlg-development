@@ -78,7 +78,8 @@ func queryCatalog(r Repository, scope Scope, f Filter, id string) ([]Content, er
 		if json.Unmarshal(row.Payload, &c) != nil {
 			return nil, ErrUnavailable
 		}
-		if catalogCreatedAt(c, row.At).After(f.AsOf) || id != "" && c.ID != id {
+		created := catalogCreatedAt(c, row.At).UTC()
+		if created.After(f.AsOf) || id != "" && c.ID != id {
 			continue
 		}
 		if c.Owner != row.Owner {
@@ -87,6 +88,7 @@ func queryCatalog(r Repository, scope Scope, f Filter, id string) ([]Content, er
 		if c.Status == "deleted" {
 			continue
 		}
+		c.CreatedAt = &created
 		c.Presentation = ContentPresentation(c)
 		// 服务端过滤：类型与项目关联（仿真稿⑦分类Tab真筛选）。
 		// 前端 Tab 传中文标签，映射到后端类型枚举（note/article/video/document）。
@@ -101,7 +103,7 @@ func queryCatalog(r Repository, scope Scope, f Filter, id string) ([]Content, er
 		if f.ProjectID != "" && c.ProjectID != f.ProjectID {
 			continue
 		}
-		c.PageViews, c.VisibleMS, c.LastVisit, c.Identified, c.Anonymous = 0, 0, nil, 0, 0
+		c.PageViews, c.VisibleMS, c.LastVisit, c.Identified, c.Anonymous, c.Shares = 0, 0, nil, 0, 0, 0
 		out = append(out, c)
 	}
 	return out, nil
@@ -331,15 +333,7 @@ func (s *Service) queryContents(ctx context.Context, scope Scope, f Filter, id s
 			}
 		}
 		sort.Slice(items, func(i, j int) bool {
-			a, b := items[i], items[j]
-			av, bv := contentSortValue(a, f.Sort), contentSortValue(b, f.Sort)
-			if av == bv {
-				return a.ID < b.ID
-			}
-			if f.Direction == "asc" {
-				return av < bv
-			}
-			return av > bv
+			return compareContentOrder(f, contentOrder(items[i], f.Sort), contentOrder(items[j], f.Sort)) < 0
 		})
 		page, cursor, e := paginateContents(f, items)
 		if e != nil {

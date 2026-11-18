@@ -157,7 +157,11 @@ func registerContentWorkbenchHandlers(g *gin.RouterGroup, svc *tracking.Service,
 		// 分类Tab/项目关联的服务端过滤（仿真稿⑦）：type 由前端映射（article/note/video/document）。
 		filter.TypeFilter = c.Query("type")
 		filter.ProjectID = c.Query("project_id")
-		out, err := svc.Contents(c.Request.Context(), scope(c), filter, "")
+		if filter.Sort == "collection" && !workbenchEnabled() {
+			trackingResponse(c, nil, &tracking.Error{Status: 403, Message: "手机内容制作暂未开通"})
+			return
+		}
+		out, err := svc.WorkbenchContents(c.Request.Context(), scope(c), filter)
 		if err == nil {
 			out, err = presentContentList(c.Request.Context(), out, profiles)
 		}
